@@ -1,0 +1,84 @@
+[package]
+name = "terminus-fuzz"
+description = "cargo fuzz targets F1 to F11 for the Terminus core (docs/TEST-SUITE.md section 12)."
+version = "0.0.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+terminus-vt = { path = "../crates/terminus-vt" }
+terminus-input = { path = "../crates/terminus-input" }
+base64 = "0.22"
+
+[workspace]
+
+[[bin]]
+name = "f01_parser"
+path = "fuzz_targets/f01_parser.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "f02_terminal"
+path = "fuzz_targets/f02_terminal.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "f03_osc"
+path = "fuzz_targets/f03_osc.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "f04_dcs_apc"
+path = "fuzz_targets/f04_dcs_apc.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "f05_kitty_graphics"
+path = "fuzz_targets/f05_kitty_graphics.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "f06_sixel"
+path = "fuzz_targets/f06_sixel.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "f07_png"
+path = "fuzz_targets/f07_png.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "f08_key_encoder"
+path = "fuzz_targets/f08_key_encoder.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "f09_mouse_encoder"
+path = "fuzz_targets/f09_mouse_encoder.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "f10_resize"
+path = "fuzz_targets/f10_resize.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "f11_page"
+path = "fuzz_targets/f11_page.rs"
+test = false
+doc = false

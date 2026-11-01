@@ -52,7 +52,9 @@ impl Terminal {
         let text = String::from_utf8_lossy(rest);
         let parts: Vec<&str> = text.split(';').collect();
         for pair in parts.chunks(2) {
-            let (Some(idx), Some(spec)) = (pair.first().and_then(|s| s.parse::<u8>().ok()), pair.get(1)) else { continue };
+            let (Some(idx), Some(spec)) = (pair.first().and_then(|s| s.parse::<u8>().ok()), pair.get(1)) else {
+                continue;
+            };
             if *spec == "?" {
                 let c = self.palette[idx as usize];
                 self.reply(format!("\x1b]4;{idx};{}{}", rgb_spec(c), terminator(term)).as_bytes());
@@ -198,12 +200,24 @@ impl Terminal {
         for kv in meta.split(':') {
             match kv.split_once('=') {
                 Some(("d", "0")) => done = false,
-                Some(("p", p)) => part = if p == "body" { "body" } else if p == "title" { "title" } else { "other" },
+                Some(("p", p)) => {
+                    part = if p == "body" {
+                        "body"
+                    } else if p == "title" {
+                        "title"
+                    } else {
+                        "other"
+                    }
+                }
                 Some(("e", "1")) => base64 = true,
                 _ => {}
             }
         }
-        let payload = if base64 { decode_base64(payload.as_bytes()).map(|b| String::from_utf8_lossy(&b).into_owned()).unwrap_or_default() } else { payload.to_string() };
+        let payload = if base64 {
+            decode_base64(payload.as_bytes()).map(|b| String::from_utf8_lossy(&b).into_owned()).unwrap_or_default()
+        } else {
+            payload.to_string()
+        };
         let pending = &mut self.notification_pending;
         match part {
             "body" => pending.1.push_str(&payload),
@@ -220,7 +234,11 @@ impl Terminal {
     fn osc_clipboard(&mut self, rest: &[u8]) {
         let text = String::from_utf8_lossy(rest).into_owned();
         let Some((sel, data)) = text.split_once(';') else { return };
-        let selection = if sel.is_empty() { "c".to_string() } else { sel.chars().filter(|c| "cpqs01234567".contains(*c)).collect() };
+        let selection = if sel.is_empty() {
+            "c".to_string()
+        } else {
+            sel.chars().filter(|c| "cpqs01234567".contains(*c)).collect()
+        };
         if data == "?" {
             if self.config.allow_osc52_read {
                 self.event(Event::ClipboardRead { selection });
@@ -316,7 +334,9 @@ fn bounded_string(raw: &[u8], max: usize) -> String {
 /// True when a URI starts with a scheme (`letters:`).
 fn has_scheme(uri: &str) -> bool {
     let Some((scheme, _)) = uri.split_once(':') else { return false };
-    !scheme.is_empty() && scheme.chars().next().is_some_and(|c| c.is_ascii_alphabetic()) && scheme.chars().all(|c| c.is_ascii_alphanumeric() || "+.-".contains(c))
+    !scheme.is_empty()
+        && scheme.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
+        && scheme.chars().all(|c| c.is_ascii_alphanumeric() || "+.-".contains(c))
 }
 
 /// The terminator to answer a query with: the one the query used.
@@ -365,6 +385,10 @@ fn scale_hex(s: &str) -> Option<u8> {
 /// Decodes standard base64, tolerating missing padding. None for invalid input.
 pub(super) fn decode_base64(data: &[u8]) -> Option<Vec<u8>> {
     use base64::Engine;
-    let engine = base64::engine::GeneralPurpose::new(&base64::alphabet::STANDARD, base64::engine::GeneralPurposeConfig::new().with_decode_padding_mode(base64::engine::DecodePaddingMode::Indifferent));
+    let engine = base64::engine::GeneralPurpose::new(
+        &base64::alphabet::STANDARD,
+        base64::engine::GeneralPurposeConfig::new()
+            .with_decode_padding_mode(base64::engine::DecodePaddingMode::Indifferent),
+    );
     engine.decode(data).ok()
 }

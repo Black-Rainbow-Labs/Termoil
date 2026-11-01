@@ -121,7 +121,11 @@ impl Terminal {
         let s = self.screen();
         let origin = self.modes.get(Mode::Origin);
         let row = if origin { s.cursor.row.saturating_sub(s.top) } else { s.cursor.row };
-        let col = if origin && self.modes.get(Mode::LeftRightMargins) { s.cursor.col.saturating_sub(s.left) } else { s.cursor.col };
+        let col = if origin && self.modes.get(Mode::LeftRightMargins) {
+            s.cursor.col.saturating_sub(s.left)
+        } else {
+            s.cursor.col
+        };
         (row + 1, col + 1)
     }
 
@@ -169,7 +173,11 @@ impl Terminal {
             match value {
                 Some(v) => {
                     let hex_name = String::from_utf8_lossy(name_hex).to_ascii_uppercase();
-                    let reply = if v.is_empty() { format!("\x1bP1+r{hex_name}\x1b\\") } else { format!("\x1bP1+r{hex_name}={}\x1b\\", hex_encode(v.as_bytes())) };
+                    let reply = if v.is_empty() {
+                        format!("\x1bP1+r{hex_name}\x1b\\")
+                    } else {
+                        format!("\x1bP1+r{hex_name}={}\x1b\\", hex_encode(v.as_bytes()))
+                    };
                     self.reply(reply.as_bytes());
                 }
                 None => {
@@ -186,16 +194,43 @@ impl Terminal {
 fn cursor_shape_number(shape: CursorShape) -> u8 {
     match shape {
         CursorShape::Default => 0,
-        CursorShape::Block { blink } => if blink { 1 } else { 2 },
-        CursorShape::Underline { blink } => if blink { 3 } else { 4 },
-        CursorShape::Bar { blink } => if blink { 5 } else { 6 },
+        CursorShape::Block { blink } => {
+            if blink {
+                1
+            } else {
+                2
+            }
+        }
+        CursorShape::Underline { blink } => {
+            if blink {
+                3
+            } else {
+                4
+            }
+        }
+        CursorShape::Bar { blink } => {
+            if blink {
+                5
+            } else {
+                6
+            }
+        }
     }
 }
 
 /// The SGR parameters that recreate a style, starting with 0.
 pub fn sgr_string(style: &crate::style::Style) -> String {
     let mut parts = vec!["0".to_string()];
-    let flags = [(attr::BOLD, "1"), (attr::FAINT, "2"), (attr::ITALIC, "3"), (attr::BLINK, "5"), (attr::INVERSE, "7"), (attr::INVISIBLE, "8"), (attr::STRIKE, "9"), (attr::OVERLINE, "53")];
+    let flags = [
+        (attr::BOLD, "1"),
+        (attr::FAINT, "2"),
+        (attr::ITALIC, "3"),
+        (attr::BLINK, "5"),
+        (attr::INVERSE, "7"),
+        (attr::INVISIBLE, "8"),
+        (attr::STRIKE, "9"),
+        (attr::OVERLINE, "53"),
+    ];
     for (bit, code) in flags {
         if style.has(bit) {
             parts.push(code.to_string());
@@ -228,7 +263,7 @@ fn push_color(parts: &mut Vec<String>, c: Color, base: u16, bright: u16, extende
 
 /// Decodes a hex string.
 fn hex_decode(hex: &[u8]) -> Option<Vec<u8>> {
-    if hex.len() % 2 != 0 {
+    if !hex.len().is_multiple_of(2) {
         return None;
     }
     hex.chunks(2).map(|p| u8::from_str_radix(core::str::from_utf8(p).ok()?, 16).ok()).collect()

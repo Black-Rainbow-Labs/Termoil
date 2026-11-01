@@ -70,7 +70,16 @@ fn push_style(out: &mut String, style: &Style) {
     if style.underline_color != Color::Default {
         out.push_str(&format!(" ulc={}", color_name(style.underline_color)));
     }
-    let names = [(attr::BOLD, "bold"), (attr::FAINT, "faint"), (attr::ITALIC, "italic"), (attr::BLINK, "blink"), (attr::INVERSE, "inverse"), (attr::INVISIBLE, "invisible"), (attr::STRIKE, "strike"), (attr::OVERLINE, "overline")];
+    let names = [
+        (attr::BOLD, "bold"),
+        (attr::FAINT, "faint"),
+        (attr::ITALIC, "italic"),
+        (attr::BLINK, "blink"),
+        (attr::INVERSE, "inverse"),
+        (attr::INVISIBLE, "invisible"),
+        (attr::STRIKE, "strike"),
+        (attr::OVERLINE, "overline"),
+    ];
     for (bit, name) in names {
         if style.has(bit) {
             out.push(' ');
@@ -134,7 +143,8 @@ pub fn diff(expected: &[String], actual: &[String]) -> Option<String> {
         let e = expected.get(r).map(String::as_str).unwrap_or("<missing>");
         let a = actual.get(r).map(String::as_str).unwrap_or("<missing>");
         if e != a {
-            let col = e.chars().zip(a.chars()).position(|(x, y)| x != y).unwrap_or(e.chars().count().min(a.chars().count()));
+            let col =
+                e.chars().zip(a.chars()).position(|(x, y)| x != y).unwrap_or(e.chars().count().min(a.chars().count()));
             return Some(format!("row {r}, column {col}:\n  expected: {e:?}\n  actual:   {a:?}"));
         }
     }

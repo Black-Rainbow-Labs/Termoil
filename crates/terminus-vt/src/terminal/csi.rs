@@ -70,6 +70,7 @@ impl Terminal {
             (0, [b'\''], b'}') => self.scroll_columns_right(self.screen().top, self.screen().bottom, n),
             (0, [b'\''], b'~') => self.scroll_columns_left(self.screen().top, self.screen().bottom, n),
             (0, [b'$'], b'x') | (0, [b'$'], b'z') | (0, [b'$'], b'{') | (0, [b'$'], b'v') => self.rect_op(seq),
+            (0, [b'*'], b'y') => self.checksum_rect(p),
             _ => self.report_dispatch(seq),
         }
     }
@@ -214,8 +215,10 @@ impl Terminal {
             alt.charsets = charsets;
             self.alt_active = true;
         } else {
-            if mode != Mode::AltScreenLegacy {
-                if let Some(alt) = self.alt.as_mut() {
+            if mode != Mode::AltScreenLegacy
+                && let Some(alt) = self.alt.as_mut()
+            {
+                {
                     let rows = alt.rows();
                     for r in 0..rows {
                         let (p, i) = alt.pages.active_mut(r);
@@ -249,10 +252,10 @@ impl Terminal {
     /// XTRESTORE: restores the listed DEC modes.
     fn restore_modes(&mut self, seq: &CsiSeq) {
         for i in 0..seq.params.len() {
-            if let Some(def) = modes::lookup(ModeKind::Dec, seq.params.get(i)) {
-                if let Some(v) = self.modes.saved(def.mode) {
-                    self.set_one_mode(def.mode, v);
-                }
+            if let Some(def) = modes::lookup(ModeKind::Dec, seq.params.get(i))
+                && let Some(v) = self.modes.saved(def.mode)
+            {
+                self.set_one_mode(def.mode, v);
             }
         }
     }
@@ -389,6 +392,33 @@ impl Terminal {
             }
             _ => {}
         }
+    }
+}
+
+impl Terminal {
+    /// DECRQCRA: answers `DCS Pid ! ~ XXXX ST` with a 16 bit checksum of the rectangle
+    /// `Pt;Pl;Pb;Pr` (1 based, relative to the origin). The checksum is the sum of the code points
+    /// of the cells, with a blank cell counting as a space, which is what xterm reports from patch
+    /// 334 and what esctest reads characters with.
+    fn checksum_rect(&mut self, p: &crate::parser::Params) {
+        let id = p.get(0);
+        let (rows, cols) = (self.rows(), self.cols());
+        let origin = self.modes.get(Mode::Origin);
+        let (oy, ox) = if origin { (self.screen().top, self.screen().left) } else { (0, 0) };
+        let top = (p.get_or(2, 1) - 1 + oy).min(rows - 1);
+        let left = (p.get_or(3, 1) - 1 + ox).min(cols - 1);
+        let bottom = (p.get_or(4, rows) - 1 + oy).min(rows - 1);
+        let right = (p.get_or(5, cols) - 1 + ox).min(cols - 1);
+        let mut sum: u32 = 0;
+        if top <= bottom && left <= right {
+            let pages = &self.screen().pages;
+            pages.for_rows(pages.active_y(top)..pages.active_y(bottom) + 1, |_, page, i| {
+                for cell in &page.cells(i)[left as usize..=right as usize] {
+                    sum = sum.wrapping_add(if cell.is_blank() { 0x20 } else { cell.codepoint() });
+                }
+            });
+        }
+        self.reply(format!("P{id}!~{:04X}\\", sum & 0xffff).as_bytes());
     }
 }
 

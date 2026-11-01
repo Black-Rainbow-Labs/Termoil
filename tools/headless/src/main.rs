@@ -1,0 +1,224 @@
+//! `terminus-headless`: a terminal with no window.
+//!
+//! ```text
+//! terminus-headless run [--cols N] [--rows N] [--record FILE] [--dump] -- PROGRAM [ARGS...]
+//! terminus-headless replay FILE [--cols N] [--rows N]
+//! ```
+//!
+//! `run` spawns the program under a pseudoterminal of the given size, feeds everything it prints
+//! into `terminus-vt`, and writes the terminal's replies (device attributes, cursor reports,
+//! DECRQCRA checksums) back to it, so programs that query the terminal (esctest2, vttest, vim) work.
+//! `--record` saves the program's output bytes; `--dump` prints the final screen. `replay` feeds a
+//! recording whole, one byte at a time and in seeded random chunks, checks the three screens are
+//! equal (docs/TEST-SUITE.md section 1) and prints the screen.
+
+use std::io::{Read, Write};
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
+
+use terminus_pty::{Pty, PtySize, SpawnOptions};
+use terminus_vt::{Terminal, TerminalConfig, dump};
+
+/// Parsed command line options.
+struct Options {
+    cols: u16,
+    rows: u16,
+    record: Option<String>,
+    dump: bool,
+    rest: Vec<String>,
+}
+
+/// Reads `--cols`, `--rows`, `--record`, `--dump` and the words after `--` (or the remaining ones).
+fn parse_options(args: &[String]) -> Options {
+    let mut o = Options { cols: 80, rows: 24, record: None, dump: false, rest: Vec::new() };
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--cols" => o.cols = args.get(i + 1).and_then(|v| v.parse().ok()).unwrap_or(80),
+            "--rows" => o.rows = args.get(i + 1).and_then(|v| v.parse().ok()).unwrap_or(24),
+            "--record" => o.record = args.get(i + 1).cloned(),
+            "--dump" => {
+                o.dump = true;
+                i += 1;
+                continue;
+            }
+            "--" => {
+                o.rest = args[i + 1..].to_vec();
+                break;
+            }
+            _ => {
+                o.rest = args[i..].to_vec();
+                break;
+            }
+        }
+        i += 2;
+    }
+    o
+}
+
+/// Spawns the program and pumps bytes between it and the terminal until it exits. Returns the
+/// program's exit code.
+fn run(o: &Options) -> i32 {
+    let Some((program, args)) = o.rest.split_first() else {
+        eprintln!("usage: terminus-headless run [--cols N] [--rows N] [--record FILE] [--dump] -- PROGRAM [ARGS...]");
+        return 2;
+    };
+    let size = PtySize { cols: o.cols, rows: o.rows, pixel_width: 0, pixel_height: 0 };
+    let opts = SpawnOptions {
+        program: program.clone(),
+        args: args.to_vec(),
+        cwd: None,
+        env: vec![("TERM".into(), "xterm-256color".into())],
+        size,
+        login: false,
+    };
+    let mut pty = match Pty::spawn(&opts) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("terminus-headless: cannot start {program}: {e}");
+            return 127;
+        }
+    };
+    let (tx, rx) = mpsc::channel::<Vec<u8>>();
+    let mut reader = pty.take_reader().expect("reader");
+    std::thread::spawn(move || {
+        let mut buf = vec![0u8; 64 * 1024];
+        while let Ok(n) = reader.read(&mut buf) {
+            if n == 0 || tx.send(buf[..n].to_vec()).is_err() {
+                break;
+            }
+        }
+    });
+    let mut writer = pty.take_writer().expect("writer");
+    let mut term = Terminal::new(o.cols, o.rows, TerminalConfig::default());
+    let mut recording = Vec::new();
+    let code = pump(&mut pty, &rx, &mut *writer, &mut term, &mut recording);
+    finish(o, &term, &recording);
+    code
+}
+
+/// Applies output and sends replies until the child has exited and its output has drained.
+fn pump(
+    pty: &mut Pty, rx: &mpsc::Receiver<Vec<u8>>, writer: &mut dyn Write, term: &mut Terminal, recording: &mut Vec<u8>,
+) -> i32 {
+    let mut exited: Option<(i32, Instant)> = None;
+    loop {
+        match rx.recv_timeout(Duration::from_millis(50)) {
+            Ok(chunk) => {
+                recording.extend_from_slice(&chunk);
+                term.advance(&chunk);
+                let replies = term.take_replies();
+                if !replies.is_empty() {
+                    let _ = writer.write_all(&replies);
+                    let _ = writer.flush();
+                }
+                let _ = term.take_events();
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => return exited.map(|e| e.0).unwrap_or(0),
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+        }
+        if exited.is_none()
+            && let Ok(Some(status)) = pty.try_wait()
+        {
+            let code = match status {
+                terminus_pty::ExitStatus::Code(c) => c,
+                terminus_pty::ExitStatus::Signal(s) => 128 + s,
+            };
+            exited = Some((code, Instant::now()));
+        }
+        // After exit, output still in flight is read for half a second; ConPTY only ends the
+        // stream when the pseudoconsole is closed.
+        if let Some((code, at)) = exited
+            && at.elapsed() > Duration::from_millis(500)
+        {
+            return code;
+        }
+    }
+}
+
+/// Writes the recording and prints the screen when asked.
+fn finish(o: &Options, term: &Terminal, recording: &[u8]) {
+    if let Some(path) = &o.record
+        && let Err(e) = std::fs::write(path, recording)
+    {
+        eprintln!("terminus-headless: cannot write {path}: {e}");
+    }
+    if o.dump {
+        for line in dump::text_dump(term) {
+            println!("{line}");
+        }
+    }
+}
+
+/// Replays a recording three ways and prints the screen; exits 1 when the ways disagree.
+fn replay(o: &Options) -> i32 {
+    let Some(path) = o.rest.first() else {
+        eprintln!("usage: terminus-headless replay FILE [--cols N] [--rows N]");
+        return 2;
+    };
+    let bytes = match std::fs::read(path) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("terminus-headless: cannot read {path}: {e}");
+            return 2;
+        }
+    };
+    let feed = |chunks: &mut dyn Iterator<Item = &[u8]>| {
+        let mut t = Terminal::new(o.cols, o.rows, TerminalConfig::default());
+        for c in chunks {
+            t.advance(c);
+        }
+        dump::grid_dump(&t)
+    };
+    let whole = feed(&mut std::iter::once(bytes.as_slice()));
+    let single = feed(&mut bytes.chunks(1));
+    let random = feed(&mut random_chunks(&bytes, 0x5eed).into_iter());
+    for (name, other) in [("one byte at a time", &single), ("random chunks", &random)] {
+        if let Some(d) = dump::diff(&whole, other) {
+            eprintln!("replay {name} differs from whole: {d}");
+            return 1;
+        }
+    }
+    let mut t = Terminal::new(o.cols, o.rows, TerminalConfig::default());
+    t.advance(&bytes);
+    for line in dump::text_dump(&t) {
+        println!("{line}");
+    }
+    0
+}
+
+/// Splits `bytes` at pseudo random points from a fixed seed.
+fn random_chunks(bytes: &[u8], seed: u64) -> Vec<&[u8]> {
+    let mut x = seed | 1;
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < bytes.len() {
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        let end = (i + 1 + (x % 97) as usize).min(bytes.len());
+        out.push(&bytes[i..end]);
+        i = end;
+    }
+    out
+}
+
+/// Entry point.
+fn main() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let code = match args.first().map(String::as_str) {
+        Some("run") => run(&parse_options(&args[1..])),
+        Some("replay") => {
+            let mut o = parse_options(&args[1..]);
+            if o.rest.is_empty() {
+                o.rest = args[1..].iter().filter(|a| !a.starts_with("--")).take(1).cloned().collect();
+            }
+            replay(&o)
+        }
+        _ => {
+            eprintln!("usage: terminus-headless run|replay ...");
+            2
+        }
+    };
+    std::process::exit(code);
+}

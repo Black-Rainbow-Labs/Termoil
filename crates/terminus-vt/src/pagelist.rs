@@ -89,6 +89,8 @@ pub struct PageList {
     limit: ScrollbackLimit,
     history: bool,
     bytes: usize,
+    // Boxed so a page moves between the pool and the list without copying its header.
+    #[allow(clippy::vec_box)]
     pool: Vec<Box<Page>>,
     pins: Vec<Option<Pin>>,
     free_pins: Vec<u32>,
@@ -383,11 +385,12 @@ impl PageList {
         self.bytes -= node.bytes();
         self.total -= node.len;
         self.pruned_pages += 1;
-        if let NodeData::Live(mut page) = node.data {
-            if !page.is_oversized() && self.pool.len() < 4 {
-                page.reset();
-                self.pool.push(page);
-            }
+        if let NodeData::Live(mut page) = node.data
+            && !page.is_oversized()
+            && self.pool.len() < 4
+        {
+            page.reset();
+            self.pool.push(page);
         }
     }
 
@@ -596,7 +599,11 @@ impl PageList {
         let rows = rows.max(1);
         let mut cursor = cursor;
         if cols != self.cols {
-            cursor = if reflow && self.history { crate::reflow::reflow(self, cols, cursor) } else { self.resize_cols_truncate(cols, cursor) };
+            cursor = if reflow && self.history {
+                crate::reflow::reflow(self, cols, cursor)
+            } else {
+                self.resize_cols_truncate(cols, cursor)
+            };
         }
         if rows != self.rows {
             cursor = self.resize_rows(rows, cursor);
@@ -612,7 +619,20 @@ impl PageList {
         let old_cols = self.cols;
         let total = self.total;
         let first = old.front().map(|n| n.first_serial).unwrap_or(self.next_serial);
-        let src = PageList { nodes: old, cols: old_cols, rows: self.rows, total, next_serial: self.next_serial, limit: self.limit, history: self.history, bytes: 0, pool: Vec::new(), pins: Vec::new(), free_pins: Vec::new(), pruned_pages: 0 };
+        let src = PageList {
+            nodes: old,
+            cols: old_cols,
+            rows: self.rows,
+            total,
+            next_serial: self.next_serial,
+            limit: self.limit,
+            history: self.history,
+            bytes: 0,
+            pool: Vec::new(),
+            pins: Vec::new(),
+            free_pins: Vec::new(),
+            pruned_pages: 0,
+        };
         self.cols = cols;
         self.total = 0;
         self.bytes = 0;
@@ -706,7 +726,8 @@ impl PageList {
         if extra == 0 {
             return;
         }
-        let tmp_rows: Vec<Page> = (0..self.rows).map(|r| self.with_row(self.active_y(r), |p, i| p.extract_row(i))).collect();
+        let tmp_rows: Vec<Page> =
+            (0..self.rows).map(|r| self.with_row(self.active_y(r), |p, i| p.extract_row(i))).collect();
         let first = self.first_serial() + extra as u64;
         self.nodes.clear();
         self.total = 0;
@@ -756,7 +777,9 @@ impl PageList {
         for node in &self.nodes {
             let page = match &node.data {
                 NodeData::Live(p) => (**p).clone(),
-                NodeData::Compressed { bytes, .. } => Page::decompress(bytes).unwrap_or_else(|| Page::new(self.cols, 1)),
+                NodeData::Compressed { bytes, .. } => {
+                    Page::decompress(bytes).unwrap_or_else(|| Page::new(self.cols, 1))
+                }
             };
             out.push((node.first_serial, page));
         }

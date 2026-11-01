@@ -203,7 +203,11 @@ impl Page {
         self.graphemes.clear();
         self.grapheme_garbage = 0;
         self.hyperlinks.clear();
-        self.styles = StyleTable { entries: vec![(Style::default(), 0)], ..StyleTable::default() };
+        // Cleared in place so a recycled page allocates nothing (P5).
+        self.styles.entries.truncate(1);
+        self.styles.map.clear();
+        self.styles.free.clear();
+        self.oversized = false;
         self.uid = next_uid();
     }
 
@@ -328,7 +332,10 @@ impl Page {
 
     /// A style id that was interned but never referenced is freed again.
     pub fn drop_unused_style(&mut self, id: u16) {
-        if id != 0 && self.styles.entries.get(id as usize).is_some_and(|e| e.1 == 0) && self.styles.map.get(&self.styles.entries[id as usize].0) == Some(&id) {
+        if id != 0
+            && self.styles.entries.get(id as usize).is_some_and(|e| e.1 == 0)
+            && self.styles.map.get(&self.styles.entries[id as usize].0) == Some(&id)
+        {
             let style = self.styles.entries[id as usize].0;
             self.styles.entries[id as usize].1 = FREE;
             self.styles.map.remove(&style);
@@ -338,7 +345,8 @@ impl Page {
 
     /// The reference count of each live style, for the property tests.
     pub fn style_ref_counts(&self) -> Vec<(u16, u32)> {
-        let mut v: Vec<(u16, u32)> = self.styles.map.values().map(|&id| (id, self.styles.entries[id as usize].1)).collect();
+        let mut v: Vec<(u16, u32)> =
+            self.styles.map.values().map(|&id| (id, self.styles.entries[id as usize].1)).collect();
         v.sort_unstable();
         v
     }
@@ -473,7 +481,12 @@ impl Page {
         let cols = self.cols as usize;
         self.clear_cells(i, 0, cols, Cell::BLANK, false);
         let row = &mut self.rows[i];
-        row.flags &= !(row_flags::CONTENT | row_flags::WRAP | row_flags::WRAP_CONTINUATION | row_flags::SEMANTIC_PROMPT | row_flags::PROMPT_CONTINUATION | row_flags::LINE_SIZE);
+        row.flags &= !(row_flags::CONTENT
+            | row_flags::WRAP
+            | row_flags::WRAP_CONTINUATION
+            | row_flags::SEMANTIC_PROMPT
+            | row_flags::PROMPT_CONTINUATION
+            | row_flags::LINE_SIZE);
         row.flags |= row_flags::DIRTY;
     }
 
@@ -595,7 +608,12 @@ impl Page {
             let cell = src.cells(src_row)[col];
             self.copy_cell_from(dst_row, col, src, src_header.offset + col as u32, cell);
         }
-        let keep = row_flags::WRAP | row_flags::WRAP_CONTINUATION | row_flags::SEMANTIC_PROMPT | row_flags::PROMPT_CONTINUATION | row_flags::LINE_SIZE | row_flags::KITTY_PLACEHOLDER;
+        let keep = row_flags::WRAP
+            | row_flags::WRAP_CONTINUATION
+            | row_flags::SEMANTIC_PROMPT
+            | row_flags::PROMPT_CONTINUATION
+            | row_flags::LINE_SIZE
+            | row_flags::KITTY_PLACEHOLDER;
         self.rows[dst_row].flags |= src_header.flags & keep;
     }
 
@@ -630,7 +648,13 @@ impl Page {
 
     /// Bytes this page holds in memory now, including side data.
     pub fn memory_bytes(&self) -> usize {
-        self.cells.len() * 8 + self.rows.len() * 8 + self.styles.entries.len() * 24 + self.grapheme_chars.len() * 4 + self.graphemes.len() * 16 + self.hyperlinks.len() * 16 + 128
+        self.cells.len() * 8
+            + self.rows.len() * 8
+            + self.styles.entries.len() * 24
+            + self.grapheme_chars.len() * 4
+            + self.graphemes.len() * 16
+            + self.hyperlinks.len() * 16
+            + 128
     }
 
     /// The text of row `i`: each cell's code points, a space for blank cells, nothing for spacer
@@ -778,7 +802,11 @@ fn prefetch_cells(cells: &[Cell], start: usize, cols: usize) {
         while k < end {
             // SAFETY: `k < cells.len()`, so the pointer is inside the slice; a prefetch never
             // faults and does not change memory.
-            unsafe { core::arch::x86_64::_mm_prefetch::<{ core::arch::x86_64::_MM_HINT_T0 }>(cells.as_ptr().add(k) as *const i8) };
+            unsafe {
+                core::arch::x86_64::_mm_prefetch::<{ core::arch::x86_64::_MM_HINT_T0 }>(
+                    cells.as_ptr().add(k) as *const i8
+                )
+            };
             k += 8;
         }
     }

@@ -12,9 +12,7 @@ const VERSION: &str = "17.0.0";
 
 /// Root of the workspace, found relative to this crate.
 fn workspace_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("..")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("..")
 }
 
 /// Path of the generated tables file.
@@ -68,9 +66,6 @@ mod tests {
     /// The checked in tables.rs must equal what the generator produces from the vendored data files.
     #[test]
     fn checked_in_tables_are_current() {
-        assert!(
-            super::is_current(),
-            "crates/terminus-vt/src/unicode/tables.rs is stale"
-        );
+        assert!(super::is_current(), "crates/terminus-vt/src/unicode/tables.rs is stale");
     }
 }

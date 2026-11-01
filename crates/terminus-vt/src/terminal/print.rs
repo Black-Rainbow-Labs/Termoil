@@ -198,7 +198,11 @@ impl Terminal {
             let row = screen.cursor.row;
             let (page, i) = screen.pages.active_mut(row);
             page.row_mut(i).set(row_flags::WRAP, true);
-            let left = if lrmm && screen.cursor.col >= screen.left && screen.cursor.col <= screen.right { screen.left } else { 0 };
+            let left = if lrmm && screen.cursor.col >= screen.left && screen.cursor.col <= screen.right {
+                screen.left
+            } else {
+                0
+            };
             screen.cursor.col = left;
             screen.cursor.pending_wrap = false;
         }
@@ -218,15 +222,14 @@ pub(super) fn effective_right(s: &Screen, lrmm: bool) -> u16 {
     if lrmm && s.cursor.col <= s.right { s.right } else { s.cols() - 1 }
 }
 
-
-
 /// Clears half of a wide character that writing columns `from..to` would leave behind.
 pub(super) fn fix_wide_boundaries(page: &mut Page, i: usize, from: usize, to: usize) {
     let cols = page.cols() as usize;
     if from > 0 && page.cells(i)[from].wide() == Wide::SpacerTail {
         page.clear_cells(i, from - 1, from, Cell::BLANK, false);
     }
-    if to < cols && to > 0 && page.cells(i)[to - 1].wide() == Wide::Wide && page.cells(i)[to].wide() == Wide::SpacerTail {
+    if to < cols && to > 0 && page.cells(i)[to - 1].wide() == Wide::Wide && page.cells(i)[to].wide() == Wide::SpacerTail
+    {
         page.clear_cells(i, to, to + 1, Cell::BLANK, false);
     }
     if to < cols && page.cells(i)[to.saturating_sub(1)].wide() == Wide::Wide && to > from {

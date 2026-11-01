@@ -71,12 +71,8 @@ const GRAPHEME_VALUES: [GraphemeBreak; 14] = [
     GraphemeBreak::LV,
     GraphemeBreak::LVT,
 ];
-const INCB_VALUES: [IndicConjunctBreak; 4] = [
-    IndicConjunctBreak::None,
-    IndicConjunctBreak::Linker,
-    IndicConjunctBreak::Consonant,
-    IndicConjunctBreak::Extend,
-];
+const INCB_VALUES: [IndicConjunctBreak; 4] =
+    [IndicConjunctBreak::None, IndicConjunctBreak::Linker, IndicConjunctBreak::Consonant, IndicConjunctBreak::Extend];
 
 /// Decodes a packed table value (see the header of `tables.rs`) into a `CharProps`.
 fn unpack(packed: u16) -> CharProps {
@@ -96,8 +92,7 @@ fn lookup_packed(c: char) -> u16 {
         return tables::ASCII[cp];
     }
     let block = tables::STAGE1[cp >> tables::BLOCK_SHIFT] as usize;
-    let index =
-        tables::STAGE2[(block << tables::BLOCK_SHIFT) | (cp & ((1 << tables::BLOCK_SHIFT) - 1))];
+    let index = tables::STAGE2[(block << tables::BLOCK_SHIFT) | (cp & ((1 << tables::BLOCK_SHIFT) - 1))];
     tables::VALUES[index as usize]
 }
 
@@ -190,8 +185,7 @@ impl GraphemeBreaker {
 
     /// Updates the remembered context after `p` was appended; `split` says a boundary fell before it.
     fn advance(&mut self, p: CharProps, split: bool) {
-        self.regional_odd =
-            p.grapheme == GraphemeBreak::RegionalIndicator && (split || !self.regional_odd);
+        self.regional_odd = p.grapheme == GraphemeBreak::RegionalIndicator && (split || !self.regional_odd);
         self.emoji = next_emoji_state(self.emoji, &p);
         self.conjunct = next_conjunct_state(self.conjunct, &p);
         self.prev = p.grapheme;
@@ -248,11 +242,7 @@ pub fn cluster_width(cluster: &[char]) -> u8 {
         return p.width.max(1);
     }
     if p.grapheme == GraphemeBreak::RegionalIndicator {
-        return if props(rest[0]).grapheme == GraphemeBreak::RegionalIndicator {
-            2
-        } else {
-            1
-        };
+        return if props(rest[0]).grapheme == GraphemeBreak::RegionalIndicator { 2 } else { 1 };
     }
     emoji_sequence_width(first, &p, rest).unwrap_or(p.width.max(1))
 }
@@ -270,9 +260,5 @@ fn emoji_sequence_width(first: char, p: &CharProps, rest: &[char]) -> Option<u8>
         return Some(1);
     }
     let widened = has(VS16) || has(ZWJ) || rest.iter().any(|&c| is_skin_tone(c));
-    if widened && p.extended_pictographic {
-        Some(2)
-    } else {
-        None
-    }
+    if widened && p.extended_pictographic { Some(2) } else { None }
 }

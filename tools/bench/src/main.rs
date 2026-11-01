@@ -99,7 +99,12 @@ fn throughput(samples: usize, only: Option<&str>) -> Vec<Sample> {
         times.sort_by(f64::total_cmp);
         let median = times[times.len() / 2];
         let bytes = (data.len() * repeat) as u64;
-        println!("{name:<22} {:>9.1} MB/s  ({:.3} s for {} MB, median of {samples})", bytes as f64 / median / 1e6, median, bytes >> 20);
+        println!(
+            "{name:<22} {:>9.1} MB/s  ({:.3} s for {} MB, median of {samples})",
+            bytes as f64 / median / 1e6,
+            median,
+            bytes >> 20
+        );
         out.push(Sample { scenario: name.to_string(), bytes, seconds: median });
     }
     out
@@ -127,13 +132,22 @@ fn allocations() -> (u64, u64, u64) {
     }
     let steady = ALLOCS.load(Ordering::Relaxed) - steady_start.unwrap_or(before);
     println!("warm up allocations: {warm}");
-    println!("steady state: {steady} allocations over {} MB ({:.6} per byte)", steady_bytes >> 20, steady as f64 / steady_bytes.max(1) as f64);
+    println!(
+        "steady state: {steady} allocations over {} MB ({:.6} per byte)",
+        steady_bytes >> 20,
+        steady as f64 / steady_bytes.max(1) as f64
+    );
     (warm, steady, steady_bytes)
 }
 
 /// The commit being measured.
 fn commit() -> String {
-    std::process::Command::new("git").args(["rev-parse", "--short", "HEAD"]).output().ok().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default()
+    std::process::Command::new("git")
+        .args(["rev-parse", "--short", "HEAD"])
+        .output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default()
 }
 
 /// Appends JSON rows to `_agent_output/bench/<file>`.
@@ -177,7 +191,11 @@ fn parse_only() {
         }
         let secs = start.elapsed().as_secs_f64();
         let bytes = data.len() as u64 * repeat;
-        println!("parse {name:<22} {:>9.1} MB/s  {:.1} bytes per action", bytes as f64 / secs / 1e6, bytes as f64 / count.max(1) as f64);
+        println!(
+            "parse {name:<22} {:>9.1} MB/s  {:.1} bytes per action",
+            bytes as f64 / secs / 1e6,
+            bytes as f64 / count.max(1) as f64
+        );
     }
 }
 
@@ -188,7 +206,12 @@ fn main() {
         Some("parse") => parse_only(),
         Some("alloc") => {
             let (warm, steady, bytes) = allocations();
-            record("p5.jsonl", &[serde_json::json!({"machine": machine(), "warm_allocs": warm, "steady_allocs": steady, "steady_bytes": bytes})]);
+            record(
+                "p5.jsonl",
+                &[
+                    serde_json::json!({"machine": machine(), "warm_allocs": warm, "steady_allocs": steady, "steady_bytes": bytes}),
+                ],
+            );
             if steady > bytes / (1 << 20) {
                 eprintln!("P5 FAIL: more than one allocation per MB in the steady state");
                 std::process::exit(1);
@@ -199,7 +222,8 @@ fn main() {
             let results = throughput(samples, args.get(3).map(String::as_str));
             let rows: Vec<serde_json::Value> = results.iter().map(|s| serde_json::json!({"machine": machine(), "scenario": s.scenario, "bytes": s.bytes, "seconds": s.seconds, "mb_per_s": s.bytes as f64 / s.seconds / 1e6})).collect();
             record("p1.jsonl", &rows);
-            let mixed = results.iter().find(|s| s.scenario == "mixed").map(|s| s.bytes as f64 / s.seconds / 1e9).unwrap_or(0.0);
+            let mixed =
+                results.iter().find(|s| s.scenario == "mixed").map(|s| s.bytes as f64 / s.seconds / 1e9).unwrap_or(0.0);
             println!("P1 gate (mixed >= 1.0 GB/s): {mixed:.2} GB/s {}", if mixed >= 1.0 { "PASS" } else { "FAIL" });
         }
     }

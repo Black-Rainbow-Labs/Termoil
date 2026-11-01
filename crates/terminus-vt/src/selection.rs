@@ -90,9 +90,19 @@ impl Selection {
         let cols = pages.cols();
         Some(match self.mode {
             SelectionMode::Char => SelectionRange { start, end, block: false },
-            SelectionMode::Block => SelectionRange { start: (start.0, a.1.min(h.1)), end: (end.0, a.1.max(h.1)), block: true },
-            SelectionMode::Line => SelectionRange { start: (line_start(pages, start.0), 0), end: (line_end(pages, end.0), cols - 1), block: false },
-            SelectionMode::Word => SelectionRange { start: word_start(pages, start, separators), end: word_end(pages, end, separators), block: false },
+            SelectionMode::Block => {
+                SelectionRange { start: (start.0, a.1.min(h.1)), end: (end.0, a.1.max(h.1)), block: true }
+            }
+            SelectionMode::Line => SelectionRange {
+                start: (line_start(pages, start.0), 0),
+                end: (line_end(pages, end.0), cols - 1),
+                block: false,
+            },
+            SelectionMode::Word => SelectionRange {
+                start: word_start(pages, start, separators),
+                end: word_end(pages, end, separators),
+                block: false,
+            },
             SelectionMode::Semantic => semantic_range(pages, start.0)?,
         })
     }
@@ -171,7 +181,10 @@ pub fn range_ansi(pages: &PageList, r: SelectionRange) -> String {
     let mut current = Style::default();
     pages.for_rows(r.start.0..r.end.0 + 1, |y, page, i| {
         let (from, to) = row_span(r, y, page.cols());
-        let last = (from..=to).rev().find(|&c| !page.cells(i)[c as usize].is_blank() || page.cells(i)[c as usize].style_id() != 0).unwrap_or(from);
+        let last = (from..=to)
+            .rev()
+            .find(|&c| !page.cells(i)[c as usize].is_blank() || page.cells(i)[c as usize].style_id() != 0)
+            .unwrap_or(from);
         for col in from..=last {
             let style = page.style(page.cells(i)[col as usize].style_id());
             if style != current {
@@ -194,7 +207,15 @@ pub fn range_ansi(pages: &PageList, r: SelectionRange) -> String {
 /// An SGR sequence that sets exactly `style`.
 fn sgr_for(style: &Style) -> String {
     let mut p = vec!["0".to_string()];
-    let flags = [(attr::BOLD, "1"), (attr::FAINT, "2"), (attr::ITALIC, "3"), (attr::BLINK, "5"), (attr::INVERSE, "7"), (attr::INVISIBLE, "8"), (attr::STRIKE, "9")];
+    let flags = [
+        (attr::BOLD, "1"),
+        (attr::FAINT, "2"),
+        (attr::ITALIC, "3"),
+        (attr::BLINK, "5"),
+        (attr::INVERSE, "7"),
+        (attr::INVISIBLE, "8"),
+        (attr::STRIKE, "9"),
+    ];
     p.extend(flags.iter().filter(|(b, _)| style.has(*b)).map(|(_, c)| c.to_string()));
     if style.underline != Underline::None {
         p.push(format!("4:{}", style.underline as u8));
@@ -243,7 +264,8 @@ fn word_start(pages: &PageList, p: (usize, u16), separators: &str) -> (usize, u1
 
 /// Moves right from `p` to the last cell of its word, across wrapped rows.
 fn word_end(pages: &PageList, p: (usize, u16), separators: &str) -> (usize, u16) {
-    if is_separator(pages, p.0, p.1, separators) && !pages.with_row(p.0, |pg, i| pg.cells(i)[p.1 as usize].is_spacer()) {
+    if is_separator(pages, p.0, p.1, separators) && !pages.with_row(p.0, |pg, i| pg.cells(i)[p.1 as usize].is_spacer())
+    {
         return p;
     }
     let (mut y, mut col) = p;
@@ -283,7 +305,11 @@ fn semantic_range(pages: &PageList, y: usize) -> Option<SelectionRange> {
     while end > start && pages.row_text(end).trim().is_empty() {
         end -= 1;
     }
-    (start < total && start <= end).then(|| SelectionRange { start: (start, 0), end: (end, pages.cols() - 1), block: false })
+    (start < total && start <= end).then(|| SelectionRange {
+        start: (start, 0),
+        end: (end, pages.cols() - 1),
+        block: false,
+    })
 }
 
 /// True when any cell of row `y` has one of the semantic kinds.

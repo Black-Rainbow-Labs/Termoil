@@ -27,7 +27,8 @@ impl Charset {
             b'0' | b'2' => Charset::DecSpecial,
             b'A' => Charset::Uk,
             b'>' => Charset::DecTechnical,
-            b'1' | b'<' | b'%' | b'4' | b'5' | b'C' | b'R' | b'f' | b'Q' | b'9' | b'K' | b'Y' | b'Z' | b'H' | b'7' | b'=' | b'6' | b'"' | b'`' | b'E' => Charset::Ascii,
+            b'1' | b'<' | b'%' | b'4' | b'5' | b'C' | b'R' | b'f' | b'Q' | b'9' | b'K' | b'Y' | b'Z' | b'H' | b'7'
+            | b'=' | b'6' | b'"' | b'`' | b'E' => Charset::Ascii,
             _ => return None,
         })
     }
@@ -47,7 +48,10 @@ impl Charset {
 /// The DEC Special Graphics mapping for 0x5F to 0x7E.
 fn dec_special(c: char) -> char {
     const TABLE: [char; 32] = [
-        '\u{00a0}', '\u{25c6}', '\u{2592}', '\u{2409}', '\u{240c}', '\u{240d}', '\u{240a}', '\u{00b0}', '\u{00b1}', '\u{2424}', '\u{240b}', '\u{2518}', '\u{2510}', '\u{250c}', '\u{2514}', '\u{253c}', '\u{23ba}', '\u{23bb}', '\u{2500}', '\u{23bc}', '\u{23bd}', '\u{251c}', '\u{2524}', '\u{2534}', '\u{252c}', '\u{2502}', '\u{2264}', '\u{2265}', '\u{03c0}', '\u{2260}', '\u{00a3}', '\u{00b7}',
+        '\u{00a0}', '\u{25c6}', '\u{2592}', '\u{2409}', '\u{240c}', '\u{240d}', '\u{240a}', '\u{00b0}', '\u{00b1}',
+        '\u{2424}', '\u{240b}', '\u{2518}', '\u{2510}', '\u{250c}', '\u{2514}', '\u{253c}', '\u{23ba}', '\u{23bb}',
+        '\u{2500}', '\u{23bc}', '\u{23bd}', '\u{251c}', '\u{2524}', '\u{2534}', '\u{252c}', '\u{2502}', '\u{2264}',
+        '\u{2265}', '\u{03c0}', '\u{2260}', '\u{00a3}', '\u{00b7}',
     ];
     match c as u32 {
         0x5f..=0x7e => TABLE[(c as u32 - 0x5f) as usize],

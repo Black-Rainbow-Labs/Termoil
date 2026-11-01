@@ -1,0 +1,14 @@
+[package]
+name = "terminus-headless"
+description = "Runs a program under a pseudoterminal against terminus-vt with no window: the front end the conformance harness (esctest2, vttest) and the recordings use."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+terminus-vt.workspace = true
+terminus-pty.workspace = true
+
+[lints]
+workspace = true

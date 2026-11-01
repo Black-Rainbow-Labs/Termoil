@@ -379,7 +379,11 @@ impl Parser {
     fn advance_utf8<H: Handler>(&mut self, bytes: &[u8], handler: &mut H) -> usize {
         let end = if self.simd { scan::first_control(bytes) } else { scan::first_control_scalar(bytes) };
         let run = &bytes[..end];
-        let result = if self.simd { simdutf8::compat::from_utf8(run).map_err(|e| (e.valid_up_to(), e.error_len())) } else { core::str::from_utf8(run).map_err(|e| (e.valid_up_to(), e.error_len())) };
+        let result = if self.simd {
+            simdutf8::compat::from_utf8(run).map_err(|e| (e.valid_up_to(), e.error_len()))
+        } else {
+            core::str::from_utf8(run).map_err(|e| (e.valid_up_to(), e.error_len()))
+        };
         match result {
             Ok(text) => {
                 handler.handle(Action::Print(text));
@@ -398,7 +402,9 @@ impl Parser {
     }
 
     /// Handles invalid or incomplete UTF-8 at the start of `run`. Returns bytes consumed.
-    fn handle_invalid_utf8<H: Handler>(&mut self, run: &[u8], error_len: Option<usize>, more_follows: bool, handler: &mut H) -> usize {
+    fn handle_invalid_utf8<H: Handler>(
+        &mut self, run: &[u8], error_len: Option<usize>, more_follows: bool, handler: &mut H,
+    ) -> usize {
         match error_len {
             Some(1) if (0x80..0xa0).contains(&run[0]) => {
                 self.c1_control(run[0], handler);
@@ -491,9 +497,13 @@ impl Parser {
             State::Ground => self.ground_byte(byte, handler),
             State::Escape => self.escape_byte(byte, handler),
             State::EscapeIntermediate => self.escape_intermediate_byte(byte, handler),
-            State::CsiEntry | State::CsiParam | State::CsiIntermediate | State::CsiIgnore => self.csi_byte(byte, handler),
+            State::CsiEntry | State::CsiParam | State::CsiIntermediate | State::CsiIgnore => {
+                self.csi_byte(byte, handler)
+            }
             State::DcsEntry | State::DcsParam | State::DcsIntermediate | State::DcsIgnore => self.dcs_header_byte(byte),
-            State::DcsPassthrough | State::OscString | State::ApcString | State::SosPmString => self.string_byte(byte, handler),
+            State::DcsPassthrough | State::OscString | State::ApcString | State::SosPmString => {
+                self.string_byte(byte, handler)
+            }
             State::StringEscape => {}
         }
     }
@@ -501,7 +511,10 @@ impl Parser {
     /// The transitions that apply in every state: CAN and SUB abort, ESC restarts, and the 8 bit
     /// C1 introducers outside string states. Returns true when the byte was consumed.
     fn anywhere<H: Handler>(&mut self, byte: u8, handler: &mut H) -> bool {
-        let in_string = matches!(self.state, State::OscString | State::DcsPassthrough | State::ApcString | State::SosPmString | State::DcsIgnore);
+        let in_string = matches!(
+            self.state,
+            State::OscString | State::DcsPassthrough | State::ApcString | State::SosPmString | State::DcsIgnore
+        );
         match byte {
             0x18 | 0x1a => {
                 if in_string {

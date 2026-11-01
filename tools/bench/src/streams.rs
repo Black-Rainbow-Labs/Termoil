@@ -23,9 +23,41 @@ impl Rng {
     }
 }
 
-const WORDS: &[&str] = &["the", "compiling", "terminus", "warning:", "error", "src/main.rs", "Finished", "release", "target", "in", "1.23s", "test", "ok", "passed", "--> crates/vt/src/page.rs:42:7", "fn", "let", "mut", "self", "=", "{", "}", "0x1f", "Downloaded", "serde", "v1.0.229", "|", "^^^^", "note:", "#[derive(Debug)]"];
+const WORDS: &[&str] = &[
+    "the",
+    "compiling",
+    "terminus",
+    "warning:",
+    "error",
+    "src/main.rs",
+    "Finished",
+    "release",
+    "target",
+    "in",
+    "1.23s",
+    "test",
+    "ok",
+    "passed",
+    "--> crates/vt/src/page.rs:42:7",
+    "fn",
+    "let",
+    "mut",
+    "self",
+    "=",
+    "{",
+    "}",
+    "0x1f",
+    "Downloaded",
+    "serde",
+    "v1.0.229",
+    "|",
+    "^^^^",
+    "note:",
+    "#[derive(Debug)]",
+];
 
-const UNICODE: &[&str] = &["café", "naïve", "über", "中文字符", "日本語のテキスト", "한국어", "✓", "→", "😀", "Ωmega", "αβγ"];
+const UNICODE: &[&str] =
+    &["café", "naïve", "über", "中文字符", "日本語のテキスト", "한국어", "✓", "→", "😀", "Ωmega", "αβγ"];
 
 /// One line of the mixed stream.
 fn mixed_line(r: &mut Rng, out: &mut Vec<u8>, k: Knobs) {
@@ -43,7 +75,9 @@ fn mixed_line(r: &mut Rng, out: &mut Vec<u8>, k: Knobs) {
             out.push(b' ');
         }
         if r.below(8) == 0 && k.sgr {
-            out.extend_from_slice(format!("\x1b[{};{}m", 30 + r.below(8), if r.below(2) == 0 { 1 } else { 22 }).as_bytes());
+            out.extend_from_slice(
+                format!("\x1b[{};{}m", 30 + r.below(8), if r.below(2) == 0 { 1 } else { 22 }).as_bytes(),
+            );
         }
         if r.below(20) == 0 && k.unicode {
             out.extend_from_slice(UNICODE[r.below(UNICODE.len() as u64) as usize].as_bytes());
@@ -102,7 +136,10 @@ fn dense_cells(size: usize) -> Vec<u8> {
     while out.len() < size {
         out.extend_from_slice(b"\x1b[H");
         for _ in 0..200 * 60 {
-            out.extend_from_slice(format!("\x1b[38;5;{};48;5;{};1;4m{}", r.below(256), r.below(256), (b'A' + r.below(26) as u8) as char).as_bytes());
+            out.extend_from_slice(
+                format!("\x1b[38;5;{};48;5;{};1;4m{}", r.below(256), r.below(256), (b'A' + r.below(26) as u8) as char)
+                    .as_bytes(),
+            );
         }
     }
     out
@@ -134,7 +171,9 @@ fn cursor_motion(size: usize) -> Vec<u8> {
     let mut r = Rng(17);
     let mut out = Vec::with_capacity(size);
     while out.len() < size {
-        out.extend_from_slice(format!("\x1b[{};{}H{}", 1 + r.below(60), 1 + r.below(200), (b'a' + r.below(26) as u8) as char).as_bytes());
+        out.extend_from_slice(
+            format!("\x1b[{};{}H{}", 1 + r.below(60), 1 + r.below(200), (b'a' + r.below(26) as u8) as char).as_bytes(),
+        );
     }
     out
 }
@@ -166,12 +205,38 @@ pub fn scenarios() -> Vec<(&'static str, Vec<u8>)> {
         ("mixed_sgr", mixed_with(32 << 20, Knobs { sgr: true, unicode: false, progress: false })),
         ("mixed_unicode", mixed_with(32 << 20, Knobs { sgr: false, unicode: true, progress: false })),
         ("mixed_progress", mixed_with(32 << 20, Knobs { sgr: false, unicode: false, progress: true })),
-        ("micro_line60_lf", [b"x".repeat(60), b"
-".to_vec()].concat().repeat(256 << 10)),
-        ("micro_line60_lnm", [b"[20h".to_vec(), [b"x".repeat(60), b"
-".to_vec()].concat().repeat(256 << 10)].concat()),
-        ("micro_words_lf", b"the compiling terminus warning: error src/main.rs Finished x
-".repeat(256 << 10)),
+        (
+            "micro_line60_lf",
+            [
+                b"x".repeat(60),
+                b"
+"
+                .to_vec(),
+            ]
+            .concat()
+            .repeat(256 << 10),
+        ),
+        (
+            "micro_line60_lnm",
+            [
+                b"[20h".to_vec(),
+                [
+                    b"x".repeat(60),
+                    b"
+"
+                    .to_vec(),
+                ]
+                .concat()
+                .repeat(256 << 10),
+            ]
+            .concat(),
+        ),
+        (
+            "micro_words_lf",
+            b"the compiling terminus warning: error src/main.rs Finished x
+"
+            .repeat(256 << 10),
+        ),
         ("micro_sgr_pair", b"[31mab[0mcd".repeat(1 << 20)),
         ("micro_sgr_same", b"[31mab[31mcd".repeat(1 << 20)),
         ("micro_print_only", b"abcd".repeat(4 << 20)),

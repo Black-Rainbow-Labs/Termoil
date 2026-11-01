@@ -60,7 +60,12 @@ pub(super) fn write_segment(s: &mut Screen, text: &str, m: PrintModes) -> usize 
     let base = pen_on_page(page, cursor);
     let link = cursor.hyperlink;
     let joinable = last_print.filter(|lp| lp.after == (cursor.row, cursor.col, cursor.pending_wrap));
-    let mut seg = Seg { x: cursor.col, pending: cursor.pending_wrap && m.autowrap, last: joinable.map(|lp| Last { col: lp.col, breaker: lp.state, ascii: lp.ascii }), ascii_refs: 0 };
+    let mut seg = Seg {
+        x: cursor.col,
+        pending: cursor.pending_wrap && m.autowrap,
+        last: joinable.map(|lp| Last { col: lp.col, breaker: lp.state, ascii: lp.ascii }),
+        ascii_refs: 0,
+    };
     if seg.x > 0 && !seg.pending && page.cells(i)[seg.x as usize].wide() == Wide::SpacerTail {
         page.clear_cells(i, seg.x as usize - 1, seg.x as usize + 1, Cell::BLANK, false);
     }
@@ -71,7 +76,8 @@ pub(super) fn write_segment(s: &mut Screen, text: &str, m: PrintModes) -> usize 
     cursor.col = seg.x;
     cursor.pending_wrap = seg.pending;
     if let Some(l) = seg.last {
-        *last_print = Some(LastPrint { row, col: l.col, state: l.breaker, ascii: l.ascii, after: (row, seg.x, seg.pending) });
+        *last_print =
+            Some(LastPrint { row, col: l.col, state: l.breaker, ascii: l.ascii, after: (row, seg.x, seg.pending) });
     }
     consumed
 }
@@ -84,7 +90,12 @@ fn pen_on_page(page: &mut Page, cursor: &mut crate::screen::Cursor) -> Cell {
     let id = match cursor.style_cache {
         Some((u, id)) if u == uid && page.style_id_valid(id, &style) => id,
         _ => {
-            let recent = cursor.recent_styles.iter().flatten().find(|(u, s, id)| *u == uid && *s == style && page.style_id_valid(*id, &style)).map(|e| e.2);
+            let recent = cursor
+                .recent_styles
+                .iter()
+                .flatten()
+                .find(|(u, s, id)| *u == uid && *s == style && page.style_id_valid(*id, &style))
+                .map(|e| e.2);
             let id = recent.unwrap_or_else(|| page.intern_style(&style));
             if recent.is_none() && id != 0 {
                 let slot = cursor.recent_next as usize % cursor.recent_styles.len();
@@ -104,12 +115,17 @@ fn pen_on_page(page: &mut Page, cursor: &mut crate::screen::Cursor) -> Cell {
 }
 
 /// The character loop of a segment. Returns bytes consumed.
-fn write_loop(page: &mut Page, i: usize, text: &str, base: Cell, link: Option<u32>, side: bool, cols: u16, m: PrintModes, seg: &mut Seg) -> usize {
+fn write_loop(
+    page: &mut Page, i: usize, text: &str, base: Cell, link: Option<u32>, side: bool, cols: u16, m: PrintModes,
+    seg: &mut Seg,
+) -> usize {
     let bytes = text.as_bytes();
     let mut pos = 0;
     while pos < bytes.len() {
         let b = bytes[pos];
-        let ascii_fast = b < 0x80 && !seg.pending && seg.last.is_none_or(|l| l.breaker.is_none_or(|br| !br.joins_ascii() || !m.cluster));
+        let ascii_fast = b < 0x80
+            && !seg.pending
+            && seg.last.is_none_or(|l| l.breaker.is_none_or(|br| !br.joins_ascii() || !m.cluster));
         if ascii_fast && (m.autowrap || seg.x < m.right) {
             let n = ascii_run(page, i, &bytes[pos..], base, link, side, m, seg);
             pos += n;
@@ -126,7 +142,9 @@ fn write_loop(page: &mut Page, i: usize, text: &str, base: Cell, link: Option<u3
 
 /// Writes the run of ASCII at the start of `bytes` that fits on the row, as one bulk copy.
 /// Returns how many bytes were written (at least one).
-fn ascii_run(page: &mut Page, i: usize, bytes: &[u8], base: Cell, link: Option<u32>, side: bool, m: PrintModes, seg: &mut Seg) -> usize {
+fn ascii_run(
+    page: &mut Page, i: usize, bytes: &[u8], base: Cell, link: Option<u32>, side: bool, m: PrintModes, seg: &mut Seg,
+) -> usize {
     let room = (m.right - seg.x + 1) as usize;
     // Without autowrap the last column is written through the general path, which overwrites it.
     let room = if m.autowrap { room } else { room - 1 };
@@ -159,7 +177,9 @@ enum Step {
 }
 
 /// Writes or joins one character through the general rules.
-fn write_char(page: &mut Page, i: usize, c: char, base: Cell, link: Option<u32>, cols: u16, m: PrintModes, seg: &mut Seg) -> Step {
+fn write_char(
+    page: &mut Page, i: usize, c: char, base: Cell, link: Option<u32>, cols: u16, m: PrintModes, seg: &mut Seg,
+) -> Step {
     if ('\u{80}'..='\u{9f}').contains(&c) {
         return Step::Done;
     }
@@ -285,7 +305,11 @@ fn finish_row(page: &mut Page, i: usize, base: Cell, start_x: u16, seg: &Seg, co
         *flags |= row_flags::STYLED;
     }
     let end = if seg.pending { seg.x as usize + 1 } else { seg.x as usize };
-    if end > start_x as usize && end < cols as usize && page.cells(i)[end].wide() == Wide::SpacerTail && page.cells(i)[end - 1].wide() != Wide::Wide {
+    if end > start_x as usize
+        && end < cols as usize
+        && page.cells(i)[end].wide() == Wide::SpacerTail
+        && page.cells(i)[end - 1].wide() != Wide::Wide
+    {
         page.clear_cells(i, end, end + 1, Cell::BLANK, false);
     }
 }

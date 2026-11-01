@@ -83,3 +83,18 @@ EVENT ColorSchemeQuery
 # The kitty keyboard flags query.
 PUSH "\e[?u"
 REPLY "\e[?0u"
+
+# DECRQCRA: the checksum of a rectangle, as esctest uses it to read single cells. A blank cell
+# counts as a space (xterm from patch 334).
+SIZE 10 3
+PUSH "AB\e[2;3HC"
+PUSH "\e[7;0;1;1;1;1*y"
+REPLY "\eP7!~0041\e\\"
+PUSH "\e[8;0;1;2;1;2*y"
+REPLY "\eP8!~0042\e\\"
+PUSH "\e[9;0;2;3;2;3*y"
+REPLY "\eP9!~0043\e\\"
+PUSH "\e[1;0;3;1;3;1*y"
+REPLY "\eP1!~0020\e\\"
+PUSH "\e[2;0*y"
+REPLY "\eP2!~0426\e\\"

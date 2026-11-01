@@ -35,7 +35,10 @@ fn stream() -> impl Strategy<Value = Vec<u8>> {
 
 /// A terminal with a small scrollback so pruning happens.
 fn term(cols: u16, rows: u16) -> Terminal {
-    let config = TerminalConfig { scrollback: ScrollbackLimit { bytes: 400_000, lines: Some(300) }, ..TerminalConfig::default() };
+    let config = TerminalConfig {
+        scrollback: ScrollbackLimit { bytes: 400_000, lines: Some(300) },
+        ..TerminalConfig::default()
+    };
     Terminal::new(cols, rows, config)
 }
 
@@ -43,7 +46,14 @@ fn term(cols: u16, rows: u16) -> Terminal {
 fn check_invariants(t: &Terminal) {
     for screen in [Some(t.primary()), t.is_alt_screen().then(|| t.screen())].into_iter().flatten() {
         let c = &screen.cursor;
-        assert!(c.row < screen.rows() && c.col < screen.cols(), "cursor {},{} outside {}x{}", c.row, c.col, screen.cols(), screen.rows());
+        assert!(
+            c.row < screen.rows() && c.col < screen.cols(),
+            "cursor {},{} outside {}x{}",
+            c.row,
+            c.col,
+            screen.cols(),
+            screen.rows()
+        );
         let pages = &screen.pages;
         assert!(pages.total_rows() >= screen.rows() as usize);
         pages.for_rows(0..pages.total_rows(), |y, page, i| check_row(page, i, y));
@@ -68,7 +78,10 @@ fn check_row(page: &Page, i: usize, y: usize) {
     assert_eq!(cells.len(), page.cols() as usize);
     for (col, cell) in cells.iter().enumerate() {
         match cell.wide() {
-            Wide::Wide => assert!(col + 1 < cells.len() && cells[col + 1].wide() == Wide::SpacerTail, "wide cell without tail at {y},{col}"),
+            Wide::Wide => assert!(
+                col + 1 < cells.len() && cells[col + 1].wide() == Wide::SpacerTail,
+                "wide cell without tail at {y},{col}"
+            ),
             Wide::SpacerTail => assert!(col > 0 && cells[col - 1].wide() == Wide::Wide, "orphan tail at {y},{col}"),
             Wide::SpacerHead => assert_eq!(col + 1, cells.len(), "spacer head not at the end at {y},{col}"),
             Wide::Narrow => {}

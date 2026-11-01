@@ -52,7 +52,8 @@ impl Terminal {
             return;
         }
         let lrmm = self.modes.get(Mode::LeftRightMargins);
-        let (left, right) = if lrmm { (self.screen().left, self.screen().right + 1) } else { (0, self.screen().cols()) };
+        let (left, right) =
+            if lrmm { (self.screen().left, self.screen().right + 1) } else { (0, self.screen().cols()) };
         for r in from..to.min(self.screen().rows()) {
             self.erase_cells(r, left, right, false);
         }
@@ -106,7 +107,8 @@ impl Terminal {
         let (page, i) = s.pages.active_mut(row);
         if !selective {
             let r = page.row_mut(i);
-            r.flags &= !(row_flags::WRAP | row_flags::WRAP_CONTINUATION | row_flags::LINE_SIZE | row_flags::SEMANTIC_PROMPT);
+            r.flags &=
+                !(row_flags::WRAP | row_flags::WRAP_CONTINUATION | row_flags::LINE_SIZE | row_flags::SEMANTIC_PROMPT);
         }
     }
 
@@ -304,7 +306,11 @@ impl Terminal {
     /// The cursor column relative to the origin.
     fn cursor_col_in_origin(&self) -> u16 {
         let s = self.screen();
-        if self.modes.get(Mode::Origin) && self.modes.get(Mode::LeftRightMargins) { s.cursor.col.saturating_sub(s.left) } else { s.cursor.col }
+        if self.modes.get(Mode::Origin) && self.modes.get(Mode::LeftRightMargins) {
+            s.cursor.col.saturating_sub(s.left)
+        } else {
+            s.cursor.col
+        }
     }
 
     /// CUU: up `n`, stopping at the top margin when inside the region.
@@ -417,10 +423,12 @@ impl Terminal {
     pub(super) fn copy_rect(&mut self, top: u16, left: u16, bottom: u16, right: u16, dst_top: u16, dst_left: u16) {
         let s = self.screen_mut();
         let (rows, cols) = (s.rows(), s.cols());
-        let rows_src: Vec<crate::page::Page> = (top..=bottom).map(|r| {
-            let (p, i) = s.pages.active_mut(r);
-            p.extract_row(i)
-        }).collect();
+        let rows_src: Vec<crate::page::Page> = (top..=bottom)
+            .map(|r| {
+                let (p, i) = s.pages.active_mut(r);
+                p.extract_row(i)
+            })
+            .collect();
         for (k, tmp) in rows_src.iter().enumerate() {
             let dr = dst_top + k as u16;
             if dr >= rows {

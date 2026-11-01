@@ -8,8 +8,8 @@ pub const CODE_POINTS: usize = 0x11_0000;
 
 /// General_Category abbreviations in the order of their index; index 0 is Cn, the default.
 pub const GC_NAMES: &[&str] = &[
-    "Cn", "Lu", "Ll", "Lt", "Lm", "Lo", "Mn", "Mc", "Me", "Nd", "Nl", "No", "Pc", "Pd", "Ps", "Pe",
-    "Pi", "Pf", "Po", "Sm", "Sc", "Sk", "So", "Zs", "Zl", "Zp", "Cc", "Cf", "Cs", "Co",
+    "Cn", "Lu", "Ll", "Lt", "Lm", "Lo", "Mn", "Mc", "Me", "Nd", "Nl", "No", "Pc", "Pd", "Ps", "Pe", "Pi", "Pf", "Po",
+    "Sm", "Sc", "Sk", "So", "Zs", "Zl", "Zp", "Cc", "Cf", "Cs", "Co",
 ];
 /// East_Asian_Width values in the order of their index; index 0 (N) is the default.
 pub const EAW_NAMES: &[&str] = &["N", "A", "Na", "H", "W", "F"];
@@ -45,9 +45,7 @@ pub struct Ucd {
 
 /// Reads every data file under `dir` and returns the properties of all code points.
 pub fn load(dir: &Path) -> Ucd {
-    let read = |name: &str| {
-        fs::read_to_string(dir.join(name)).unwrap_or_else(|e| panic!("cannot read {name}: {e}"))
-    };
+    let read = |name: &str| fs::read_to_string(dir.join(name)).unwrap_or_else(|e| panic!("cannot read {name}: {e}"));
     Ucd {
         gc: fill_values(&read("DerivedGeneralCategory.txt"), None, GC_NAMES),
         eaw: fill_values(&read("EastAsianWidth.txt"), None, EAW_NAMES),
@@ -70,11 +68,8 @@ fn split_fields(line: &str) -> Option<Vec<&str>> {
 /// Parses `XXXX` or `XXXX..YYYY` into an inclusive code point range.
 fn parse_range(text: &str) -> (usize, usize) {
     let mut parts = text.split("..");
-    let lo = usize::from_str_radix(parts.next().unwrap(), 16)
-        .unwrap_or_else(|_| panic!("bad code point {text}"));
-    let hi = parts
-        .next()
-        .map_or(lo, |h| usize::from_str_radix(h, 16).unwrap());
+    let lo = usize::from_str_radix(parts.next().unwrap(), 16).unwrap_or_else(|_| panic!("bad code point {text}"));
+    let hi = parts.next().map_or(lo, |h| usize::from_str_radix(h, 16).unwrap());
     (lo, hi)
 }
 
@@ -88,10 +83,7 @@ fn fill_values(text: &str, property: Option<&str>, names: &[&str]) -> Vec<u8> {
             Some(_) => continue,
             None => fields[1],
         };
-        let index = names
-            .iter()
-            .position(|n| *n == value)
-            .unwrap_or_else(|| panic!("unknown value {value}"));
+        let index = names.iter().position(|n| *n == value).unwrap_or_else(|| panic!("unknown value {value}"));
         let (lo, hi) = parse_range(fields[0]);
         out[lo..=hi].fill(index as u8);
     }

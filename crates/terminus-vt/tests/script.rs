@@ -56,7 +56,13 @@ struct Run {
 impl Run {
     /// A run with a default sized terminal.
     fn new(feed: Feed) -> Run {
-        Run { term: Terminal::new(80, 24, TerminalConfig::default()), replies: Vec::new(), events: VecDeque::new(), feed, rng: 0x9e37_79b9 }
+        Run {
+            term: Terminal::new(80, 24, TerminalConfig::default()),
+            replies: Vec::new(),
+            events: VecDeque::new(),
+            feed,
+            rng: 0x9e37_79b9,
+        }
     }
 
     /// Feeds bytes the way this run feeds them, collecting replies and events.
@@ -110,7 +116,8 @@ fn unescape(s: &str) -> Vec<u8> {
             Some('u') => {
                 assert_eq!(chars.next(), Some('{'), "write code points as \\u{{e9}}");
                 let hex: String = chars.by_ref().take_while(|c| *c != '}').collect();
-                let c = char::from_u32(u32::from_str_radix(&hex, 16).expect("hex inside \\u{{}}")).expect("valid code point");
+                let c = char::from_u32(u32::from_str_radix(&hex, 16).expect("hex inside \\u{{}}"))
+                    .expect("valid code point");
                 let mut buf = [0u8; 4];
                 out.extend_from_slice(c.encode_utf8(&mut buf).as_bytes());
             }
@@ -188,7 +195,9 @@ fn actual_line(run: &mut Run, word: &str, rest: &str) -> Option<String> {
             format!("MODE {spec} {}", t.modes().report(kind, num.parse().ok()?))
         }
         "TITLE" => format!("TITLE {}", quote(t.title().as_bytes())),
-        "EVENT" => format!("EVENT {}", run.events.pop_front().map(|e| format!("{e:?}")).unwrap_or_else(|| "none".into())),
+        "EVENT" => {
+            format!("EVENT {}", run.events.pop_front().map(|e| format!("{e:?}")).unwrap_or_else(|| "none".into()))
+        }
         "HISTORY" => format!("HISTORY {}", t.primary().pages.history_rows()),
         "HISTROW" => {
             let r: usize = rest.split_whitespace().next()?.parse().ok()?;
@@ -240,7 +249,13 @@ fn run_script(path: &Path, text: &str, feed: Feed, bless: bool) -> String {
             w if w.starts_with('#') => out.push(line.to_string()),
             "SIZE" => {
                 let (c, r) = two_nums(rest);
-                run = Run { term: Terminal::new(c, r, TerminalConfig::default()), replies: Vec::new(), events: VecDeque::new(), feed, rng: 0x9e37_79b9 };
+                run = Run {
+                    term: Terminal::new(c, r, TerminalConfig::default()),
+                    replies: Vec::new(),
+                    events: VecDeque::new(),
+                    feed,
+                    rng: 0x9e37_79b9,
+                };
                 out.push(line.to_string());
             }
             "RESIZE" => {
@@ -262,19 +277,23 @@ fn run_script(path: &Path, text: &str, feed: Feed, bless: bool) -> String {
                 }
                 i += 1;
                 let actual = dump::text_dump(&run.term);
-                if !bless {
-                    if let Some(d) = dump::diff(&expected, &actual) {
-                        panic!("{} line {i} ({feed:?}): SCREEN differs at {d}", path.display());
-                    }
+                if !bless && let Some(d) = dump::diff(&expected, &actual) {
+                    panic!("{} line {i} ({feed:?}): SCREEN differs at {d}", path.display());
                 }
                 out.push("SCREEN".into());
                 out.extend(actual.iter().map(|r| format!("|{r}")));
                 out.push("END".into());
             }
             _ => {
-                let actual = actual_line(&mut run, word, rest).unwrap_or_else(|| panic!("{} line {i}: unknown step {word}", path.display()));
+                let actual = actual_line(&mut run, word, rest)
+                    .unwrap_or_else(|| panic!("{} line {i}: unknown step {word}", path.display()));
                 if !bless && norm(&actual) != norm(line) {
-                    panic!("{} line {i} ({feed:?}):\n  expected: {}\n  actual:   {}", path.display(), line.trim(), actual);
+                    panic!(
+                        "{} line {i} ({feed:?}):\n  expected: {}\n  actual:   {}",
+                        path.display(),
+                        line.trim(),
+                        actual
+                    );
                 }
                 out.push(actual);
             }
@@ -288,7 +307,11 @@ fn run_script(path: &Path, text: &str, feed: Feed, bless: bool) -> String {
 /// The script files.
 fn scripts() -> Vec<PathBuf> {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/vt");
-    let mut v: Vec<PathBuf> = std::fs::read_dir(&dir).expect("corpus/vt exists").filter_map(|e| e.ok().map(|e| e.path())).filter(|p| p.extension().is_some_and(|x| x == "test")).collect();
+    let mut v: Vec<PathBuf> = std::fs::read_dir(&dir)
+        .expect("corpus/vt exists")
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().is_some_and(|x| x == "test"))
+        .collect();
     v.sort();
     v
 }
@@ -301,7 +324,15 @@ fn control_function_scripts() {
     let mut cases = 0;
     for path in &files {
         let text = std::fs::read_to_string(path).expect("readable script").replace("\r\n", "\n");
-        cases += text.lines().filter(|l| !l.trim().is_empty() && !l.trim_start().starts_with('#') && !matches!(split_word(l).0, "SIZE" | "PUSH" | "RESIZE" | "END") && !l.starts_with('|')).count();
+        cases += text
+            .lines()
+            .filter(|l| {
+                !l.trim().is_empty()
+                    && !l.trim_start().starts_with('#')
+                    && !matches!(split_word(l).0, "SIZE" | "PUSH" | "RESIZE" | "END")
+                    && !l.starts_with('|')
+            })
+            .count();
         let blessed = run_script(path, &text, Feed::Whole, bless);
         if bless && blessed != text {
             std::fs::write(path, &blessed).expect("write blessed script");

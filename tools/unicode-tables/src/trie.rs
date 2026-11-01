@@ -79,17 +79,9 @@ pub fn build(u: &Ucd) -> Tables {
         });
         stage1.push(id);
     }
-    assert!(
-        values.len() <= 256,
-        "more than 256 distinct property values"
-    );
+    assert!(values.len() <= 256, "more than 256 distinct property values");
     let ascii = (0..0x80).map(|cp| u32::from(pack(cp, u))).collect();
-    Tables {
-        stage1,
-        stage2,
-        values,
-        ascii,
-    }
+    Tables { stage1, stage2, values, ascii }
 }
 
 /// Smallest unsigned integer type name that holds every entry.
@@ -101,10 +93,7 @@ fn int_type(entries: &[u32]) -> &'static str {
 /// Renders one static array with entries wrapped at about 110 columns. `ty` forces the element type when given.
 fn render_array(name: &str, entries: &[u32], ty: Option<&'static str>) -> String {
     let ty = ty.unwrap_or_else(|| int_type(entries));
-    let mut out = format!(
-        "#[rustfmt::skip]\npub(super) static {name}: [{ty}; {}] = [\n",
-        entries.len()
-    );
+    let mut out = format!("#[rustfmt::skip]\npub(super) static {name}: [{ty}; {}] = [\n", entries.len());
     let mut line = String::new();
     for e in entries {
         let item = format!("{e},");
@@ -125,16 +114,10 @@ pub fn render(t: &Tables, version: &str) -> String {
     let mut out = String::new();
     out.push_str("// Generated file. Do not edit by hand.\n");
     out.push_str("// Regenerate with: cargo run -p unicode-tables -- generate\n");
-    out.push_str(&format!(
-        "// Source data: corpus/unicode/{version}/ (Unicode {version}).\n"
-    ));
+    out.push_str(&format!("// Source data: corpus/unicode/{version}/ (Unicode {version}).\n"));
     out.push_str("// Packed value: bits 0..1 width, 2..5 grapheme break, 6..7 InCB, 8 Extended_Pictographic, 9 Emoji_Presentation.\n\n");
-    out.push_str(&format!(
-        "pub(super) const DATA_VERSION: &str = \"{version}\";\n"
-    ));
-    out.push_str(&format!(
-        "pub(super) const BLOCK_SHIFT: usize = {BLOCK_SHIFT};\n\n"
-    ));
+    out.push_str(&format!("pub(super) const DATA_VERSION: &str = \"{version}\";\n"));
+    out.push_str(&format!("pub(super) const BLOCK_SHIFT: usize = {BLOCK_SHIFT};\n\n"));
     let arrays = [
         ("STAGE1", &t.stage1, None),
         ("STAGE2", &t.stage2, Some("u8")),

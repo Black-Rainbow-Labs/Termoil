@@ -205,7 +205,15 @@ impl Terminal {
     pub(super) fn save_cursor(&mut self) {
         let origin = self.modes.get(Mode::Origin);
         let s = self.screen_mut();
-        s.saved = Some(SavedCursor { row: s.cursor.row, col: s.cursor.col, pending_wrap: s.cursor.pending_wrap, style: s.cursor.style, protected: s.cursor.protected, origin, charsets: s.charsets });
+        s.saved = Some(SavedCursor {
+            row: s.cursor.row,
+            col: s.cursor.col,
+            pending_wrap: s.cursor.pending_wrap,
+            style: s.cursor.style,
+            protected: s.cursor.protected,
+            origin,
+            charsets: s.charsets,
+        });
     }
 
     /// DECRC: restores what DECSC saved, or homes the cursor with default settings.

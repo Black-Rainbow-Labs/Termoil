@@ -12,6 +12,9 @@
 //! sides: a tab Alacritty stores in a cell reads as a space (Terminus does not store tabs);
 //! blink and overline are not compared (Alacritty does not keep them); hyperlinks compare by URI.
 
+// Test tables are written inline as tuples; naming each one would not help a reader.
+#![allow(clippy::type_complexity)]
+
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
@@ -28,7 +31,11 @@ fn corpus() -> PathBuf {
 
 /// The test cases, sorted.
 fn cases() -> Vec<PathBuf> {
-    let mut v: Vec<PathBuf> = std::fs::read_dir(corpus()).expect("corpus").filter_map(|e| e.ok().map(|e| e.path())).filter(|p| p.join("alacritty.recording").exists()).collect();
+    let mut v: Vec<PathBuf> = std::fs::read_dir(corpus())
+        .expect("corpus")
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.join("alacritty.recording").exists())
+        .collect();
     v.sort();
     v
 }
@@ -49,7 +56,14 @@ impl CellRepr {
     /// The cell as one string.
     fn render(&self) -> String {
         let mut s = format!("'{}'", self.text);
-        for (k, v) in [("", self.wide), ("fg=", self.fg.as_str()), ("bg=", self.bg.as_str()), ("ul=", self.ul), ("ulc=", self.ulc.as_str()), ("link=", self.link.as_str())] {
+        for (k, v) in [
+            ("", self.wide),
+            ("fg=", self.fg.as_str()),
+            ("bg=", self.bg.as_str()),
+            ("ul=", self.ul),
+            ("ulc=", self.ulc.as_str()),
+            ("link=", self.link.as_str()),
+        ] {
             if !v.is_empty() {
                 s.push(' ');
                 s.push_str(k);
@@ -107,9 +121,22 @@ fn terminus_cell(term: &Terminal, page: &Page, row: usize, col: usize) -> String
         Underline::Dotted => "dotted",
         Underline::Dashed => "dashed",
     };
-    let names = [(attr::BOLD, "bold"), (attr::FAINT, "faint"), (attr::ITALIC, "italic"), (attr::INVERSE, "inverse"), (attr::INVISIBLE, "hidden"), (attr::STRIKE, "strike")];
+    let names = [
+        (attr::BOLD, "bold"),
+        (attr::FAINT, "faint"),
+        (attr::ITALIC, "italic"),
+        (attr::INVERSE, "inverse"),
+        (attr::INVISIBLE, "hidden"),
+        (attr::STRIKE, "strike"),
+    ];
     let attrs = names.iter().filter(|(b, _)| style.has(*b)).map(|(_, n)| *n).collect();
-    let link = cell.has_hyperlink().then(|| page.hyperlink(index)).flatten().and_then(|id| term.hyperlink(id)).map(|h| h.uri.clone()).unwrap_or_default();
+    let link = cell
+        .has_hyperlink()
+        .then(|| page.hyperlink(index))
+        .flatten()
+        .and_then(|id| term.hyperlink(id))
+        .map(|h| h.uri.clone())
+        .unwrap_or_default();
     let ulc = if style.underline == Underline::None { String::new() } else { color(style.underline_color) };
     CellRepr { text, wide, fg: color(style.fg), bg: color(style.bg), ul, ulc, attrs, link }.render()
 }
@@ -147,7 +174,24 @@ fn trim_blank_history(mut rows: Vec<String>) -> Vec<String> {
 /// An Alacritty colour value in comparison form for the foreground or background position.
 fn alacritty_color(v: &Value, background: bool) -> String {
     if let Some(name) = v.get("Named").and_then(Value::as_str) {
-        const NAMES: [&str; 16] = ["Black", "Red", "Green", "Yellow", "Blue", "Magenta", "Cyan", "White", "BrightBlack", "BrightRed", "BrightGreen", "BrightYellow", "BrightBlue", "BrightMagenta", "BrightCyan", "BrightWhite"];
+        const NAMES: [&str; 16] = [
+            "Black",
+            "Red",
+            "Green",
+            "Yellow",
+            "Blue",
+            "Magenta",
+            "Cyan",
+            "White",
+            "BrightBlack",
+            "BrightRed",
+            "BrightGreen",
+            "BrightYellow",
+            "BrightBlue",
+            "BrightMagenta",
+            "BrightCyan",
+            "BrightWhite",
+        ];
         return match name {
             "Foreground" if !background => String::new(),
             "Background" if background => String::new(),
@@ -176,16 +220,58 @@ fn alacritty_cell(v: &Value) -> (String, bool) {
     if let Some(zw) = extra.and_then(|e| e.get("zerowidth")).and_then(Value::as_array) {
         text.extend(zw.iter().filter_map(Value::as_str));
     }
-    let wide = if has("WIDE_CHAR") { "w2" } else if has("WIDE_CHAR_SPACER") { "tail" } else if has("LEADING_WIDE_CHAR_SPACER") { "head" } else { "" };
-    let ul = if has("UNDERLINE") { "single" } else if has("DOUBLE_UNDERLINE") { "double" } else if has("UNDERCURL") { "curly" } else if has("DOTTED_UNDERLINE") { "dotted" } else if has("DASHED_UNDERLINE") { "dashed" } else { "" };
-    let names = [("BOLD", "bold"), ("DIM", "faint"), ("ITALIC", "italic"), ("INVERSE", "inverse"), ("HIDDEN", "hidden"), ("STRIKEOUT", "strike")];
+    let wide = if has("WIDE_CHAR") {
+        "w2"
+    } else if has("WIDE_CHAR_SPACER") {
+        "tail"
+    } else if has("LEADING_WIDE_CHAR_SPACER") {
+        "head"
+    } else {
+        ""
+    };
+    let ul = if has("UNDERLINE") {
+        "single"
+    } else if has("DOUBLE_UNDERLINE") {
+        "double"
+    } else if has("UNDERCURL") {
+        "curly"
+    } else if has("DOTTED_UNDERLINE") {
+        "dotted"
+    } else if has("DASHED_UNDERLINE") {
+        "dashed"
+    } else {
+        ""
+    };
+    let names = [
+        ("BOLD", "bold"),
+        ("DIM", "faint"),
+        ("ITALIC", "italic"),
+        ("INVERSE", "inverse"),
+        ("HIDDEN", "hidden"),
+        ("STRIKEOUT", "strike"),
+    ];
     let attrs = names.iter().filter(|(f, _)| has(f)).map(|(_, n)| *n).collect();
-    let link = extra.and_then(|e| e.get("hyperlink")).and_then(|h| h.get("inner")).and_then(|i| i.get("uri")).and_then(Value::as_str).unwrap_or("").to_string();
+    let link = extra
+        .and_then(|e| e.get("hyperlink"))
+        .and_then(|h| h.get("inner"))
+        .and_then(|i| i.get("uri"))
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
     let ulc = match (ul, extra.and_then(|e| e.get("underline_color")).filter(|c| !c.is_null())) {
         ("", _) | (_, None) => String::new(),
         (_, Some(c)) => alacritty_color(c, false),
     };
-    let repr = CellRepr { text, wide, fg: alacritty_color(&v["fg"], false), bg: alacritty_color(&v["bg"], true), ul, ulc, attrs, link };
+    let repr = CellRepr {
+        text,
+        wide,
+        fg: alacritty_color(&v["fg"], false),
+        bg: alacritty_color(&v["bg"], true),
+        ul,
+        ulc,
+        attrs,
+        link,
+    };
     (repr.render(), has("WRAPLINE"))
 }
 
@@ -196,11 +282,14 @@ fn translate_grid(grid: &Value) -> Vec<String> {
     let row_string = |i: usize| {
         let cells = inner[i]["inner"].as_array().expect("cells");
         let mut wrap = false;
-        let strings: Vec<String> = cells.iter().map(|c| {
-            let (s, w) = alacritty_cell(c);
-            wrap |= w;
-            s
-        }).collect();
+        let strings: Vec<String> = cells
+            .iter()
+            .map(|c| {
+                let (s, w) = alacritty_cell(c);
+                wrap |= w;
+                s
+            })
+            .collect();
         render_row(wrap, &strings)
     };
     let mut out = Vec::new();
@@ -215,11 +304,20 @@ fn translate_grid(grid: &Value) -> Vec<String> {
 
 /// Runs a recording through a fresh terminal with `chunk` deciding read sizes.
 fn replay(dir: &Path, chunk: &dyn Fn(usize) -> usize) -> Terminal {
-    let size: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("size.json")).expect("size")).expect("size json");
-    let cfg: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("config.json")).expect("config")).expect("config json");
+    let size: Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.join("size.json")).expect("size")).expect("size json");
+    let cfg: Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.join("config.json")).expect("config")).expect("config json");
     let history = cfg["history_size"].as_u64().unwrap_or(0) as usize;
-    let config = TerminalConfig { scrollback: ScrollbackLimit { bytes: usize::MAX, lines: Some(history) }, ..TerminalConfig::default() };
-    let mut term = Terminal::new(size["columns"].as_u64().expect("columns") as u16, size["screen_lines"].as_u64().expect("lines") as u16, config);
+    let config = TerminalConfig {
+        scrollback: ScrollbackLimit { bytes: usize::MAX, lines: Some(history) },
+        ..TerminalConfig::default()
+    };
+    let mut term = Terminal::new(
+        size["columns"].as_u64().expect("columns") as u16,
+        size["screen_lines"].as_u64().expect("lines") as u16,
+        config,
+    );
     let bytes = std::fs::read(dir.join("alacritty.recording")).expect("recording");
     let mut i = 0;
     let mut k = 0;
@@ -236,7 +334,11 @@ fn replay(dir: &Path, chunk: &dyn Fn(usize) -> usize) -> Terminal {
 /// The expected rows for a case: `terminus.txt` when Terminus differs on purpose.
 fn expected(dir: &Path) -> Vec<String> {
     let path = if dir.join("terminus.txt").exists() { dir.join("terminus.txt") } else { dir.join("expected.txt") };
-    std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("missing {}", path.display())).lines().map(str::to_string).collect()
+    std::fs::read_to_string(&path)
+        .unwrap_or_else(|_| panic!("missing {}", path.display()))
+        .lines()
+        .map(str::to_string)
+        .collect()
 }
 
 /// Regenerates `expected.txt` files from Alacritty's grid.json files when asked.
@@ -245,7 +347,8 @@ fn translate_if_asked() {
     for dir in cases() {
         let name = dir.file_name().expect("name");
         let grid_path = Path::new(&grids).join(name).join("grid.json");
-        let grid: Value = serde_json::from_str(&std::fs::read_to_string(&grid_path).expect("grid.json")).expect("grid json");
+        let grid: Value =
+            serde_json::from_str(&std::fs::read_to_string(&grid_path).expect("grid.json")).expect("grid json");
         let rows = translate_grid(&grid);
         std::fs::write(dir.join("expected.txt"), rows.join("\n") + "\n").expect("write expected");
     }
@@ -266,10 +369,13 @@ fn alacritty_ref_tests() {
         let chunkers: [(&str, Box<dyn Fn(usize) -> usize>); 3] = [
             ("whole", Box::new(|_| usize::MAX)),
             ("bytes", Box::new(|_| 1)),
-            ("random", Box::new(|k| {
-                let h = (k as u64 ^ 0x2545_f491).wrapping_mul(0x9e37_79b9_7f4a_7c15);
-                1 + ((h >> 29) % 97) as usize
-            })),
+            (
+                "random",
+                Box::new(|k| {
+                    let h = (k as u64 ^ 0x2545_f491).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+                    1 + ((h >> 29) % 97) as usize
+                }),
+            ),
         ];
         for (name, chunk) in chunkers.iter() {
             let got = terminus_rows(&replay(dir, chunk.as_ref()));

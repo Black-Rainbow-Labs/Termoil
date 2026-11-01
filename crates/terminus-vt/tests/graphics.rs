@@ -4,6 +4,9 @@
 //! compared to `corpus/vt340test/expected.txt`. Expected values change only with `TERMINUS_BLESS=1`, which
 //! rewrites that file instead of asserting.
 
+// Test tables are written inline as tuples; naming each one would not help a reader.
+#![allow(clippy::type_complexity)]
+
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use std::io::Write;
@@ -273,7 +276,7 @@ fn transmit_zlib_garbage_and_bomb() {
     let bomb = zlib(&vec![0u8; 1 << 20]);
     let r = send(&mut s, "a=t,i=2,f=32,s=2,v=2,o=z", &bomb);
     assert!(body(&r).starts_with("i=2;EFBIG"), "{}", body(&r));
-    assert_eq!(s.image(2).is_none(), true);
+    assert!(s.image(2).is_none());
 }
 
 #[test]
@@ -684,7 +687,7 @@ fn chunked_oversize_is_dropped_and_counted() {
     assert!(body(&r).contains("EFBIG"), "{}", body(&r));
     assert_eq!(s.dropped(), 1);
     assert!(s.image(1).is_none());
-    assert_eq!(send(&mut s, "a=t,i=2,f=32,s=1,v=1", &[0; 4]).reply.is_some(), true);
+    assert!(send(&mut s, "a=t,i=2,f=32,s=1,v=1", &[0; 4]).reply.is_some());
 }
 
 #[test]

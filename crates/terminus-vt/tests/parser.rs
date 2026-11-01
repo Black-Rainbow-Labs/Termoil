@@ -49,12 +49,12 @@ fn run(chunks: &[&[u8]], simd: bool, limits: ParserLimits) -> Vec<String> {
     for chunk in chunks {
         parser.advance(chunk, &mut |a: Action<'_>| {
             let s = render(a);
-            if let (Some(last), true) = (out.last_mut(), s.starts_with("P(")) {
-                if last.starts_with("P(") {
-                    last.pop();
-                    last.push_str(&s[2..]);
-                    return;
-                }
+            if let (Some(last), true) = (out.last_mut(), s.starts_with("P("))
+                && last.starts_with("P(")
+            {
+                last.pop();
+                last.push_str(&s[2..]);
+                return;
             }
             out.push(s);
         });
@@ -239,10 +239,7 @@ fn osc_terminators() {
     check("\x1b]2;\u{442}\u{438}\u{442}\u{43b}\x07".as_bytes(), &["O(2;\u{442}\u{438}\u{442}\u{43b},bel)"]);
     // U+045C encodes as D1 9C: the 0x9C is a continuation byte, not ST.
     check("\x1b]2;\u{45c}x\x07".as_bytes(), &["O(2;\u{45c}x,bel)"]);
-    check(
-        b"\x1b]8;id=1;http://x\x1b\\link\x1b]8;;\x1b\\",
-        &["O(8;id=1;http://x)", "P(link)", "O(8;;)"],
-    );
+    check(b"\x1b]8;id=1;http://x\x1b\\link\x1b]8;;\x1b\\", &["O(8;id=1;http://x)", "P(link)", "O(8;;)"]);
     check(b"\x1b]0;a\x18b", &["X(18)", "P(b)"]);
     check(b"\x1b]0;a\nb\x07", &["O(0;ab,bel)"]);
     check(b"\x1b]\x07", &["O(,bel)"]);

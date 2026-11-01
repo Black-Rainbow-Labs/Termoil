@@ -89,7 +89,10 @@ pub fn reflow(list: &mut PageList, cols: u16, cursor: ReflowCursor) -> ReflowCur
 }
 
 /// Installs the built pages and maps the pins and cursor into the new list.
-fn finish(list: &mut PageList, cols: u16, builder: Builder, first_serial: u64, mapped: &[Option<(usize, u16)>], cursor_y: usize, cursor_col: u16) -> ReflowCursor {
+fn finish(
+    list: &mut PageList, cols: u16, builder: Builder, first_serial: u64, mapped: &[Option<(usize, u16)>],
+    cursor_y: usize, cursor_col: u16,
+) -> ReflowCursor {
     let total = builder.total;
     list.replace_from_reflow(cols, builder.pages, first_serial, total);
     let mut k = 0;
@@ -144,7 +147,10 @@ fn line_end(snapshot: &[(u64, Page)], rows: &[(usize, usize, u64)], start: usize
 }
 
 /// Writes one logical line into the builder and maps the tracked positions that fall in it.
-fn write_line(snapshot: &[(u64, Page)], line: &[(usize, usize, u64)], tracked: &[Tracked], mapped: &mut [Option<(usize, u16)>], b: &mut Builder) {
+fn write_line(
+    snapshot: &[(u64, Page)], line: &[(usize, usize, u64)], tracked: &[Tracked], mapped: &mut [Option<(usize, u16)>],
+    b: &mut Builder,
+) {
     let (cells, offsets) = collect_line(snapshot, line);
     let first_flags = snapshot[line[0].0].1.row(line[0].1).flags;
     let start_y = b.push_row();
@@ -235,7 +241,10 @@ fn collect_line(snapshot: &[(u64, Page)], line: &[(usize, usize, u64)]) -> (Vec<
 }
 
 /// Maps every tracked position on this line's rows to its new row and column.
-fn map_tracked(line: &[(usize, usize, u64)], offsets: &[usize], positions: &[(usize, u16)], tracked: &[Tracked], mapped: &mut [Option<(usize, u16)>], cols: u16, end: (usize, u16)) {
+fn map_tracked(
+    line: &[(usize, usize, u64)], offsets: &[usize], positions: &[(usize, u16)], tracked: &[Tracked],
+    mapped: &mut [Option<(usize, u16)>], cols: u16, end: (usize, u16),
+) {
     for (k, t) in tracked.iter().enumerate() {
         let Some(row_idx) = line.iter().position(|&(_, _, s)| s == t.serial) else { continue };
         let offset = offsets[row_idx] + t.col as usize;

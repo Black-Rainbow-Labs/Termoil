@@ -551,6 +551,14 @@ name = "terminus-font"
 version = "0.1.0"
 
 [[package]]
+name = "terminus-headless"
+version = "0.1.0"
+dependencies = [
+ "terminus-pty",
+ "terminus-vt",
+]
+
+[[package]]
 name = "terminus-input"
 version = "0.1.0"
 
