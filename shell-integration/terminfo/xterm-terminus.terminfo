@@ -1,0 +1,21 @@
+# Terminfo source for Terminus. Compile with: tic -x -o ~/.terminfo xterm-terminus.terminfo
+# The capabilities match TERMINFO_CAPS in crates/terminus-vt/src/terminal/report.rs, which is also
+# what XTGETTCAP answers. Names without a standard terminfo meaning (Tc, RGB, Su, Smulx, Setulc,
+# Ss, Se, Sync, BD, BE, PE, PS) are extended capabilities, so tic needs the -x flag.
+# TN and name in that table are the terminal name on the first line; Co is colors.
+xterm-terminus|Terminus terminal emulator,
+	use=xterm-256color,
+	colors#256, cols#80, lines#24,
+	Tc, RGB=8/8/8, Su, hs,
+	Smulx=\E[4:%p1%dm,
+	Setulc=\E[58:2::%p1%{65536}%/%d:%p1%{256}%/%{255}%&%d:%p1%{255}%&%dm,
+	Ss=\E[%p1%d q, Se=\E[2 q,
+	Sync=\E[?2026%?%p1%{1}%-%tl%eh%;,
+	BD=\E[?2004l, BE=\E[?2004h, PE=\E[201~, PS=\E[200~,
+	fsl=^G, tsl=\E]2;, bel=^G,
+	kbs=^?, kcuu1=\EOA, kcud1=\EOB, kcuf1=\EOC, kcub1=\EOD,
+	khome=\EOH, kend=\EOF, kdch1=\E[3~, kich1=\E[2~, knp=\E[6~, kpp=\E[5~,
+	kf1=\EOP, kf2=\EOQ, kf3=\EOR, kf4=\EOS, kf5=\E[15~, kf6=\E[17~,
+	kf7=\E[18~, kf8=\E[19~, kf9=\E[20~, kf10=\E[21~, kf11=\E[23~, kf12=\E[24~,
+	smkx=\E[?1h\E=, rmkx=\E[?1l\E>, smcup=\E[?1049h, rmcup=\E[?1049l,
+	civis=\E[?25l, cnorm=\E[?12l\E[?25h,

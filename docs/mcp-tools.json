@@ -1,0 +1,373 @@
+{
+  "tools": [
+    {
+      "description": "Opens a new window with one tab.",
+      "inputSchema": {
+        "properties": {
+          "command": {
+            "description": "Program to run instead of the configured shell.",
+            "type": "string"
+          },
+          "cwd": {
+            "description": "Working directory for the shell.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "terminus_new_window"
+    },
+    {
+      "description": "Opens a new tab in the focused window, in the given directory or the focused pane's.",
+      "inputSchema": {
+        "properties": {
+          "command": {
+            "description": "Program to run instead of the configured shell.",
+            "type": "string"
+          },
+          "cwd": {
+            "description": "Working directory for the shell.",
+            "type": "string"
+          },
+          "name": {
+            "description": "Title for the tab.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "terminus_new_tab"
+    },
+    {
+      "description": "Splits the pane, starting a new shell in the new half.",
+      "inputSchema": {
+        "properties": {
+          "cwd": {
+            "description": "Working directory for the shell.",
+            "type": "string"
+          },
+          "direction": {
+            "description": "Which side the new pane goes on; right when omitted.",
+            "enum": [
+              "left",
+              "right",
+              "up",
+              "down"
+            ],
+            "type": "string"
+          },
+          "pane": {
+            "description": "The pane to act on; the focused pane when omitted.",
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "terminus_split"
+    },
+    {
+      "description": "Closes a pane, ending its shell; the last pane closes its tab and window.",
+      "inputSchema": {
+        "properties": {
+          "pane": {
+            "description": "The pane to act on; the focused pane when omitted.",
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "terminus_close"
+    },
+    {
+      "description": "Focuses a pane, or the neighbouring pane in a direction.",
+      "inputSchema": {
+        "properties": {
+          "direction": {
+            "description": "Move focus to the neighbour on this side.",
+            "enum": [
+              "left",
+              "right",
+              "up",
+              "down"
+            ],
+            "type": "string"
+          },
+          "pane": {
+            "description": "The pane to act on; the focused pane when omitted.",
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "terminus_focus"
+    },
+    {
+      "description": "Types text into a pane's program, as if pasted without bracketing.",
+      "inputSchema": {
+        "properties": {
+          "pane": {
+            "description": "The pane to act on; the focused pane when omitted.",
+            "type": "integer"
+          },
+          "text": {
+            "description": "The text; \\n is Enter.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "type": "object"
+      },
+      "name": "terminus_send_text"
+    },
+    {
+      "description": "Presses a key in a pane, encoded for the program's keyboard mode.",
+      "inputSchema": {
+        "properties": {
+          "key": {
+            "description": "A chord such as enter, ctrl+c or shift+tab.",
+            "type": "string"
+          },
+          "pane": {
+            "description": "The pane to act on; the focused pane when omitted.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "type": "object"
+      },
+      "name": "terminus_send_key"
+    },
+    {
+      "description": "Returns the visible screen of a pane as text, or as JSON cells with styles.",
+      "inputSchema": {
+        "properties": {
+          "json": {
+            "description": "Return cells with styles instead of text.",
+            "type": "boolean"
+          },
+          "pane": {
+            "description": "The pane to act on; the focused pane when omitted.",
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "terminus_screen"
+    },
+    {
+      "description": "Returns the last lines of a pane's scrollback and screen as text.",
+      "inputSchema": {
+        "properties": {
+          "lines": {
+            "description": "How many lines; 500 when omitted.",
+            "type": "integer"
+          },
+          "pane": {
+            "description": "The pane to act on; the focused pane when omitted.",
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "terminus_scrollback"
+    },
+    {
+      "description": "Waits until the command running in a pane finishes and returns its exit code.",
+      "inputSchema": {
+        "properties": {
+          "pane": {
+            "description": "The pane to act on; the focused pane when omitted.",
+            "type": "integer"
+          },
+          "timeout": {
+            "description": "Seconds to wait; 600 when omitted.",
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "terminus_wait_prompt"
+    },
+    {
+      "description": "Lists windows, tabs and panes with their ids, titles and working directories.",
+      "inputSchema": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "terminus_list"
+    },
+    {
+      "description": "Resizes a pane's window to a number of columns and rows.",
+      "inputSchema": {
+        "properties": {
+          "cols": {
+            "description": "Columns.",
+            "type": "integer"
+          },
+          "pane": {
+            "description": "The pane to act on; the focused pane when omitted.",
+            "type": "integer"
+          },
+          "rows": {
+            "description": "Rows.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "cols",
+          "rows"
+        ],
+        "type": "object"
+      },
+      "name": "terminus_resize"
+    },
+    {
+      "description": "Sets the title of a pane's tab.",
+      "inputSchema": {
+        "properties": {
+          "pane": {
+            "description": "The pane to act on; the focused pane when omitted.",
+            "type": "integer"
+          },
+          "title": {
+            "description": "The title.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "type": "object"
+      },
+      "name": "terminus_set_title"
+    },
+    {
+      "description": "Runs any action by name with JSON arguments, the way a keybinding does.",
+      "inputSchema": {
+        "properties": {
+          "args": {
+            "description": "Arguments as a JSON object.",
+            "type": "string"
+          },
+          "name": {
+            "description": "The action.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "name": "terminus_run_action"
+    },
+    {
+      "description": "Prints the effective configuration, or the documented default file.",
+      "inputSchema": {
+        "properties": {
+          "default": {
+            "description": "Print the default file instead.",
+            "type": "boolean"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "terminus_show_config"
+    },
+    {
+      "description": "Reads the configuration file again and applies it.",
+      "inputSchema": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "terminus_reload_config"
+    },
+    {
+      "description": "Installs the shell integration scripts and hooks them into the named shells' startup files.",
+      "inputSchema": {
+        "properties": {
+          "dry-run": {
+            "description": "Show what would change without changing it.",
+            "type": "boolean"
+          },
+          "shells": {
+            "description": "Comma separated: powershell, pwsh, bash, zsh, fish, nushell, cmd; the current shell when omitted.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "terminus_install_shell_integration"
+    },
+    {
+      "description": "Prints the version and build date.",
+      "inputSchema": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "terminus_version"
+    },
+    {
+      "description": "Erases the scrollback of the pane, keeping the screen.",
+      "inputSchema": {
+        "properties": {
+          "pane": {
+            "description": "The pane to act on; the focused pane when omitted.",
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "terminus_clear_scrollback"
+    },
+    {
+      "description": "Opens the search bar, or searches for a pattern and selects the first match.",
+      "inputSchema": {
+        "properties": {
+          "case-sensitive": {
+            "description": "Match case exactly.",
+            "type": "boolean"
+          },
+          "pane": {
+            "description": "The pane to act on; the focused pane when omitted.",
+            "type": "integer"
+          },
+          "pattern": {
+            "description": "A regular expression.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "terminus_search"
+    },
+    {
+      "description": "Shows or hides the quick terminal that slides in from a screen edge.",
+      "inputSchema": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "terminus_quick_terminal"
+    }
+  ]
+}

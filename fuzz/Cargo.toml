@@ -10,6 +10,7 @@ publish = false
 cargo-fuzz = true
 
 [dependencies]
+terminus-app = { path = "../crates/terminus-app" }
 libfuzzer-sys = "0.4"
 terminus-vt = { path = "../crates/terminus-vt" }
 terminus-input = { path = "../crates/terminus-input" }
@@ -80,5 +81,11 @@ doc = false
 [[bin]]
 name = "f11_page"
 path = "fuzz_targets/f11_page.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "f12_config"
+path = "fuzz_targets/f12_config.rs"
 test = false
 doc = false

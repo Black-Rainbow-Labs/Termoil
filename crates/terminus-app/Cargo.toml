@@ -8,6 +8,20 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+terminus-vt.workspace = true
+terminus-input.workspace = true
+terminus-pty.workspace = true
+terminus-protocol.workspace = true
+terminus-font.workspace = true
+terminus-render.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+crossbeam-channel.workspace = true
+toml = "1"
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+terminus-vt.workspace = true
+terminus-pty.workspace = true

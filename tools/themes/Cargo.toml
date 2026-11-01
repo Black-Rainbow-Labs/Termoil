@@ -1,0 +1,15 @@
+[package]
+name = "terminus-themes"
+description = "Converts the iTerm2 colour schemes (.itermcolors) into the compact themes.txt that terminus-app embeds."
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+too_many_arguments = "allow"
