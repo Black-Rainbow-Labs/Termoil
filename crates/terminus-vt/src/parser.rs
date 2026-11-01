@@ -306,6 +306,13 @@ impl Parser {
                 State::OscString | State::ApcString | State::DcsPassthrough => {
                     i += self.advance_string_bulk(&bytes[i..], handler)
                 }
+                State::CsiEntry | State::CsiParam => match self.advance_csi_bulk(&bytes[i..], handler) {
+                    0 => {
+                        self.step(bytes[i], handler);
+                        i += 1;
+                    }
+                    n => i += n,
+                },
                 _ => {
                     self.step(bytes[i], handler);
                     i += 1;
@@ -319,16 +326,52 @@ impl Parser {
         let first = bytes[0];
         if (0x20..0x7f).contains(&first) {
             let n = if self.simd { scan::first_non_printable(bytes) } else { scan::first_non_printable_scalar(bytes) };
-            // SAFETY of the conversion below is not needed: the run is ASCII, so it is valid UTF-8.
-            let text = core::str::from_utf8(&bytes[..n]).unwrap_or_default();
+            let text = scan::ascii_str(&bytes[..n]);
             handler.handle(Action::Print(text));
             return n;
         }
-        if first < 0x80 {
-            self.step(first, handler);
-            return 1;
+        match first {
+            0x1b if bytes.get(1) == Some(&b'[') => {
+                // ESC [ goes straight to CSI, the most common sequence by far.
+                self.clear_seq();
+                self.state = State::CsiEntry;
+                return 2;
+            }
+            0x1b => self.enter_escape(),
+            0x18 | 0x1a | 0x7f => self.step(first, handler),
+            0x00..=0x1f => handler.handle(Action::Execute(first)),
+            _ => return self.advance_utf8(bytes, handler),
         }
-        self.advance_utf8(bytes, handler)
+        1
+    }
+
+    /// Reads CSI parameter bytes, a private marker and the final byte in one loop, the common
+    /// shape of every CSI sequence. Stops (returning bytes consumed) at anything else, which the
+    /// general state machine then handles: intermediates, controls inside the sequence, ESC.
+    fn advance_csi_bulk<H: Handler>(&mut self, bytes: &[u8], handler: &mut H) -> usize {
+        for (k, &b) in bytes.iter().enumerate() {
+            match b {
+                b'0'..=b'9' => {
+                    self.has_params = true;
+                    self.param = (self.param * 10 + (b - b'0') as u32).min(u16::MAX as u32);
+                    self.state = State::CsiParam;
+                }
+                b';' | b':' => {
+                    self.param_byte(b);
+                    self.state = State::CsiParam;
+                }
+                0x3c..=0x3f if self.state == State::CsiEntry => {
+                    self.seq.private = b;
+                    self.state = State::CsiParam;
+                }
+                0x40..=0x7e => {
+                    self.dispatch_csi(b, handler);
+                    return k + 1;
+                }
+                _ => return k,
+            }
+        }
+        bytes.len()
     }
 
     /// Decodes a run of UTF-8 text that starts with a non ASCII byte, up to the next C0 control.
@@ -422,9 +465,13 @@ impl Parser {
         self.clear_seq();
     }
 
-    /// Resets the sequence being collected.
+    /// Resets the sequence being collected. Only the counts are cleared: parameter slots past
+    /// the counts are never read, so the 200 bytes of values are left as they are.
     fn clear_seq(&mut self) {
-        self.seq = CsiSeq::default();
+        self.seq.params.count = 0;
+        self.seq.private = 0;
+        self.seq.intermediate_len = 0;
+        self.seq.final_byte = 0;
         self.param = 0;
         self.sub_index = 0;
         self.seq_valid = true;
@@ -667,8 +714,7 @@ impl Parser {
         }
         self.finish_params();
         self.seq.final_byte = byte;
-        let seq = self.seq;
-        handler.handle(Action::Csi(&seq));
+        handler.handle(Action::Csi(&self.seq));
     }
 
     /// Begins collecting a string payload of the given kind.

@@ -73,7 +73,7 @@ impl Page {
     pub fn new(cols: u16, capacity: u16) -> Page {
         let cols = cols.max(1);
         let capacity = capacity.max(1);
-        let rows = (0..capacity).map(|i| Row { offset: i as u32 * cols as u32, flags: 0 }).collect();
+        let rows = (0..capacity).map(|i| Row { offset: i as u32 * cols as u32, flags: 0, written: 0 }).collect();
         Page {
             uid: next_uid(),
             cols,
@@ -140,8 +140,15 @@ impl Page {
         }
         let i = self.len as usize;
         self.len += 1;
-        self.clear_row(i);
-        self.rows[i].flags = 0;
+        // Rows past `len` hold nothing that needs releasing (truncate released them, or reset
+        // threw the tables away), so a raw fill up to the written mark is enough.
+        let row = self.rows[i];
+        let start = row.offset as usize;
+        self.cells[start..start + row.written as usize].fill(Cell::BLANK);
+        self.rows[i] = Row { offset: row.offset, flags: 0, written: 0 };
+        if let Some(next) = self.rows.get(i + 1) {
+            prefetch_cells(&self.cells, next.offset as usize, self.cols as usize);
+        }
         Some(i)
     }
 
@@ -189,7 +196,9 @@ impl Page {
 
     /// Clears every row and marks the page empty, ready for reuse from the pool.
     pub fn reset(&mut self) {
-        self.truncate(0);
+        // Cells are not cleared here; each row is cleared up to its written mark when it is
+        // taken back into use.
+        self.len = 0;
         self.grapheme_chars.clear();
         self.graphemes.clear();
         self.grapheme_garbage = 0;
@@ -347,6 +356,48 @@ impl Page {
         }
     }
 
+    /// True when row `i` may hold cells with a style, grapheme tail or hyperlink that must be
+    /// released before they are overwritten.
+    #[inline]
+    pub fn row_has_side_data(&self, i: usize) -> bool {
+        self.rows[i].flags & (row_flags::STYLED | row_flags::GRAPHEME | row_flags::HYPERLINK) != 0
+    }
+
+    /// Releases what the cell at row `i`, column `col` holds and leaves it unchanged; the caller
+    /// overwrites it next with [`Page::put_raw`].
+    #[inline]
+    pub fn release_at(&mut self, i: usize, col: usize) {
+        let index = self.cell_index(i, col);
+        let old = self.cells[index as usize];
+        self.release_cell(index, old);
+    }
+
+    /// Stores `cell` at row `i`, column `col` without touching style counts or side data. The
+    /// caller adds the style references (in bulk) and has released the old cell.
+    #[inline]
+    pub fn put_raw(&mut self, i: usize, col: usize, cell: Cell) {
+        let index = self.rows[i].offset as usize + col;
+        self.cells[index] = cell;
+    }
+
+    /// Stores one cell per byte of `ascii` from column `col` of row `i`, each `base` with the byte
+    /// as its code point. Raw like [`Page::put_raw`]: the caller releases and counts.
+    #[inline]
+    pub fn put_ascii(&mut self, i: usize, col: usize, ascii: &[u8], base: Cell) {
+        let start = self.rows[i].offset as usize + col;
+        let dst = &mut self.cells[start..start + ascii.len()];
+        for (d, &b) in dst.iter_mut().zip(ascii) {
+            *d = Cell(base.0 | b as u64);
+        }
+    }
+
+    /// Records that columns before `upto` of row `i` may hold something (after raw writes).
+    #[inline]
+    pub fn mark_written(&mut self, i: usize, upto: usize) {
+        let r = &mut self.rows[i];
+        r.written = r.written.max(upto.min(self.cols as usize) as u16);
+    }
+
     /// Writes `cell` at row `i`, column `col`, releasing what was there and referencing the new
     /// cell's style. The new cell must not carry the cluster or hyperlink flags.
     pub fn write_cell(&mut self, i: usize, col: usize, cell: Cell) {
@@ -356,6 +407,7 @@ impl Page {
         self.add_style_refs(cell.style_id(), 1);
         self.cells[index as usize] = cell;
         let row = &mut self.rows[i];
+        row.written = row.written.max(col as u16 + 1);
         if cell.style_id() != 0 {
             row.flags |= row_flags::STYLED;
         }
@@ -372,6 +424,19 @@ impl Page {
         let row = self.rows[i];
         let needs_release = row.has(row_flags::STYLED) || row.has(row_flags::GRAPHEME) || row.has(row_flags::HYPERLINK);
         let start = row.offset as usize;
+        if !needs_release && !keep_protected {
+            self.cells[start + from..start + to].fill(blank);
+            self.add_style_refs(blank.style_id(), (to - from) as u32);
+            let row = &mut self.rows[i];
+            if blank != Cell::BLANK {
+                row.written = row.written.max(to as u16);
+            }
+            if blank.style_id() != 0 {
+                row.flags |= row_flags::STYLED;
+            }
+            row.flags |= row_flags::DIRTY;
+            return;
+        }
         for col in from..to {
             let index = (start + col) as u32;
             let old = self.cells[index as usize];
@@ -385,6 +450,9 @@ impl Page {
         }
         self.add_style_refs(blank.style_id(), self.count_written(i, from, to, blank));
         let row = &mut self.rows[i];
+        if blank != Cell::BLANK {
+            row.written = row.written.max(to as u16);
+        }
         if blank.style_id() != 0 {
             row.flags |= row_flags::STYLED;
         }
@@ -658,6 +726,7 @@ impl Page {
         page.oversized = oversized;
         for i in 0..len as usize {
             page.rows[i].flags = r.u16()?;
+            page.rows[i].written = cols;
             for col in 0..cols as usize {
                 page.cells[i * cols as usize + col] = Cell(r.u64()?);
             }
@@ -695,6 +764,27 @@ impl Page {
             self.hyperlinks.insert(index, id);
         }
         Some(())
+    }
+}
+
+/// Asks the CPU to start loading the first cells of a row the terminal is about to write, so
+/// the next line feed does not wait for memory. Scrollback pages are recycled and cold.
+#[inline]
+fn prefetch_cells(cells: &[Cell], start: usize, cols: usize) {
+    #[cfg(all(target_arch = "x86_64", not(miri)))]
+    {
+        let end = (start + cols.min(32)).min(cells.len());
+        let mut k = start;
+        while k < end {
+            // SAFETY: `k < cells.len()`, so the pointer is inside the slice; a prefetch never
+            // faults and does not change memory.
+            unsafe { core::arch::x86_64::_mm_prefetch::<{ core::arch::x86_64::_MM_HINT_T0 }>(cells.as_ptr().add(k) as *const i8) };
+            k += 8;
+        }
+    }
+    #[cfg(not(all(target_arch = "x86_64", not(miri))))]
+    {
+        let _ = (cells, start, cols);
     }
 }
 

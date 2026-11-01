@@ -11,6 +11,7 @@ mod edit;
 mod osc;
 mod print;
 mod report;
+mod segment;
 mod sgr;
 
 use crate::graphics::GraphicsStore;

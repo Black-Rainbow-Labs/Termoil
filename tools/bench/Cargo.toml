@@ -1,0 +1,14 @@
+[package]
+name = "terminus-bench"
+description = "Terminus performance benchmarks: parser throughput (P1) and allocation counting (P5)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+terminus-vt.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

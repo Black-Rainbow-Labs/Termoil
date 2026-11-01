@@ -535,6 +535,14 @@ name = "terminus-app"
 version = "0.1.0"
 
 [[package]]
+name = "terminus-bench"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "terminus-vt",
+]
+
+[[package]]
 name = "terminus-cli"
 version = "0.1.0"
 

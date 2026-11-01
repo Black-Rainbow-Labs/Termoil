@@ -153,6 +153,13 @@ impl GraphemeBreaker {
         breaker
     }
 
+    /// True when the last code point was a Prepend character, after which even an ASCII character
+    /// joins the cluster (GB9b). No other rule joins ASCII to what came before.
+    #[inline]
+    pub fn joins_ascii(&self) -> bool {
+        self.prev == GraphemeBreak::Prepend
+    }
+
     /// Returns true when a cluster boundary falls before `next`, and records `next` as the latest code point.
     pub fn should_break(&mut self, next: char) -> bool {
         let p = props(next);

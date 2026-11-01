@@ -236,6 +236,9 @@ pub struct Row {
     pub offset: u32,
     /// Bits from [`row_flags`].
     pub flags: u16,
+    /// Every cell at or after this column is blank. Writers raise it; a row taken back into use
+    /// is cleared only up to it, which is most of the cost of a new line on a wide terminal.
+    pub written: u16,
 }
 
 impl Row {

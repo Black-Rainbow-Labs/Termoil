@@ -37,6 +37,18 @@ pub fn first_control(bytes: &[u8]) -> usize {
     }
 }
 
+/// Views a run of printable ASCII as a `str` without validating it again.
+///
+/// Callers pass only bytes that [`first_non_printable`] has just accepted, so every byte is in
+/// 0x20 to 0x7E. A debug build checks that.
+#[inline]
+pub fn ascii_str(bytes: &[u8]) -> &str {
+    debug_assert!(bytes.iter().all(|b| (0x20..0x7f).contains(b)));
+    // SAFETY: every byte is ASCII (checked by the caller's scan, asserted above in debug
+    // builds), and ASCII is valid UTF-8.
+    unsafe { core::str::from_utf8_unchecked(bytes) }
+}
+
 /// The scalar version of [`first_non_printable`], used on targets without SSE2 and by the tests
 /// that check both paths agree.
 #[inline]

@@ -6,6 +6,7 @@
 //! when 2027 is off, wide characters at the margin, insert mode and hyperlinks.
 
 use super::Terminal;
+use super::segment::{PrintModes, write_segment};
 use crate::cell::{Cell, Semantic, Wide, row_flags};
 use crate::modes::Mode;
 use crate::page::Page;
@@ -16,107 +17,35 @@ use crate::unicode::{GraphemeBreaker, char_width, cluster_width};
 const KITTY_PLACEHOLDER: char = '\u{10EEEE}';
 
 impl Terminal {
-    /// Prints a run of text with no control characters in it.
+    /// Prints a run of text with no control characters in it. Insert mode and translated
+    /// character sets go character by character; everything else goes through the segment
+    /// writer one row at a time.
     pub(super) fn print(&mut self, text: &str) {
-        let bytes = text.as_bytes();
-        let fast = text.is_ascii() && self.screen().charsets.is_plain() && !self.modes.get(Mode::Insert);
-        if !fast {
+        if self.modes.get(Mode::Insert) || !self.screen().charsets.is_plain() {
             for c in text.chars() {
                 self.print_char(c);
             }
             return;
         }
-        let mut start = 0;
-        if self.screen().last_print.is_some() && self.modes.get(Mode::GraphemeCluster) {
-            // The first character may join the previous cell (after a Prepend character).
-            self.print_char(bytes[0] as char);
-            start = 1;
-        }
-        if start < bytes.len() {
-            self.print_ascii(&bytes[start..]);
-        }
-    }
-
-    /// The fast path: printable ASCII, default character set, replace mode.
-    fn print_ascii(&mut self, bytes: &[u8]) {
         let autowrap = self.modes.get(Mode::Autowrap);
-        let mut rest = bytes;
+        let lrmm = self.modes.get(Mode::LeftRightMargins);
+        let cluster = self.modes.get(Mode::GraphemeCluster);
+        let max_cluster = self.config.max_cluster_len;
+        let mut rest = text;
         while !rest.is_empty() {
-            if self.screen().cursor.pending_wrap && autowrap {
-                self.wrap_line();
-            }
-            let (col, right) = {
-                let s = self.screen();
-                (s.cursor.col, effective_right(s, self.modes.get(Mode::LeftRightMargins)))
-            };
-            let space = (right + 1).saturating_sub(col) as usize;
-            if space == 0 {
+            let right = effective_right(self.screen(), lrmm);
+            let m = PrintModes { autowrap, cluster, right, max_cluster };
+            let n = write_segment(self.screen_mut(), rest, m);
+            rest = &rest[n..];
+            if rest.is_empty() {
                 break;
             }
-            let n = space.min(rest.len());
-            let run = if !autowrap && rest.len() > space { overwrite_tail(rest, space) } else { None };
-            match run {
-                Some(last_run) => {
-                    self.write_ascii_run(&rest[..space - 1], col);
-                    self.write_ascii_run(&[last_run], right);
-                    rest = &[];
-                }
-                None => {
-                    self.write_ascii_run(&rest[..n], col);
-                    rest = &rest[n..];
-                }
-            }
-            self.advance_after_run(col, n.min(space), right, autowrap);
-        }
-    }
-
-    /// Moves the cursor after `n` cells were written from `col`.
-    fn advance_after_run(&mut self, col: u16, n: usize, right: u16, autowrap: bool) {
-        let screen = self.screen_mut();
-        let end = col as usize + n;
-        let last_col = (end - 1) as u16;
-        if end > right as usize {
-            screen.cursor.col = right;
-            screen.cursor.pending_wrap = autowrap;
-        } else {
-            screen.cursor.col = end as u16;
-            screen.cursor.pending_wrap = false;
-        }
-        let row = screen.cursor.row;
-        let after = (screen.cursor.row, screen.cursor.col, screen.cursor.pending_wrap);
-        let last = last_byte_char(screen, row, last_col);
-        screen.last_print = Some(LastPrint { row, col: last_col, breaker: GraphemeBreaker::new(last), after });
-    }
-
-    /// Writes ASCII bytes as cells starting at `col` of the cursor row, with the cursor's pen.
-    fn write_ascii_run(&mut self, run: &[u8], col: u16) {
-        if run.is_empty() {
-            return;
-        }
-        let row = self.screen().cursor.row;
-        let base = self.pen_cell(row);
-        let link = self.screen().cursor.hyperlink;
-        let screen = self.screen_mut();
-        let (page, i) = screen.pages.active_mut(row);
-        let (from, to) = (col as usize, col as usize + run.len());
-        fix_wide_boundaries(page, i, from, to);
-        let header = *page.row(i);
-        if header.has(row_flags::STYLED) || header.has(row_flags::GRAPHEME) || header.has(row_flags::HYPERLINK) {
-            page.clear_cells(i, from, to, Cell::BLANK, false);
-        }
-        let cells = page.cells_mut(i);
-        for (k, &b) in run.iter().enumerate() {
-            cells[from + k] = Cell(base.0 | b as u64);
-        }
-        page.add_style_refs(base.style_id(), run.len() as u32);
-        let r = page.row_mut(i);
-        r.flags |= row_flags::DIRTY;
-        if base.style_id() != 0 {
-            r.flags |= row_flags::STYLED;
-        }
-        if let Some(id) = link {
-            for c in from..to {
-                page.set_hyperlink(i, c, id);
+            if self.screen().cursor.pending_wrap && autowrap {
+                self.wrap_line();
+            } else if n == 0 {
+                // Nothing fitted and nothing will: drop one character rather than loop.
+                let skip = rest.chars().next().map(char::len_utf8).unwrap_or(1);
+                rest = &rest[skip..];
             }
         }
     }
@@ -157,13 +86,13 @@ impl Terminal {
         let mut breaker = GraphemeBreaker::new(c);
         if let Some(lp) = self.joinable_last_print() {
             if cluster_mode {
-                let mut br = lp.breaker;
+                let mut br = lp.breaker();
                 if !br.should_break(c) {
                     self.join_cluster(lp, c, br);
                     return;
                 }
             } else if char_width(c) == 0 {
-                self.join_cluster(lp, c, lp.breaker);
+                self.join_cluster(lp, c, lp.breaker());
                 return;
             }
             breaker = GraphemeBreaker::new(c);
@@ -172,7 +101,7 @@ impl Terminal {
         if let Some((row, col)) = self.put_char(c, width.clamp(1, 2)) {
             let s = self.screen_mut();
             let after = (s.cursor.row, s.cursor.col, s.cursor.pending_wrap);
-            s.last_print = Some(LastPrint { row, col, breaker, after });
+            s.last_print = Some(LastPrint { row, col, state: Some(breaker), ascii: 0, after });
         }
     }
 
@@ -206,7 +135,7 @@ impl Terminal {
         }
         let s = self.screen_mut();
         let after = (s.cursor.row, s.cursor.col, s.cursor.pending_wrap);
-        s.last_print = Some(LastPrint { breaker, after, ..lp });
+        s.last_print = Some(LastPrint { state: Some(breaker), after, ..lp });
     }
 
     /// Writes one character of the given width at the cursor and advances. Returns the row and
@@ -289,17 +218,7 @@ pub(super) fn effective_right(s: &Screen, lrmm: bool) -> u16 {
     if lrmm && s.cursor.col <= s.right { s.right } else { s.cols() - 1 }
 }
 
-/// With autowrap off and more text than room, every character past the room overwrites the last
-/// column; only the final one survives. Returns that byte.
-fn overwrite_tail(rest: &[u8], space: usize) -> Option<u8> {
-    (space >= 1 && rest.len() > space).then(|| rest[rest.len() - 1])
-}
 
-/// The character in the cell at (row, col), for starting a grapheme breaker after a fast run.
-fn last_byte_char(screen: &mut Screen, row: u16, col: u16) -> char {
-    let (page, i) = screen.pages.active_mut(row);
-    page.cells(i)[col as usize].char().unwrap_or(' ')
-}
 
 /// Clears half of a wide character that writing columns `from..to` would leave behind.
 pub(super) fn fix_wide_boundaries(page: &mut Page, i: usize, from: usize, to: usize) {

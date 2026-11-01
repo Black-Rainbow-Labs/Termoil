@@ -26,6 +26,11 @@ pub struct Cursor {
     pub semantic: Semantic,
     /// Cached page identity and style id for `style`, so printing does not intern per cell.
     pub style_cache: Option<(u64, u16)>,
+    /// The last few (page identity, style, id) the pen used, so switching back and forth between
+    /// a colour and the default does not look the style up in the page's table each time.
+    pub recent_styles: [Option<(u64, Style, u16)>; 4],
+    /// Which slot of `recent_styles` the next new entry replaces.
+    pub recent_next: u8,
 }
 
 /// What DECSC saves and DECRC restores.
@@ -55,10 +60,20 @@ pub struct LastPrint {
     pub row: u16,
     /// Column of the cell (the first column of a wide character).
     pub col: u16,
-    /// Grapheme break state after the cell's last code point.
-    pub breaker: GraphemeBreaker,
+    /// Grapheme break state after the cell's last code point; None for a plain ASCII cell,
+    /// whose state is built from `ascii` only when something needs it.
+    pub state: Option<GraphemeBreaker>,
+    /// The cell's character when `state` is None.
+    pub ascii: u8,
     /// Cursor position right after printing; any other position means the cursor moved.
     pub after: (u16, u16, bool),
+}
+
+impl LastPrint {
+    /// The grapheme break state after the cell.
+    pub fn breaker(&self) -> GraphemeBreaker {
+        self.state.unwrap_or_else(|| GraphemeBreaker::new(self.ascii as char))
+    }
 }
 
 /// The kitty keyboard protocol flag stack for one screen, bounded at 16 entries.
@@ -196,7 +211,6 @@ impl Screen {
         if bottom + 1 < rows {
             self.pages.scroll_down(bottom, rows - 1, 1, None);
         }
-        self.cursor.style_cache = None;
     }
 
     /// True when the scrolling region covers every row and column.

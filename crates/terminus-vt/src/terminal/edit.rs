@@ -238,7 +238,6 @@ impl Terminal {
             let (top, bottom) = (s.top, s.bottom);
             s.pages.scroll_up(top, bottom, n.max(1), margins);
         }
-        s.cursor.style_cache = None;
         s.last_print = None;
         let (top, bottom) = (s.top, s.bottom);
         let n = n.max(1).min(bottom + 1 - top);
