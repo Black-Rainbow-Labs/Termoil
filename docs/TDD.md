@@ -15,7 +15,7 @@ Goals, each with the test that proves it (test ids are from `docs/TEST-SUITE.md`
 | Goal | Proof |
 |---|---|
 | Emulation correct to xterm, with the Ghostty and Kitty extensions | C1 Alacritty ref tests at 100 %, C2 esctest xterm profile at Ghostty 1.4's pass set, C3 the Terminus conformance corpus |
-| Parser at 1 GB/s or more per core, no per byte allocation | P1 throughput benchmark, P5 allocation counter |
+| Parser plus screen at 250 MB/s or more per core on the `mixed` build log stream (`docs/decisions/throughput.md`), no per byte allocation | P1 throughput benchmark, P5 allocation counter |
 | Keypress to pixel p99 under 16 ms at 120 Hz | P2 latency harness |
 | 100 000 lines of 200 column scrollback in under 150 MB | P3 memory benchmark |
 | Startup to first prompt under 100 ms (Windows, Linux) | P4 startup benchmark |
@@ -221,7 +221,7 @@ The full specification is `docs/TEST-SUITE.md`; this section says what kinds exi
 - **Unit and property** (U): tables for the key and mouse encoders against the kitty keyboard protocol's published examples; Unicode width and grapheme tests from the Unicode conformance files; `proptest` over page operations (insert, erase, reflow, prune) checked against a simple vector of strings model; cargo fuzz targets for the parser, the OSC and DCS handlers, the graphics protocol and the page allocator, run in CI for a bounded time and nightly for longer.
 - **Rendering** (R): the frame builder is tested as data (given a snapshot, the expected row records); pixel tests render through `VelloCpuRenderer` to a PNG and compare with an accepted image and a tolerance, per platform folder, with `.new.png` and `.diff.png` written beside a failure the way Unluminous does; the GPU renderer runs the same cases on this machine and in a CI job with a software adapter (lavapipe on Linux, WARP on Windows) where the comparison is against the CPU image with a larger tolerance.
 - **End to end** (E): spawn the real shell on each platform through `terminus-pty`, send keystrokes, wait for prompt marks, read the screen; the IPC commands exercised through `terminus-cli` against a running instance; shell integration scripts tested per shell.
-- **Performance** (P): throughput (vtebench scenarios plus a 1 GB file), latency (the typometer method: a keypress injected and the frame detected, measured in process and once with a camera), memory with large scrollback, startup, reflow time. Each has a gate and runs on this machine before a release; CI runs them to catch a regression over 20 % but gates only on this machine's numbers.
+- **Performance** (P): throughput (vtebench scenarios plus the `mixed` 1 GiB build log stream, gated at 250 MB/s through the parser plus screen per `docs/decisions/throughput.md`), latency (the typometer method: a keypress injected and the frame detected, measured in process and once with a camera), memory with large scrollback, startup, reflow time. Each has a gate and runs on this machine before a release; CI runs them to catch a regression over 20 % but gates only on this machine's numbers.
 - **Agent reachability** (A): catalogue completeness, documentation sections, MCP generation.
 - **Windows specifics** (W): ConPTY reflow comparison, bundled pair version check, the graphics passthrough spike result recorded as a test that documents the behaviour on this machine.
 
