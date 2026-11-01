@@ -66,6 +66,12 @@ pub enum Mode {
     ColorSchemeReport,
     InBandResize,
     Win32Input,
+    PrintFormFeed,
+    PrintExtent,
+    HebrewEncoding,
+    NationalCharset,
+    HorizontalCursorCoupling,
+    MoreFix,
 }
 
 /// One row of the mode table.
@@ -92,14 +98,14 @@ use ModeKind::{Ansi as A, Dec as D};
 
 /// Every mode, in the order of [`Mode`].
 pub const MODES: &[ModeDef] = &[
-    def(Mode::KeyboardAction, A, 2, false, Some(false)),
+    def(Mode::KeyboardAction, A, 2, false, None),
     def(Mode::Insert, A, 4, false, None),
-    def(Mode::SendReceive, A, 12, true, Some(true)),
+    def(Mode::SendReceive, A, 12, true, None),
     def(Mode::LinefeedNewline, A, 20, false, None),
     def(Mode::CursorKeys, D, 1, false, None),
     def(Mode::Ansi, D, 2, true, Some(true)),
     def(Mode::Column132, D, 3, false, None),
-    def(Mode::SmoothScroll, D, 4, false, Some(false)),
+    def(Mode::SmoothScroll, D, 4, false, None),
     def(Mode::ReverseVideo, D, 5, false, None),
     def(Mode::Origin, D, 6, false, None),
     def(Mode::Autowrap, D, 7, true, None),
@@ -138,7 +144,18 @@ pub const MODES: &[ModeDef] = &[
     def(Mode::ColorSchemeReport, D, 2031, false, None),
     def(Mode::InBandResize, D, 2048, false, None),
     def(Mode::Win32Input, D, 9001, false, Some(false)),
+    def(Mode::PrintFormFeed, D, 18, false, None),
+    def(Mode::PrintExtent, D, 19, true, None),
+    def(Mode::HebrewEncoding, D, 35, false, None),
+    def(Mode::NationalCharset, D, 42, false, None),
+    def(Mode::HorizontalCursorCoupling, D, 60, false, Some(false)),
+    def(Mode::MoreFix, D, 41, false, None),
 ];
+
+/// ANSI modes the terminal knows by name and never turns on: DECRQM reports them as permanently
+/// reset (4). They have no entry in [`MODES`] because nothing reads their value. The numbers are
+/// GATM, SRTM, VEM, HEM, PUM, FEAM, FETM, MATM, TTM, SATM, TSM and EBM.
+pub const PERMANENTLY_RESET_ANSI: &[u16] = &[1, 5, 7, 10, 11, 13, 14, 15, 16, 17, 18, 19];
 
 /// Finds the table row for a mode number.
 pub fn lookup(kind: ModeKind, number: u16) -> Option<&'static ModeDef> {
@@ -190,6 +207,7 @@ impl ModeSet {
     /// 4 permanently reset.
     pub fn report(&self, kind: ModeKind, number: u16) -> u8 {
         match lookup(kind, number) {
+            None if kind == ModeKind::Ansi && PERMANENTLY_RESET_ANSI.contains(&number) => 4,
             None => 0,
             Some(d) => match d.fixed {
                 Some(true) => 3,

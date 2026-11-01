@@ -43,6 +43,9 @@ impl Terminal {
             ([], b'N') => self.screen_mut().charsets.single_shift = Some(2),
             ([], b'O') => self.screen_mut().charsets.single_shift = Some(3),
             ([], b'c') => self.full_reset(),
+            ([], b'Z') => self.reply_da1(),
+            ([], b'V') => self.set_iso_protection(true),
+            ([], b'W') => self.set_iso_protection(false),
             ([], b'=') => self.set_mode_value(Mode::KeypadApplication, true),
             ([], b'>') => self.set_mode_value(Mode::KeypadApplication, false),
             ([], b'n') => self.screen_mut().charsets.gl = 2,
@@ -59,9 +62,23 @@ impl Terminal {
             ([b'#'], b'6') => self.set_line_size(crate::cell::row_flags::DOUBLE_WIDTH),
             ([g @ (b'(' | b')' | b'*' | b'+')], f) => self.designate(*g - b'(', f),
             ([g @ (b'-' | b'.' | b'/')], f) => self.designate(*g - b',', f),
-            ([b' '], b'F' | b'G') => {}
+            ([b' '], b'F') => self.c1_8bit = false,
+            ([b' '], b'G') => self.c1_8bit = true,
             _ => {}
         }
+    }
+
+    /// SPA and EPA: starts or ends an ISO protected area. ED, EL and ECH skip protected cells
+    /// from now on, and DECSED and DECSEL stop skipping them.
+    fn set_iso_protection(&mut self, on: bool) {
+        self.protect_iso = true;
+        self.screen_mut().cursor.protected = on;
+    }
+
+    /// DECSCA: Ps 1 protects new cells from selective erase; 0 and 2 stop protecting them.
+    pub(super) fn set_dec_protection(&mut self, on: bool) {
+        self.protect_iso = false;
+        self.screen_mut().cursor.protected = on;
     }
 
     /// SCS: designates a character set into G0 to G3.
@@ -91,6 +108,9 @@ impl Terminal {
         let s = self.screen_mut();
         s.cursor.pending_wrap = false;
         if s.cursor.row == s.bottom {
+            if lrmm && (s.cursor.col < s.left || s.cursor.col > s.right) {
+                return;
+            }
             let margins = lrmm && !(s.left == 0 && s.right == s.cols() - 1);
             if !margins && s.top == 0 && !alt {
                 let bottom = s.bottom;
@@ -114,6 +134,9 @@ impl Terminal {
         let s = self.screen_mut();
         s.cursor.pending_wrap = false;
         if s.cursor.row == s.top {
+            if lrmm && (s.cursor.col < s.left || s.cursor.col > s.right) {
+                return;
+            }
             let margins = lrmm && !(s.left == 0 && s.right == s.cols() - 1);
             let m = margins.then_some((s.left, s.right + 1));
             s.pages.scroll_down(s.top, s.bottom, 1, m);
@@ -158,9 +181,15 @@ impl Terminal {
         }
     }
 
-    /// HT: forward `n` tab stops, stopping at the right margin.
+    /// HT: forward `n` tab stops, stopping at the right margin. A tab that does not move the
+    /// cursor leaves a pending wrap alone. With MoreFix (mode 41) a pending wrap is carried out
+    /// first, so the tab starts on the next line.
     pub(super) fn tab_forward(&mut self, n: u16) {
+        if self.screen().cursor.pending_wrap && self.modes.get(Mode::MoreFix) && self.modes.get(Mode::Autowrap) {
+            self.wrap_line();
+        }
         let s = self.screen_mut();
+        let start = s.cursor.col;
         let right = if s.cursor.col <= s.right { s.right } else { s.cols() - 1 };
         for _ in 0..n.max(1) {
             let mut col = s.cursor.col;
@@ -172,16 +201,17 @@ impl Terminal {
             }
             s.cursor.col = col;
         }
-        s.cursor.pending_wrap = false;
+        if s.cursor.col != start {
+            s.cursor.pending_wrap = false;
+        }
     }
 
-    /// CBT: back `n` tab stops, stopping at the left margin.
+    /// CBT: back `n` tab stops, stopping at the left edge of the screen (the left margin is ignored).
     pub(super) fn tab_backward(&mut self, n: u16) {
         let s = self.screen_mut();
-        let left = if s.cursor.col >= s.left { s.left } else { 0 };
         for _ in 0..n.max(1) {
             let mut col = s.cursor.col;
-            while col > left {
+            while col > 0 {
                 col -= 1;
                 if s.tabs.get(col as usize).copied().unwrap_or(false) {
                     break;
@@ -273,6 +303,7 @@ impl Terminal {
     /// RIS: everything back to its initial state, keeping the size and the scrollback setting.
     pub(super) fn full_reset(&mut self) {
         let (cols, rows) = (self.cols(), self.rows());
+        let was_132 = self.modes.get(Mode::Column132);
         let limit = self.config.scrollback;
         self.primary = Screen::new(cols, rows, limit, true);
         self.alt = None;
@@ -280,24 +311,42 @@ impl Terminal {
         self.modes.reset();
         self.modes.set(Mode::GraphemeCluster, self.config.grapheme_clustering);
         self.palette = default_palette();
+        self.special_colors = [None; 5];
         self.colors = super::DynamicColors::default();
         self.title_stack.clear();
+        self.title_modes = 0;
+        self.window.restore = None;
         self.sgr_stack.clear();
         self.cursor_shape = CursorShape::Default;
         self.sync_pending = false;
         self.graphics.clear();
         self.event(Event::ColorsChanged);
         self.event(Event::CursorShapeChanged);
+        self.protect_iso = false;
+        self.vt_level = 5;
+        self.c1_8bit = false;
+        if was_132 {
+            self.request_resize(80, rows);
+        }
     }
 
     /// DECSTR: soft reset. Modes, pen, margins and saved cursor go back to defaults; the screen
     /// contents and the cursor position stay.
     pub(super) fn soft_reset(&mut self) {
-        for mode in [Mode::Insert, Mode::Origin, Mode::CursorKeys, Mode::KeypadApplication, Mode::LeftRightMargins] {
+        for mode in [
+            Mode::Insert,
+            Mode::Origin,
+            Mode::CursorKeys,
+            Mode::KeypadApplication,
+            Mode::LeftRightMargins,
+            Mode::ReverseWrap,
+            Mode::ReverseWrapExtended,
+        ] {
             self.modes.set(mode, false);
         }
         self.modes.set(Mode::Autowrap, true);
         self.modes.set(Mode::CursorVisible, true);
+        self.protect_iso = false;
         let s = self.screen_mut();
         s.reset_margins();
         s.cursor.style = Default::default();

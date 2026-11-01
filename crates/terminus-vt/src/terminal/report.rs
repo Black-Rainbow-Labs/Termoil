@@ -62,18 +62,22 @@ pub const TERMINFO_CAPS: &[(&str, &str)] = &[
     ("lines", "24"),
 ];
 
+/// The version number DA2 reports. xterm reports its patch number, and programs that look at it
+/// expect a value from 314 up.
+const DA2_VERSION: u16 = 400;
+
 impl Terminal {
     /// CSI sequences that answer with a report, plus anything unrecognised (ignored).
     pub(super) fn report_dispatch(&mut self, seq: &CsiSeq) {
         let p = &seq.params;
         match (seq.private, seq.intermediates(), seq.final_byte) {
-            (0, [], b'c') if p.get(0) == 0 => self.reply(b"\x1b[?62;1;4;6;22;28;52c"),
+            (0, [], b'c') if p.get(0) == 0 => self.reply_da1(),
             (b'>', [], b'c') if p.get(0) == 0 => self.reply_da2(),
             (b'=', [], b'c') if p.get(0) == 0 => self.reply(b"\x1bP!|5445524d\x1b\\"),
             (0, [], b'n') => self.dsr(p.get(0)),
-            (b'?', [], b'n') => self.dec_dsr(p.get(0)),
-            (0, [b'$'], b'p') => self.decrqm(ModeKind::Ansi, p.get(0)),
-            (b'?', [b'$'], b'p') => self.decrqm(ModeKind::Dec, p.get(0)),
+            (b'?', [], b'n') => self.dec_dsr(p.get(0), p.get(1)),
+            (0, [b'$'], b'p') if self.vt_level >= 3 => self.decrqm(ModeKind::Ansi, p.get(0)),
+            (b'?', [b'$'], b'p') if self.vt_level >= 3 => self.decrqm(ModeKind::Dec, p.get(0)),
             (b'>', [], b'q') => {
                 let v = self.config.version_string.clone();
                 self.reply(format!("\x1bP>|{v}\x1b\\").as_bytes());
@@ -82,11 +86,44 @@ impl Terminal {
         }
     }
 
-    /// DA2: terminal type 1, the version as a number, ROM 0.
+    /// DA1 (and DECID): the conformance level, then the features Terminus implements: 132 columns
+    /// (1), selective erase (6), horizontal scrolling (21), ANSI colour (22), rectangular editing
+    /// (28) and clipboard access (52). xterm also lists a printer, ReGIS, sixel, NRCS, the technical
+    /// character set, a locator and user windows; Terminus leaves out what it does not have, because
+    /// programs read this list to decide what to send. Sixel (4) is added when sixel images draw.
+    pub(super) fn reply_da1(&mut self) {
+        let reply = match self.vt_level {
+            1 => "[?1;2c",
+            2 => "[?62;1;6;22;52c",
+            3 => "[?63;1;6;22;52c",
+            4 => "[?64;1;6;21;22;28;52c",
+            _ => "[?65;1;6;21;22;28;52c",
+        };
+        self.reply(reply.as_bytes());
+    }
+
+    /// DA2: the terminal type for the conformance level (as xterm reports it), a version number
+    /// in the range xterm's patch numbers use, and ROM cartridge 0.
     fn reply_da2(&mut self) {
-        let mut parts = env!("CARGO_PKG_VERSION").split('.').map(|s| s.parse::<u32>().unwrap_or(0));
-        let (a, b, c) = (parts.next().unwrap_or(0), parts.next().unwrap_or(0), parts.next().unwrap_or(0));
-        self.reply(format!("\x1b[>1;{};0c", a * 10000 + b * 100 + c).as_bytes());
+        let kind = match self.vt_level {
+            1 => 0,
+            2 => 1,
+            3 => 24,
+            4 => 41,
+            _ => 64,
+        };
+        self.reply(format!("\x1b[>{kind};{DA2_VERSION};0c").as_bytes());
+    }
+
+    /// DECSCL: `CSI 61..65 ; Ps " p` sets the conformance level and soft resets the terminal.
+    pub(super) fn set_conformance_level(&mut self, seq: &CsiSeq) {
+        let ps = seq.params.get(0);
+        if !(61..=65).contains(&ps) {
+            return;
+        }
+        self.vt_level = (ps - 60) as u8;
+        self.c1_8bit = ps > 61 && seq.params.get(1) != 1;
+        self.soft_reset();
     }
 
     /// DSR: 5 is the status (always OK), 6 the cursor position.
@@ -101,8 +138,9 @@ impl Terminal {
         }
     }
 
-    /// DEC DSR: DECXCPR, printer, UDK, keyboard, and the colour scheme query.
-    fn dec_dsr(&mut self, ps: u16) {
+    /// DEC DSR: DECXCPR, printer, UDK, keyboard, locator, macro space and checksum, data
+    /// integrity, multiple sessions, and the colour scheme query.
+    fn dec_dsr(&mut self, ps: u16, pid: u16) {
         match ps {
             6 => {
                 let (row, col) = self.cursor_report_position();
@@ -111,6 +149,12 @@ impl Terminal {
             15 => self.reply(b"\x1b[?13n"),
             25 => self.reply(b"\x1b[?21n"),
             26 => self.reply(b"\x1b[?27;1;0;0n"),
+            55 => self.reply(b"\x1b[?50n"),
+            56 => self.reply(b"\x1b[?57;0n"),
+            62 => self.reply(b"\x1b[0*{"),
+            63 => self.reply(format!("\x1bP{pid}!~0000\x1b\\").as_bytes()),
+            75 => self.reply(b"\x1b[?70n"),
+            85 => self.reply(b"\x1b[?83n"),
             996 => self.event(Event::ColorSchemeQuery),
             _ => {}
         }
@@ -153,7 +197,10 @@ impl Terminal {
             b"s" => Some(format!("{};{}s", s.left + 1, s.right + 1)),
             b" q" => Some(format!("{} q", cursor_shape_number(self.cursor_shape))),
             b"\"q" => Some(format!("{}\"q", if s.cursor.protected { 1 } else { 0 })),
-            b"\"p" => Some("64;1\"p".to_string()),
+            b"\"p" => Some(format!("{};{}\"p", 60 + self.vt_level, if self.c1_8bit { 0 } else { 1 })),
+            b"$}" => Some(format!("{}$}}", self.sasd)),
+            b"*x" => Some(format!("{}*x", self.sace)),
+            b"$~" => Some(format!("{}$~", self.status_line_type)),
             b"t" => Some(format!("{}t", s.rows())),
             b"$|" => Some(format!("{}$|", s.cols())),
             b"*|" => Some(format!("{}*|", s.rows())),

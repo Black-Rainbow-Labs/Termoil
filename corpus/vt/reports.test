@@ -1,11 +1,14 @@
 # Reports: DA1, DA2, DA3, DSR, CPR, DECXCPR, DECRQSS, XTVERSION, XTGETTCAP, XTWINOPS.
 SIZE 80 24
+# DA1 at conformance level 5 starts with 65 and has every feature xterm lists (test_DA_0,
+# test_DA_NoParameter), with sixel (4) and clipboard (52) added. DA2 starts with 64 at level 5,
+# then a version number from 314 up, then 0 (test_DA2_0, test_DA2_NoParameter).
 PUSH "\e[c"
-REPLY "\e[?62;1;4;6;22;28;52c"
+REPLY "\e[?65;1;6;21;22;28;52c"
 PUSH "\e[0c"
-REPLY "\e[?62;1;4;6;22;28;52c"
+REPLY "\e[?65;1;6;21;22;28;52c"
 PUSH "\e[>c"
-REPLY "\e[>1;100;0c"
+REPLY "\e[>64;400;0c"
 PUSH "\e[=c"
 REPLY "\eP!|5445524d\e\\"
 PUSH "\e[5n"
@@ -39,7 +42,7 @@ REPLY "\eP1$r0 q\e\\"
 PUSH "\e[1\"q\eP$q\"q\e\\"
 REPLY "\eP1$r1\"q\e\\"
 PUSH "\e[0\"q\eP$q\"p\e\\"
-REPLY "\eP1$r64;1\"p\e\\"
+REPLY "\eP1$r65;1\"p\e\\"
 PUSH "\e[?69h\e[3;40s\eP$qs\e\\"
 REPLY "\eP1$r3;40s\e\\"
 PUSH "\e[?69l\eP$qx\e\\"

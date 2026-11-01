@@ -57,8 +57,8 @@ fn line(n: usize) -> Vec<u8> {
     let mut k = n;
     while col < 190 {
         k = k.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-        let w = words[(k >> 33) as usize % words.len()];
-        out.extend_from_slice(format!("\x1b[{}m{w} ", 31 + (k >> 40) as usize % 7).as_bytes());
+        let w = words[(k >> 33) % words.len()];
+        out.extend_from_slice(format!("\x1b[{}m{w} ", 31 + (k >> 40) % 7).as_bytes());
         col += w.chars().count() + 1;
     }
     out.extend_from_slice(b"\x1b[0m\r\n");

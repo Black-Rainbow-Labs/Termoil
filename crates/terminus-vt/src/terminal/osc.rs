@@ -1,6 +1,7 @@
 //! OSC: titles, colours, the working directory, hyperlinks, notifications, progress, the
 //! clipboard, semantic prompts and the iTerm2 extensions.
 
+use super::colorspec::parse_color;
 use super::{Event, Hyperlink, PromptEvent, Terminal};
 use crate::cell::{Semantic, row_flags};
 use crate::parser::Terminator;
@@ -18,6 +19,7 @@ impl Terminal {
             Some(1) => self.set_icon_name(rest),
             Some(2) => self.set_title(rest),
             Some(4) => self.osc_palette(rest, term),
+            Some(5) => self.osc_special_colors(rest, term),
             Some(7) => self.osc_cwd(rest),
             Some(8) => self.osc_hyperlink(rest),
             Some(9) => self.osc_9(rest),
@@ -25,6 +27,7 @@ impl Terminal {
             Some(52) => self.osc_clipboard(rest),
             Some(99) => self.osc_kitty_notification(rest),
             Some(104) => self.osc_reset_palette(rest),
+            Some(105) => self.osc_reset_special_colors(rest),
             Some(n @ 110..=119) => self.reset_dynamic_color(n - 100),
             Some(133) => self.osc_semantic(rest),
             Some(777) => self.osc_777(rest),
@@ -35,6 +38,8 @@ impl Terminal {
 
     /// OSC 2: the window title, bounded in length.
     fn set_title(&mut self, raw: &[u8]) {
+        let Some(raw) = self.decode_title(raw) else { return };
+        let raw = &raw[..];
         let title = bounded_string(raw, self.config.max_title);
         self.title = title.clone();
         self.event(Event::Title(title));
@@ -42,43 +47,99 @@ impl Terminal {
 
     /// OSC 1: the icon name.
     fn set_icon_name(&mut self, raw: &[u8]) {
+        let Some(raw) = self.decode_title(raw) else { return };
+        let raw = &raw[..];
         let name = bounded_string(raw, self.config.max_title);
         self.icon_name = name.clone();
         self.event(Event::IconName(name));
     }
 
-    /// OSC 4: sets or queries palette entries, given as pairs of index and colour.
+    /// OSC 4: sets or queries palette entries, given as pairs of index and colour. Indexes 256 to
+    /// 260 are the special colours (bold, underline, blink, reverse, italic).
     fn osc_palette(&mut self, rest: &[u8], term: Terminator) {
         let text = String::from_utf8_lossy(rest);
         let parts: Vec<&str> = text.split(';').collect();
         for pair in parts.chunks(2) {
-            let (Some(idx), Some(spec)) = (pair.first().and_then(|s| s.parse::<u8>().ok()), pair.get(1)) else {
+            let (Some(idx), Some(spec)) = (pair.first().and_then(|s| s.parse::<u16>().ok()), pair.get(1)) else {
                 continue;
             };
-            if *spec == "?" {
-                let c = self.palette[idx as usize];
-                self.reply(format!("\x1b]4;{idx};{}{}", rgb_spec(c), terminator(term)).as_bytes());
-            } else if let Some(c) = parse_color(spec) {
-                self.palette[idx as usize] = c;
-                self.event(Event::ColorsChanged);
-                self.mark_all_dirty();
+            match idx {
+                0..=255 => self.palette_entry(idx, spec, term),
+                256..=260 => self.special_color(idx - 256, idx, spec, term, 4),
+                _ => {}
             }
         }
     }
 
-    /// OSC 104: resets the listed palette entries, or all of them.
+    /// Sets or queries one palette entry for OSC 4.
+    fn palette_entry(&mut self, idx: u16, spec: &str, term: Terminator) {
+        if spec == "?" {
+            let c = self.palette[idx as usize];
+            self.reply(format!("\x1b]4;{idx};{}{}", rgb_spec(c), terminator(term)).as_bytes());
+        } else if let Some(c) = parse_color(spec) {
+            self.palette[idx as usize] = c;
+            self.event(Event::ColorsChanged);
+            self.mark_all_dirty();
+        }
+    }
+
+    /// OSC 5: sets or queries the special colours, given as pairs of number (0 to 4) and colour.
+    fn osc_special_colors(&mut self, rest: &[u8], term: Terminator) {
+        let text = String::from_utf8_lossy(rest);
+        let parts: Vec<&str> = text.split(';').collect();
+        for pair in parts.chunks(2) {
+            let (Some(n), Some(spec)) = (pair.first().and_then(|s| s.parse::<u16>().ok()), pair.get(1)) else {
+                continue;
+            };
+            if n < 5 {
+                self.special_color(n, n, spec, term, 5);
+            }
+        }
+    }
+
+    /// Sets or queries special colour `n`. A reply names the colour the way the request did:
+    /// `osc` is the OSC number used and `shown` the colour number in the request.
+    fn special_color(&mut self, n: u16, shown: u16, spec: &str, term: Terminator, osc: u16) {
+        if spec == "?" {
+            let c = self.special_colors[n as usize].or_else(|| self.dynamic_color(10)).unwrap_or_default();
+            self.reply(format!("\x1b]{osc};{shown};{}{}", rgb_spec(c), terminator(term)).as_bytes());
+        } else if let Some(c) = parse_color(spec) {
+            self.special_colors[n as usize] = Some(c);
+            self.event(Event::ColorsChanged);
+        }
+    }
+
+    /// OSC 104: resets the listed palette entries (256 to 260 are special colours), or all of them.
     fn osc_reset_palette(&mut self, rest: &[u8]) {
         let defaults = crate::style::default_palette();
         let text = String::from_utf8_lossy(rest);
         if text.is_empty() {
             self.palette = defaults;
+            self.special_colors = [None; 5];
         } else {
-            for idx in text.split(';').filter_map(|s| s.parse::<u8>().ok()) {
-                self.palette[idx as usize] = defaults[idx as usize];
+            for idx in text.split(';').filter_map(|s| s.parse::<u16>().ok()) {
+                match idx {
+                    0..=255 => self.palette[idx as usize] = defaults[idx as usize],
+                    256..=260 => self.special_colors[idx as usize - 256] = None,
+                    _ => {}
+                }
             }
         }
         self.event(Event::ColorsChanged);
         self.mark_all_dirty();
+    }
+
+    /// OSC 105: resets the listed special colours (0 to 4), or all of them.
+    fn osc_reset_special_colors(&mut self, rest: &[u8]) {
+        let text = String::from_utf8_lossy(rest);
+        if text.is_empty() {
+            self.special_colors = [None; 5];
+        } else {
+            for n in text.split(';').filter_map(|s| s.parse::<usize>().ok()).filter(|n| *n < 5) {
+                self.special_colors[n] = None;
+            }
+        }
+        self.event(Event::ColorsChanged);
     }
 
     /// OSC 10 to 19: sets or queries the dynamic colours; several may follow in one sequence.
@@ -245,7 +306,10 @@ impl Terminal {
             }
             return;
         }
-        if let Some(bytes) = decode_base64(data.as_bytes()) {
+        // Characters outside the base64 alphabet are skipped, as xterm does, so a stray quote or
+        // newline does not lose the whole write.
+        let cleaned: Vec<u8> = data.bytes().filter(|b| b.is_ascii_alphanumeric() || b"+/=".contains(b)).collect();
+        if let Some(bytes) = decode_base64(&cleaned) {
             self.event(Event::ClipboardWrite { selection, data: bytes });
         }
     }
@@ -350,36 +414,6 @@ fn terminator(term: Terminator) -> &'static str {
 /// An `rgb:rrrr/gggg/bbbb` colour spec, the form xterm answers queries with.
 pub(super) fn rgb_spec(c: Rgb) -> String {
     format!("rgb:{:02x}{:02x}/{:02x}{:02x}/{:02x}{:02x}", c.r, c.r, c.g, c.g, c.b, c.b)
-}
-
-/// Parses `rgb:r/g/b` (1 to 4 hex digits each) or `#rgb`, `#rrggbb`, `#rrrgggbbb`, `#rrrrggggbbbb`.
-pub fn parse_color(spec: &str) -> Option<Rgb> {
-    if let Some(body) = spec.strip_prefix("rgb:") {
-        let parts: Vec<&str> = body.split('/').collect();
-        if parts.len() != 3 {
-            return None;
-        }
-        let r = scale_hex(parts[0])?;
-        let g = scale_hex(parts[1])?;
-        let b = scale_hex(parts[2])?;
-        return Some(Rgb::new(r, g, b));
-    }
-    let hex = spec.strip_prefix('#')?;
-    if hex.is_empty() || hex.len() % 3 != 0 || hex.len() > 12 {
-        return None;
-    }
-    let n = hex.len() / 3;
-    Some(Rgb::new(scale_hex(&hex[..n])?, scale_hex(&hex[n..2 * n])?, scale_hex(&hex[2 * n..])?))
-}
-
-/// Scales a 1 to 4 digit hex component to 8 bits.
-fn scale_hex(s: &str) -> Option<u8> {
-    if s.is_empty() || s.len() > 4 {
-        return None;
-    }
-    let v = u32::from_str_radix(s, 16).ok()?;
-    let max = (1u32 << (4 * s.len())) - 1;
-    Some(((v * 255 + max / 2) / max) as u8)
 }
 
 /// Decodes standard base64, tolerating missing padding. None for invalid input.

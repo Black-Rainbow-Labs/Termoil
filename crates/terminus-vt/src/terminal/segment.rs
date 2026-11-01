@@ -66,7 +66,11 @@ pub(super) fn write_segment(s: &mut Screen, text: &str, m: PrintModes) -> usize 
         last: joinable.map(|lp| Last { col: lp.col, breaker: lp.state, ascii: lp.ascii }),
         ascii_refs: 0,
     };
-    if seg.x > 0 && !seg.pending && page.cells(i)[seg.x as usize].wide() == Wide::SpacerTail {
+    // With autowrap off the cursor stays on the tail of a wide character written in the last
+    // column. When the text joins that character (a zero width joiner, say) it must not be
+    // cleared first, so this runs only when there is no cell to join; the general write clears a
+    // tail it overwrites.
+    if seg.last.is_none() && seg.x > 0 && !seg.pending && page.cells(i)[seg.x as usize].wide() == Wide::SpacerTail {
         page.clear_cells(i, seg.x as usize - 1, seg.x as usize + 1, Cell::BLANK, false);
     }
     let start_x = seg.x;

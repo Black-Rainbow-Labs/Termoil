@@ -1,0 +1,485 @@
+# Behaviour found by running esctest2 against xterm 400 settings. Each expectation is worked out
+# from the esctest2 test it comes from (named in the comment), not from the terminal's own output.
+
+# ED, EL and ECH skip cells written between SPA (ESC V) and EPA (ESC W). The tests are
+# test_ED_respectsISOProtection, test_EL_respectsISOProtection and test_ECH_respectsISOProtection.
+SIZE 10 2
+PUSH "ab\eVc\eW\e[1;1H\e[J"
+ROW 0 "  c"
+SIZE 10 2
+PUSH "ab\eVc\eW\e[1;1H\e[K"
+ROW 0 "  c"
+SIZE 10 2
+PUSH "ab\eVc\eW\e[1;1H\e[3X"
+ROW 0 "  c"
+
+# xterm lets DECSED and DECSEL respect ISO protection too (test_DECSED_doesNotRespectISOProtect is
+# marked as a known bug for xterm).
+SIZE 10 2
+PUSH "a\eVb\eW\e[?2J"
+ROW 0 " b"
+SIZE 10 2
+PUSH "a\eVb\eW\e[?2K"
+ROW 0 " b"
+
+# DECSCA after SPA makes ED erase everything again, because the last protection used was DEC.
+SIZE 10 2
+PUSH "\eVa\eW\e[0\"qb\e[1;1H\e[2J"
+ROW 0 ""
+
+# DECIC and DECDC work at the cursor column, in every row between the top and bottom margins
+# (test_DECIC_ExplicitParam, test_DECIC_CursorWithinTopBottom).
+SIZE 12 4
+PUSH "abcdefg\r\nABCDEFG\r\nzyxwvut\e[2;2H\e[2'}"
+SCREEN
+|a  bcdefg
+|A  BCDEFG
+|z  yxwvut
+|
+END
+
+SIZE 12 4
+PUSH "abcdefg\r\nABCDEFG\r\nzyxwvut\r\nZYXWVUT\e[?69h\e[1;12s\e[2;3r\e[2;2H\e[2'}"
+SCREEN
+|abcdefg
+|A  BCDEFG
+|z  yxwvut
+|ZYXWVUT
+END
+
+SIZE 12 2
+PUSH "abcdefg\r\nABCDEFG\e[1;2H\e[2'~"
+SCREEN
+|adefg
+|ADEFG
+END
+
+# DECIC does nothing when the cursor is left of the left margin (test_DECIC_IsNoOpWhenCursorBeginsOutsideScrollRegion).
+SIZE 12 2
+PUSH "abcdefg\r\nABCDEFG\e[?69h\e[2;5s\e[1;1H\e[10'}"
+SCREEN
+|abcdefg
+|ABCDEFG
+END
+
+# DECIC inside the margins pushes cells off the right margin (test_DECIC_ScrollOffRightMarginInScrollRegion).
+SIZE 12 2
+PUSH "abcdefg\r\nABCDEFG\e[?69h\e[2;5s\e[1;3H\e[0'}"
+SCREEN
+|ab cdfg
+|AB CDFG
+END
+
+# IND, LF, VT, FF, NEL and RI at the bottom or top margin do not move or scroll when the cursor
+# is left or right of the left and right margins (test_IND_MovesDoesNotScrollOutsideLeftRight and
+# the RI, NEL, LF, VT and FF versions).
+SIZE 10 6
+PUSH "\e[2;5r\e[?69h\e[2;5s\e[5;3Hx\e[5;6H\eD"
+CURSOR 4 5
+ROW 4 "  x"
+PUSH "\e[5;1H\eD"
+CURSOR 4 0
+ROW 4 "  x"
+PUSH "\e[6;6H\eD"
+CURSOR 5 5
+PUSH "\e[5;6H\n"
+CURSOR 4 5
+PUSH "\e[5;6H\x0b"
+CURSOR 4 5
+PUSH "\e[5;6H\x0c"
+CURSOR 4 5
+ROW 4 "  x"
+
+# NEL still carries out its carriage return, to the left margin.
+SIZE 10 6
+PUSH "\e[2;5r\e[?69h\e[2;5s\e[5;6H\eE"
+CURSOR 4 1
+PUSH "\e[5;1H\eE"
+CURSOR 4 0
+
+SIZE 10 6
+PUSH "\e[2;5r\e[?69h\e[2;5s\e[5;3Hx\e[2;6H\eM"
+CURSOR 1 5
+ROW 4 "  x"
+PUSH "\e[2;1H\eM"
+CURSOR 1 0
+ROW 4 "  x"
+
+# Inside the margins the same controls scroll (the cursor is at row 5, column 3).
+SIZE 10 6
+PUSH "\e[2;5r\e[?69h\e[2;5s\e[5;3Hx\e[5;3H\eD"
+ROW 3 "  x"
+ROW 4 ""
+
+# CBT ignores the left margin and stops at the left edge of the screen (test_CBT_IgnoresRegion).
+SIZE 40 12
+PUSH "\e[?69h\e[5;30s\e[9;7H\e[2Z"
+CURSOR 8 0
+
+# Reverse wrap with mode 45 only crosses into a line that wrapped (test_BS_AfterNoWrappedInlines,
+# test_BS_AfterOneWrappedInline, test_BS_InitialReverseWraparound).
+SIZE 10 8
+PUSH "\e[?7h\e[?45h\e[3;1H********\n********\n\e[5;5H\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b"
+CURSOR 3 0
+
+SIZE 10 8
+PUSH "\e[?7h\e[?45h\e[3;1H**********************\n**********************\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b"
+CURSOR 5 0
+
+SIZE 10 4
+PUSH "\e[?7h\e[?45h\e[1;1H\eE\b"
+CURSOR 1 0
+
+# Mode 1045 crosses into any line and wraps from the top margin to the bottom margin
+# (test_BS_WrapsInWraparoundMode, test_BS_ReverseWrapGoesToBottom, test_BS_ReverseWrapWithLeftRight).
+SIZE 10 6
+PUSH "\e[?7h\e[?1045h\e[3;1H\b"
+CURSOR 1 9
+SIZE 10 6
+PUSH "\e[?7h\e[?1045h\e[2;5r\e[2;1H\b"
+CURSOR 4 9
+SIZE 20 6
+PUSH "\e[?7h\e[?1045h\e[?69h\e[5;10s\e[3;5H\b"
+CURSOR 1 9
+SIZE 20 6
+PUSH "\e[?7h\e[?1045h\e[?69h\e[5;10s\e[3;1H\b"
+CURSOR 1 9
+
+# Reverse wrap needs autowrap (test_BS_ReverseWrapRequiresDECAWM), and DECSTR turns it off
+# (test_DECSTR_ReverseWraparound).
+SIZE 10 6
+PUSH "\e[?7l\e[?1045h\e[3;1H\b"
+CURSOR 2 0
+SIZE 10 6
+PUSH "\e[?1045h\e[!p\e[3;1H\b"
+CURSOR 2 0
+
+# A `#` colour keeps the high bits of a 16 bit value: #fff is 0xf000 and reports as f0f0
+# (test_ChangeColor_Hash3, Hash9 and Hash12). colors.test line 12 is the same rule for #abc.
+PUSH "\e]4;0;#fff\a\e]4;0;?\a"
+REPLY "\e]4;0;rgb:f0f0/f0f0/f0f0\a"
+PUSH "\e]4;0;#888\a\e]4;0;?\a"
+REPLY "\e]4;0;rgb:8080/8080/8080\a"
+PUSH "\e]4;0;#f00f00f00\a\e]4;0;?\a"
+REPLY "\e]4;0;rgb:f0f0/f0f0/f0f0\a"
+PUSH "\e]4;0;#800800800\a\e]4;0;?\a"
+REPLY "\e]4;0;rgb:8080/8080/8080\a"
+PUSH "\e]4;0;#f000f000f000\a\e]4;0;?\a"
+REPLY "\e]4;0;rgb:f0f0/f0f0/f0f0\a"
+
+# rgbi: is a fraction of full intensity; rgbi:1/1/1 is white (test_ChangeColor_RGBI, first half).
+PUSH "\e]4;0;rgbi:1/1/1\a\e]4;0;?\a"
+REPLY "\e]4;0;rgb:ffff/ffff/ffff\a"
+
+# Special colours through OSC 4 (numbers 256 to 260) and OSC 5 (0 to 4); the reply uses the form
+# of the request (test_ChangeSpecialColor_Multiple and Multiple2).
+PUSH "\e]4;256;rgb:f0f0/f0f0/f0f0;257;rgb:f0f0/0000/0000\a\e]4;256;?;257;?\a"
+REPLY "\e]4;256;rgb:f0f0/f0f0/f0f0\a\e]4;257;rgb:f0f0/0000/0000\a"
+PUSH "\e]5;0;?;1;?\a"
+REPLY "\e]5;0;rgb:f0f0/f0f0/f0f0\a\e]5;1;rgb:f0f0/0000/0000\a"
+PUSH "\e]5;2;#aaaabbbbcccc\a\e]5;2;?\a"
+REPLY "\e]5;2;rgb:aaaa/bbbb/cccc\a"
+
+# OSC 105 resets the listed special colours, and OSC 105 with none resets every one. A special
+# colour that is not set reports the foreground colour (test_ResetSpecialColor_Single and Multiple).
+PUSH "\e]105;2\a\e]5;2;?\a"
+REPLY "\e]5;2;rgb:0000/0000/0000\a"
+PUSH "\e]105;0;1\a\e]5;0;?;1;?\a"
+REPLY "\e]5;0;rgb:0000/0000/0000\a\e]5;1;rgb:0000/0000/0000\a"
+PUSH "\e]5;3;#112233\a\e]105\a\e]5;3;?\a"
+REPLY "\e]5;3;rgb:0000/0000/0000\a"
+PUSH "\e]4;258;#112233\a\e]104;258\a\e]4;258;?\a"
+REPLY "\e]4;258;rgb:0000/0000/0000\a"
+
+# Colour names are accepted by OSC 4 and OSC 10.
+PUSH "\e]4;1;red\a\e]4;1;?\a"
+REPLY "\e]4;1;rgb:ffff/0000/0000\a"
+PUSH "\e]10;gray50\a\e]10;?\a"
+REPLY "\e]10;rgb:8080/8080/8080\a"
+
+# DECRQM. KAM, SRM and DECSCLM can be set and reset (test_DECRQM_ANSI_KAM, ANSI_SRM and DEC_DECSCLM).
+SIZE 10 2
+MODE 2 2
+PUSH "\e[2h"
+MODE 2 1
+PUSH "\e[2l"
+MODE 2 2
+MODE 12 1
+PUSH "\e[12l"
+MODE 12 2
+PUSH "\e[12h"
+MODE 12 1
+MODE ?4 2
+PUSH "\e[?4h"
+MODE ?4 1
+PUSH "\e[?4l"
+MODE ?4 2
+
+# The ANSI modes xterm never lets a program turn on report as permanently reset, 4 (test_DECRQM_ANSI_GATM
+# and the ones named after it: SRTM, VEM, HEM, PUM, FEAM, FETM, MATM, TTM, SATM, TSM, EBM).
+MODE 1 4
+MODE 5 4
+MODE 7 4
+MODE 10 4
+MODE 11 4
+MODE 13 4
+MODE 14 4
+MODE 15 4
+MODE 16 4
+MODE 17 4
+MODE 18 4
+MODE 19 4
+PUSH "\e[1h\e[19h"
+MODE 1 4
+MODE 19 4
+
+# DECPFF, DECPEX, DECHEBM and DECNRCM are remembered and reported; DECHCCM is permanently reset
+# (test_DECRQM_DEC_DECPFF, DECPEX, DECHEBM, DECNRCM, DECHCCM).
+MODE ?18 2
+PUSH "\e[?18h"
+MODE ?18 1
+PUSH "\e[?18l"
+MODE ?18 2
+MODE ?19 1
+PUSH "\e[?19l"
+MODE ?19 2
+PUSH "\e[?19h"
+MODE ?19 1
+MODE ?35 2
+PUSH "\e[?35h"
+MODE ?35 1
+MODE ?42 2
+PUSH "\e[?42h"
+MODE ?42 1
+PUSH "\e[?42l"
+MODE ?42 2
+MODE ?60 4
+PUSH "\e[?60h"
+MODE ?60 4
+
+# DECID (ESC Z) answers like DA1 (test_DECID_Basic).
+SIZE 80 25
+PUSH "\eZ"
+REPLY "\e[?65;1;6;21;22;28;52c"
+
+# DECSCL sets the conformance level, which changes DA1, DA2 and DECRQSS, and it ends DECRQM at
+# level 2 (test_DECSCL_Level2DoesntSupportDECRQM, test_DECRQSS_DECSCL).
+PUSH "\e[64;1\"p\e[c\e[>c"
+REPLY "\e[?64;1;6;21;22;28;52c\e[>41;400;0c"
+PUSH "\e[63;1\"p\e[c\e[>c\eP$q\"p\e\\"
+REPLY "\e[?63;1;6;22;52c\e[>24;400;0c\eP1$r63;1\"p\e\\"
+PUSH "\e[62;1\"p\e[c\e[>c"
+REPLY "\e[?62;1;6;22;52c\e[>1;400;0c"
+PUSH "\e[4$p\e[?7$p"
+REPLY ""
+PUSH "\e[65;1\"p\e[4$p"
+REPLY "\e[4;2$y"
+
+# Level 3 has no DECLRMM and level 4 has no DECNCSM (test_DSCSCL_Level3_SupportsDECRQMDoesntSupportDECSLRM,
+# test_DECSCL_Level4_SupportsDECSLRMDoesntSupportDECNCSM, test_DECSCL_Level5_SupportsDECNCSM).
+SIZE 80 25
+PUSH "\e[63;1\"p\e[?69h\e[1;5Habc"
+CURSOR 0 7
+SIZE 80 25
+PUSH "\e[64;1\"p\e[?40h\e[?3l\e[?95h\e[1;1H1\e[?3h"
+ROW 0 ""
+PUSH "\e[?69h\e[5;6s\e[1;5Habc"
+CURSOR 1 5
+SIZE 80 25
+PUSH "\e[65;1\"p\e[?40h\e[?3l\e[?95h\e[1;1H1\e[?3h"
+ROW 0 "1"
+
+# DECDSR (test_DECDSR_DECXCPR and the ones after it in decdsr.py).
+SIZE 80 25
+PUSH "\e[6;5H\e[?6n"
+REPLY "\e[?6;5;1R"
+PUSH "\e[?55n\e[?56n\e[?62n\e[?75n\e[?85n"
+REPLY "\e[?50n\e[?57;0n\e[0*{\e[?70n\e[?83n"
+PUSH "\e[?63;123n"
+REPLY "\eP123!~0000\e\\"
+
+# DECSASD and DECSACE are stored and reported by DECRQSS (test_DECRQSS_DECSASD, test_DECRQSS_DECSACE).
+SIZE 80 25
+PUSH "\e[0$}\eP$q$}\e\\"
+REPLY "\eP1$r0$}\e\\"
+PUSH "\e[1$}\eP$q$}\e\\"
+REPLY "\eP1$r1$}\e\\"
+PUSH "\e[0*x\eP$q*x\e\\"
+REPLY "\eP1$r0*x\e\\"
+PUSH "\e[2*x\eP$q*x\e\\"
+REPLY "\eP1$r2*x\e\\"
+
+# XTWINOPS reports: window state, position, display size in pixels and in cells.
+SIZE 80 24
+PUSH "\e[11t\e[2t\e[11t\e[1t\e[11t"
+REPLY "\e[1t\e[2t\e[1t"
+PUSH "\e[3;7;9t\e[13t\e[3;5t\e[13t\e[3t\e[13t"
+REPLY "\e[3;7;9t\e[3;5;0t\e[3;0;0t"
+PUSH "\e[15t\e[19t\e[14;2t"
+REPLY "\e[5;1080;1920t\e[9;54;192t\e[4;480;800t"
+
+# XTWINOPS 20 and 21 report the icon label and the window title (test_XtermWinops_ReportIconLabel,
+# test_XtermWinops_ReportWindowLabel).
+SIZE 80 24
+PUSH "\e]1;an icon\a\e]2;a title\a\e[20t\e[21t"
+REPLY "\e]Lan icon\e\\\e]la title\e\\"
+
+# The title stack. A push of both, a push of the icon, and a push of the window (test_XtermWinops_Push*).
+SIZE 80 24
+PUSH "\e]2;w1\a\e]1;i1\a\e[22;0t\e]2;x\a\e]1;x\a\e[23;0t\e[21t\e[20t"
+REPLY "\e]lw1\e\\\e]Li1\e\\"
+PUSH "\e]2;x\a\e]1;i2\a\e[22;1t\e]1;y\a\e[23;1t\e[21t\e[20t"
+REPLY "\e]lx\e\\\e]Li2\e\\"
+PUSH "\e]1;ia\a\e[22;1t\e]1;ib\a\e[22;1t\e]1;z\a\e[23;1t\e[20t\e[23;1t\e[20t"
+REPLY "\e]Lib\e\\\e]Lia\e\\"
+PUSH "\e]2;a\a\e]1;b\a\e[22;1t\e[22;2t\e]2;y\a\e]1;z\a\e[23;0t\e[21t\e[20t"
+REPLY "\e]la\e\\\e]Lb\e\\"
+
+# Popping only the window title leaves the icon name (test_XtermWinops_PushIconAndWindow_PopWindow);
+# the entry is used up, so a later pop of the icon does nothing.
+PUSH "\e]2;s\a\e]1;s\a\e[22;0t\e]2;x\a\e]1;x\a\e[23;2t\e[21t\e[20t\e[23;1t\e[21t\e[20t"
+REPLY "\e]ls\e\\\e]Lx\e\\\e]ls\e\\\e]Lx\e\\"
+
+# Title modes: set hex (CSI > 0 t) reads titles as hex, query hex (CSI > 1 t) reports them as hex,
+# and CSI > Ps T turns them off (test_RIS_ResetTitleMode).
+SIZE 80 24
+PUSH "\e[>0t\e]2;6162\a"
+TITLE "ab"
+PUSH "\e]2;zz\a"
+TITLE "ab"
+PUSH "\e[>1t\e[21t"
+REPLY "\e]l6162\e\\"
+PUSH "\e[>0;1T\e]2;ab\a\e[21t"
+TITLE "ab"
+REPLY "\e]lab\e\\"
+PUSH "\e[>0;1t\ec\e]2;ab\a\e[21t"
+REPLY "\e]lab\e\\"
+
+# Resize requests: XTWINOPS 8 in cells, 4 in pixels (a cell is 10 by 20 pixels and the display is
+# 1920 by 1080 pixels, so 192 by 54 cells), a 0 meaning the whole display, a missing value meaning
+# no change, 9 maximize, 10 full screen, and 24 and up setting the number of lines (DECSLPP).
+SIZE 80 24
+PUSH "\e[8;30;100t\e[8;0;0t\e[8;10t\e[8;0t"
+EVENT ResizeRequest { cols: 100, rows: 30 }
+EVENT ResizeRequest { cols: 192, rows: 54 }
+EVENT ResizeRequest { cols: 80, rows: 10 }
+EVENT ResizeRequest { cols: 80, rows: 54 }
+SIZE 80 24
+PUSH "\e[4;200;400t\e[4;0;400t\e[4;200;0t\e[4;200t"
+EVENT ResizeRequest { cols: 40, rows: 10 }
+EVENT ResizeRequest { cols: 40, rows: 54 }
+EVENT ResizeRequest { cols: 192, rows: 10 }
+EVENT ResizeRequest { cols: 80, rows: 10 }
+SIZE 80 24
+PUSH "\e[9;1t\e[9;0t\e[9;2t\e[9;0t\e[9;3t\e[9;0t"
+EVENT ResizeRequest { cols: 192, rows: 54 }
+EVENT ResizeRequest { cols: 80, rows: 24 }
+EVENT ResizeRequest { cols: 80, rows: 54 }
+EVENT ResizeRequest { cols: 80, rows: 24 }
+EVENT ResizeRequest { cols: 192, rows: 24 }
+EVENT ResizeRequest { cols: 80, rows: 24 }
+SIZE 80 24
+PUSH "\e[10;1t\e[10;0t\e[10;2t\e[10;2t"
+EVENT ResizeRequest { cols: 192, rows: 54 }
+EVENT ResizeRequest { cols: 80, rows: 24 }
+EVENT ResizeRequest { cols: 192, rows: 54 }
+EVENT ResizeRequest { cols: 80, rows: 24 }
+SIZE 80 24
+PUSH "\e[24t\e[30t"
+EVENT ResizeRequest { cols: 80, rows: 24 }
+EVENT ResizeRequest { cols: 80, rows: 30 }
+
+# RIS puts 80 columns back when DECCOLM made the screen 132 wide (test_RIS_ResetDECCOLM).
+SIZE 80 24
+PUSH "\e[?40h\e[?3h"
+EVENT ModeChanged(Allow132)
+EVENT ResizeRequest { cols: 132, rows: 24 }
+PUSH "\ec"
+EVENT ColorsChanged
+EVENT CursorShapeChanged
+EVENT ResizeRequest { cols: 80, rows: 24 }
+
+# An empty parameter keeps that direction, a 0 uses the whole display (test_XtermWinops_ResizeChars_DefaultHeight,
+# test_XtermWinops_ResizePixels_OmittedHeight).
+SIZE 80 24
+PUSH "\e[8;;100t\e[4;;400t\e[8;0;t"
+EVENT ResizeRequest { cols: 100, rows: 24 }
+EVENT ResizeRequest { cols: 40, rows: 24 }
+EVENT ResizeRequest { cols: 80, rows: 54 }
+
+# Popping only the icon name leaves the window title alone, and the entry is used up
+# (test_XtermWinops_PushIconAndWindow_PopIcon).
+SIZE 80 24
+PUSH "\e]2;s\a\e]1;s\a\e[22;0t\e]2;x\a\e]1;x\a\e[23;1t\e[21t\e[20t\e[23;2t\e[21t\e[20t"
+REPLY "\e]lx\e\\\e]Ls\e\\\e]lx\e\\\e]Ls\e\\"
+
+# Modes 47 and 1047 share one cursor between the two screens; 1049 puts the saved one back
+# (test_DECSET_ALTBUF, test_DECSET_OPT_ALTBUF, test_DECSET_OPT_ALTBUF_CURSOR).
+SIZE 10 4
+PUSH "abc\e[?47h\e[2;5H\e[?47l"
+CURSOR 1 4
+ROW 0 "abc"
+SIZE 10 4
+PUSH "abc\e[?1047h\e[3;2Hxy\e[?1047l"
+CURSOR 2 3
+ROW 0 "abc"
+SIZE 10 4
+PUSH "abc\e[1;4H\e[?1049h\e[3;3H\e[?1049l"
+CURSOR 0 3
+
+# MoreFix (mode 41): a tab at a pending wrap goes to the next line first. Without it the tab does
+# not move the cursor and the pending wrap stays (test_DECSET_MoreFix).
+SIZE 10 4
+PUSH "\e[?41h\e[2;1Hxxxxxxxxxx\t1"
+ROW 2 "        1"
+CURSOR 2 9
+SIZE 10 4
+PUSH "\e[?41l\e[1;1Hxxxxxxxxxx\t2"
+ROW 0 "xxxxxxxxxx"
+ROW 1 "2"
+CURSOR 1 1
+
+# DECSED 3 only clears the scrollback (test_DECSED_3).
+SIZE 10 4
+PUSH "abc\e[1;2H\e[?3J"
+ROW 0 "abc"
+
+# DECSERA erases ISO protected cells (test_DECSERA_doesNotRespectISOProtect) and keeps DEC protected ones.
+SIZE 10 4
+PUSH "a\eVb\eW\e[1;1;1;2${"
+ROW 0 ""
+SIZE 10 4
+PUSH "a\e[1\"qb\e[0\"q\e[1;1;1;2${"
+ROW 0 " b"
+
+# DECSNLS sets the number of lines, DECSSDT is stored (test_DECRQSS_DECSNLS, test_DECRQSS_DECSSDT).
+SIZE 80 25
+PUSH "\e[24*|"
+EVENT ResizeRequest { cols: 80, rows: 24 }
+PUSH "\e[2$~\eP$q$~\e\\"
+REPLY "\eP1$r2$~\e\\"
+
+# S8C1T (ESC SP G) makes replies use single byte C1 controls, S7C1T (ESC SP F) turns that off, and
+# DECSCL with a second parameter other than 1 turns it on (test_S8C1T_DCS).
+SIZE 80 25
+PUSH "\e G\e[5n\eP$qr\e\\"
+REPLY "\x9b0n\x901$r1;25r\x9c"
+PUSH "\e F\e[5n"
+REPLY "\e[0n"
+PUSH "\e[62\"p\e[5n\eP$q\"p\e\\"
+REPLY "\x9b0n\x901$r62;0\"p\x9c"
+PUSH "\e[62;1\"p\e[5n"
+REPLY "\e[0n"
+
+# OSC 52 skips characters outside the base64 alphabet: esctest2 on Python 3 sends the data with a
+# trailing quote (test_ManipulateSelectionData_default).
+SIZE 80 25
+PUSH "\e]52;;dGVzdGluZyAxMjM='\e\\"
+EVENT ClipboardWrite { selection: "c", data: [116, 101, 115, 116, 105, 110, 103, 32, 49, 50, 51] }
+
+# With autowrap off a wide character in the last two columns leaves the cursor on its tail, and a
+# zero width joiner that arrives in a later write joins it instead of clearing it. This is a case
+# the chunking property test found; the script runs it whole, byte by byte and in random chunks.
+SIZE 20 2
+PUSH "\e[?7l\e[19;0C\x08\u{1f468}\u{200d}\u{1f469}"
+CELL 0 18 "👨\u{200d}👩" w=2

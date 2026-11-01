@@ -4,6 +4,7 @@
 //! `Terminal::advance` feeds bytes through the parser and applies every action. The terminal is
 //! a plain value with no thread or lock; the host decides where it lives and when it is read.
 
+mod colorspec;
 mod control;
 mod csi;
 mod dcs;
@@ -13,6 +14,7 @@ mod print;
 mod report;
 mod segment;
 mod sgr;
+mod winops;
 
 use crate::graphics::GraphicsStore;
 use crate::modes::{Mode, ModeSet};
@@ -20,6 +22,8 @@ use crate::pagelist::{ReflowCursor, ScrollbackLimit};
 use crate::parser::{Action, Handler, Parser, ParserLimits};
 use crate::screen::Screen;
 use crate::style::{Rgb, Style, default_palette};
+
+pub use winops::WindowState;
 
 /// Settings a host chooses when it creates a terminal.
 #[derive(Clone, Debug)]
@@ -192,7 +196,16 @@ pub struct Terminal {
     colors: DynamicColors,
     title: String,
     icon_name: String,
-    title_stack: Vec<(String, String)>,
+    title_stack: Vec<winops::TitleEntry>,
+    window: WindowState,
+    screen_pixels: (u32, u32),
+    apply_resize: bool,
+    title_modes: u8,
+    vt_level: u8,
+    c1_8bit: bool,
+    sace: u16,
+    sasd: u16,
+    status_line_type: u16,
     sgr_stack: Vec<Style>,
     hyperlinks: Vec<Hyperlink>,
     hyperlink_index: std::collections::HashMap<Hyperlink, u32>,
@@ -210,6 +223,8 @@ pub struct Terminal {
     notification_pending: (String, String),
     click_events: Option<String>,
     marks: Vec<Mark>,
+    protect_iso: bool,
+    special_colors: [Option<Rgb>; 5],
 }
 
 impl Terminal {
@@ -231,6 +246,15 @@ impl Terminal {
             title: String::new(),
             icon_name: String::new(),
             title_stack: Vec::new(),
+            window: WindowState::default(),
+            screen_pixels: (1920, 1080),
+            apply_resize: false,
+            title_modes: 0,
+            vt_level: 5,
+            c1_8bit: false,
+            sace: 0,
+            sasd: 0,
+            status_line_type: 0,
             sgr_stack: Vec::new(),
             hyperlinks: Vec::new(),
             hyperlink_index: std::collections::HashMap::new(),
@@ -248,6 +272,8 @@ impl Terminal {
             notification_pending: (String::new(), String::new()),
             click_events: None,
             marks: Vec::new(),
+            protect_iso: false,
+            special_colors: [None; 5],
             config,
         }
     }
@@ -436,6 +462,23 @@ impl Terminal {
         self.cell_pixel
     }
 
+    /// The virtual window state XTWINOPS changes (position, iconified).
+    pub fn window(&self) -> WindowState {
+        self.window
+    }
+
+    /// Tells the terminal the size of the display in pixels, for XTWINOPS 15 and 19 and for the
+    /// resize requests that ask for the whole display.
+    pub fn set_screen_pixels(&mut self, width: u32, height: u32) {
+        self.screen_pixels = (width.max(1), height.max(1));
+    }
+
+    /// When on, a resize request from XTWINOPS or DECCOLM also resizes the terminal at once, as
+    /// well as queueing `Event::ResizeRequest`. A front end with no window turns this on.
+    pub fn set_apply_resize_requests(&mut self, on: bool) {
+        self.apply_resize = on;
+    }
+
     /// Parser counters.
     pub fn parser_stats(&self) -> crate::parser::ParserStats {
         self.parser.stats()
@@ -466,9 +509,34 @@ impl Terminal {
         }
     }
 
-    /// Queues bytes to send back to the program.
+    /// Queues bytes to send back to the program. After S8C1T the 7 bit control introducers and
+    /// terminators in the bytes (ESC [, ESC P, ESC ], ESC _, ESC \) go out as single C1 bytes.
     fn reply(&mut self, bytes: &[u8]) {
-        self.replies.extend_from_slice(bytes);
+        if !self.c1_8bit {
+            self.replies.extend_from_slice(bytes);
+            return;
+        }
+        let mut i = 0;
+        while i < bytes.len() {
+            let c1 = match (bytes[i], bytes.get(i + 1)) {
+                (0x1b, Some(b'[')) => Some(0x9b),
+                (0x1b, Some(b'P')) => Some(0x90),
+                (0x1b, Some(b']')) => Some(0x9d),
+                (0x1b, Some(b'_')) => Some(0x9f),
+                (0x1b, Some(b'\\')) => Some(0x9c),
+                _ => None,
+            };
+            match c1 {
+                Some(byte) => {
+                    self.replies.push(byte);
+                    i += 2;
+                }
+                None => {
+                    self.replies.push(bytes[i]);
+                    i += 1;
+                }
+            }
+        }
     }
 
     /// Queues an event.

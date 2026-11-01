@@ -32,6 +32,7 @@ impl Terminal {
             (0, [], b'I') => self.tab_forward(n),
             (0, [], b'J') if p.get(0) == 3 => self.clear_scrollback(),
             (0, [], b'J') => self.erase_display(erase_range(p.get(0)), false),
+            (b'?', [], b'J') if p.get(0) == 3 => self.clear_scrollback(),
             (b'?', [], b'J') => self.erase_display(erase_range(p.get(0)), true),
             (0, [], b'K') => self.erase_line(erase_range(p.get(0)), false),
             (b'?', [], b'K') => self.erase_line(erase_range(p.get(0)), true),
@@ -61,14 +62,20 @@ impl Terminal {
             (0, [], b't') => self.window_op(p),
             (0, [b' '], b'q') => self.set_cursor_shape(p.get(0)),
             (0, [b'!'], b'p') => self.soft_reset(),
-            (0, [b'"'], b'q') => self.screen_mut().cursor.protected = p.get(0) == 1,
-            (0, [b'"'], b'p') => {}
+            (0, [b'"'], b'q') => self.set_dec_protection(p.get(0) == 1),
+            (0, [b'"'], b'p') => self.set_conformance_level(seq),
+            (0, [b'$'], b'}') => self.sasd = p.get(0),
+            (0, [b'*'], b'x') => self.sace = p.get(0),
+            (0, [b'*'], b'|') => self.request_resize(self.cols(), p.get_or(0, self.rows())),
+            (0, [b'$'], b'~') => self.status_line_type = p.get(0),
             (b'?', [], b'W') if p.get(0) == 5 => self.reset_tabs(),
+            (b'>', [], b't') => self.set_title_modes(p, true),
+            (b'>', [], b'T') => self.set_title_modes(p, false),
             (0, [b'#'], b'{') | (0, [b'#'], b'p') => self.push_sgr(),
             (0, [b'#'], b'}') | (0, [b'#'], b'q') => self.pop_sgr(),
             (_, [], b'u') => self.kitty_keyboard(seq),
-            (0, [b'\''], b'}') => self.scroll_columns_right(self.screen().top, self.screen().bottom, n),
-            (0, [b'\''], b'~') => self.scroll_columns_left(self.screen().top, self.screen().bottom, n),
+            (0, [b'\''], b'}') => self.shift_columns_at_cursor(n, true),
+            (0, [b'\''], b'~') => self.shift_columns_at_cursor(n, false),
             (0, [b'$'], b'x') | (0, [b'$'], b'z') | (0, [b'$'], b'{') | (0, [b'$'], b'v') => self.rect_op(seq),
             (0, [b'*'], b'y') => self.checksum_rect(p),
             _ => self.report_dispatch(seq),
@@ -136,6 +143,8 @@ impl Terminal {
                 self.goto(1, 1);
             }
             Mode::Column132 => self.set_column_mode(on),
+            Mode::LeftRightMargins if self.vt_level < 4 => {}
+            Mode::NoClearOnColumnChange if self.vt_level < 5 => {}
             Mode::LeftRightMargins => {
                 self.modes.set(mode, on);
                 let s = self.screen_mut();
@@ -173,8 +182,8 @@ impl Terminal {
         self.modes.set(Mode::Column132, on);
         let cols = if on { 132 } else { 80 };
         let rows = self.rows();
-        self.event(Event::ResizeRequest { cols, rows });
-        if !self.modes.get(Mode::NoClearOnColumnChange) {
+        self.request_resize(cols, rows);
+        if !(self.vt_level >= 5 && self.modes.get(Mode::NoClearOnColumnChange)) {
             self.erase_display(EraseRange::All, false);
         }
         let s = self.screen_mut();
@@ -225,6 +234,13 @@ impl Terminal {
                         p.clear_row(i);
                     }
                 }
+            }
+            // 47 and 1047 share one cursor between the screens, so the primary screen gets the
+            // alternate screen's position back; 1049 restores the saved one below instead.
+            if mode != Mode::AltScreenSaveCursor
+                && let Some(alt) = self.alt.as_ref()
+            {
+                self.primary.cursor = alt.cursor.clone();
             }
             self.alt_active = false;
             self.primary.pages.mark_all_dirty();
@@ -321,44 +337,6 @@ impl Terminal {
             _ => return,
         }
         self.event(Event::ModeChanged(Mode::CursorKeys));
-    }
-
-    /// XTWINOPS: title stack, size reports and resize requests.
-    fn window_op(&mut self, p: &crate::parser::Params) {
-        match p.get(0) {
-            8 => {
-                let rows = p.get_or(1, self.rows());
-                let cols = p.get_or(2, self.cols());
-                self.event(Event::ResizeRequest { cols, rows });
-            }
-            14 => {
-                let (w, h) = self.cell_pixel;
-                let reply = format!("\x1b[4;{};{}t", h as u32 * self.rows() as u32, w as u32 * self.cols() as u32);
-                self.reply(reply.as_bytes());
-            }
-            16 => {
-                let (w, h) = self.cell_pixel;
-                self.reply(format!("\x1b[6;{h};{w}t").as_bytes());
-            }
-            18 => {
-                let reply = format!("\x1b[8;{};{}t", self.rows(), self.cols());
-                self.reply(reply.as_bytes());
-            }
-            22 => {
-                if self.title_stack.len() == self.config.title_stack_depth {
-                    self.title_stack.remove(0);
-                }
-                self.title_stack.push((self.title.clone(), self.icon_name.clone()));
-            }
-            23 => {
-                if let Some((title, icon)) = self.title_stack.pop() {
-                    self.title = title.clone();
-                    self.icon_name = icon;
-                    self.event(Event::Title(title));
-                }
-            }
-            _ => {}
-        }
     }
 
     /// The rectangle operations: DECFRA, DECERA, DECSERA and DECCRA, with 1 based coordinates

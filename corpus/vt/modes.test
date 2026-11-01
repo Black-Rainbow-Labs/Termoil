@@ -1,11 +1,11 @@
 # DECRQM for every mode: the default answer, set, reset, and the fixed ones.
 SIZE 10 2
 PUSH "\e[2$p"
-REPLY "\e[2;4$y"
+REPLY "\e[2;2$y"
 PUSH "\e[4$p"
 REPLY "\e[4;2$y"
 PUSH "\e[12$p"
-REPLY "\e[12;3$y"
+REPLY "\e[12;1$y"
 PUSH "\e[20$p"
 REPLY "\e[20;2$y"
 PUSH "\e[3$p"
@@ -13,7 +13,7 @@ REPLY "\e[3;0$y"
 MODE ?1 2
 MODE ?2 3
 MODE ?3 2
-MODE ?4 4
+MODE ?4 2
 MODE ?5 2
 MODE ?6 2
 MODE ?7 1
@@ -77,10 +77,9 @@ MODE ?2004 2
 MODE ?2027 1
 
 # Fixed modes cannot change.
-PUSH "\e[?2l\e[?8l\e[12l\e[?1001h"
+PUSH "\e[?2l\e[?8l\e[?1001h"
 MODE ?2 3
 MODE ?8 3
-MODE 12 3
 MODE ?1001 4
 
 # Several modes in one sequence.

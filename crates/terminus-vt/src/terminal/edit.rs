@@ -59,16 +59,24 @@ impl Terminal {
         }
     }
 
+    /// True when an erase must leave protected cells alone: ED, EL and ECH honour ISO protection
+    /// (SPA). The selective erases DECSED and DECSEL honour both kinds, as xterm does for
+    /// backward compatibility.
+    fn keeps_protected(&self, selective: bool) -> bool {
+        selective || self.protect_iso
+    }
+
     /// EL and DECSEL.
     pub(super) fn erase_line(&mut self, range: EraseRange, selective: bool) {
+        let keep = self.keeps_protected(selective);
         let (row, col, cols) = {
             let s = self.screen();
             (s.cursor.row, s.cursor.col, s.cols())
         };
         match range {
-            EraseRange::ToEnd => self.erase_cells(row, col, cols, selective),
-            EraseRange::ToStart => self.erase_cells(row, 0, col + 1, selective),
-            EraseRange::All => self.erase_cells(row, 0, cols, selective),
+            EraseRange::ToEnd => self.erase_cells(row, col, cols, keep),
+            EraseRange::ToStart => self.erase_cells(row, 0, col + 1, keep),
+            EraseRange::All => self.erase_cells(row, 0, cols, keep),
         }
         self.screen_mut().cursor.pending_wrap = false;
     }
@@ -101,11 +109,11 @@ impl Terminal {
 
     /// Clears a whole active row, including its wrap and line size flags.
     fn erase_row(&mut self, row: u16, selective: bool) {
-        let cols = self.screen().cols();
-        self.erase_cells(row, 0, cols, selective);
+        let (cols, keep) = (self.screen().cols(), self.keeps_protected(selective));
+        self.erase_cells(row, 0, cols, keep);
         let s = self.screen_mut();
         let (page, i) = s.pages.active_mut(row);
-        if !selective {
+        if !keep {
             let r = page.row_mut(i);
             r.flags &=
                 !(row_flags::WRAP | row_flags::WRAP_CONTINUATION | row_flags::LINE_SIZE | row_flags::SEMANTIC_PROMPT);
@@ -119,7 +127,8 @@ impl Terminal {
             (s.cursor.row, s.cursor.col, s.cols())
         };
         let end = (col as u32 + n.max(1) as u32).min(right as u32) as u16;
-        self.erase_cells(row, col, end, false);
+        let keep = self.keeps_protected(false);
+        self.erase_cells(row, col, end, keep);
         self.screen_mut().cursor.pending_wrap = false;
     }
 
@@ -337,10 +346,13 @@ impl Terminal {
         s.cursor.pending_wrap = false;
     }
 
-    /// CUB: left `n`, stopping at the left margin when inside it. With reverse wrap on, moving
-    /// past the left margin continues on the previous line.
+    /// CUB and BS: left `n`, stopping at the left margin when inside it. With reverse wrap on
+    /// (mode 45 or 1045, and autowrap), moving past the left margin continues on the previous
+    /// line, see `reverse_wrap_step`.
     pub(super) fn cursor_backward(&mut self, n: u16) {
-        let reverse = self.modes.get(Mode::ReverseWrap) && self.modes.get(Mode::Autowrap);
+        let reverse = (self.modes.get(Mode::ReverseWrap) || self.modes.get(Mode::ReverseWrapExtended))
+            && self.modes.get(Mode::Autowrap);
+        let extended = self.modes.get(Mode::ReverseWrapExtended);
         let s = self.screen_mut();
         let mut n = n.max(1);
         let limit = if s.cursor.col >= s.left { s.left } else { 0 };
@@ -357,10 +369,7 @@ impl Terminal {
         for _ in 0..n {
             if s.cursor.col > limit {
                 s.cursor.col -= 1;
-            } else if s.cursor.row > s.top {
-                s.cursor.row -= 1;
-                s.cursor.col = s.right;
-            } else {
+            } else if !reverse_wrap_step(s, extended) {
                 break;
             }
         }
@@ -415,7 +424,7 @@ impl Terminal {
     /// DECERA and DECSERA: erases a rectangle (selective keeps protected cells).
     pub(super) fn erase_rect(&mut self, top: u16, left: u16, bottom: u16, right: u16, selective: bool) {
         for r in top..=bottom {
-            self.erase_cells(r, left, right + 1, selective);
+            self.erase_cells(r, left, right + 1, selective && !self.protect_iso);
         }
     }
 
@@ -444,5 +453,47 @@ impl Terminal {
                 page.copy_cell_from(i, dc as usize, tmp, tmp.cell_index(0, c as usize), cell);
             }
         }
+    }
+}
+
+impl Terminal {
+    /// DECIC (`insert`) and DECDC: inserts or deletes `n` columns at the cursor column, in the
+    /// rows between the top and bottom margins and up to the right margin. Does nothing when the
+    /// cursor is outside the margins.
+    pub(super) fn shift_columns_at_cursor(&mut self, n: u16, insert: bool) {
+        let s = self.screen();
+        let (row, col) = (s.cursor.row, s.cursor.col);
+        let (top, bottom, left, right) = (s.top, s.bottom, s.left, s.right);
+        if row < top || row > bottom || col < left || col > right {
+            return;
+        }
+        for r in top..=bottom {
+            self.shift_cells(r, col, right, n.max(1), insert);
+        }
+        self.screen_mut().cursor.pending_wrap = false;
+    }
+}
+
+/// One reverse wrap step from the left edge: moves to the right margin of the line above.
+/// Mode 45 only does it when the line above wrapped into this one. Mode 1045 does it for any
+/// line, and from the top margin goes to the bottom margin. Returns false when the cursor cannot
+/// move.
+fn reverse_wrap_step(s: &mut crate::screen::Screen, extended: bool) -> bool {
+    let top = if s.cursor.row >= s.top { s.top } else { 0 };
+    let right = if s.cursor.col <= s.right { s.right } else { s.cols() - 1 };
+    if s.cursor.row > top {
+        let (page, i) = s.pages.active_mut(s.cursor.row - 1);
+        if !extended && !page.row(i).has(row_flags::WRAP) {
+            return false;
+        }
+        s.cursor.row -= 1;
+        s.cursor.col = right;
+        true
+    } else if extended && s.cursor.row >= s.top && s.cursor.row <= s.bottom {
+        s.cursor.row = s.bottom;
+        s.cursor.col = right;
+        true
+    } else {
+        false
     }
 }

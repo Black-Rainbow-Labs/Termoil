@@ -17,7 +17,7 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use terminus_pty::{Pty, PtySize, SpawnOptions};
-use terminus_vt::{Terminal, TerminalConfig, dump};
+use terminus_vt::{Event, Terminal, TerminalConfig, dump};
 
 /// Parsed command line options.
 struct Options {
@@ -90,29 +90,33 @@ fn run(o: &Options) -> i32 {
         }
     });
     let mut writer = pty.take_writer().expect("writer");
-    let mut term = Terminal::new(o.cols, o.rows, TerminalConfig::default());
+    let config = TerminalConfig { allow_osc52_read: true, ..TerminalConfig::default() };
+    let mut term = Terminal::new(o.cols, o.rows, config);
+    term.set_apply_resize_requests(true);
     let mut recording = Vec::new();
     let code = pump(&mut pty, &rx, &mut *writer, &mut term, &mut recording);
     finish(o, &term, &recording);
     code
 }
 
-/// Applies output and sends replies until the child has exited and its output has drained.
+/// Applies output, resize requests and replies until the child has exited and its output has drained.
 fn pump(
     pty: &mut Pty, rx: &mpsc::Receiver<Vec<u8>>, writer: &mut dyn Write, term: &mut Terminal, recording: &mut Vec<u8>,
 ) -> i32 {
     let mut exited: Option<(i32, Instant)> = None;
+    let mut last_size = (term.cols(), term.rows());
+    let mut clipboard: Vec<u8> = Vec::new();
     loop {
         match rx.recv_timeout(Duration::from_millis(50)) {
             Ok(chunk) => {
                 recording.extend_from_slice(&chunk);
                 term.advance(&chunk);
+                apply_host_events(pty, term, &mut last_size, &mut clipboard);
                 let replies = term.take_replies();
                 if !replies.is_empty() {
                     let _ = writer.write_all(&replies);
                     let _ = writer.flush();
                 }
-                let _ = term.take_events();
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => return exited.map(|e| e.0).unwrap_or(0),
             Err(mpsc::RecvTimeoutError::Timeout) => {}
@@ -133,6 +137,33 @@ fn pump(
         {
             return code;
         }
+    }
+}
+
+/// Carries out what the terminal asked of its host. A resize request resizes the terminal when it
+/// is not already that size, and the program's pseudoterminal is told the new size when it changed
+/// since `last` so the program gets SIGWINCH. A clipboard write is kept in `clipboard` and a
+/// clipboard read is answered from it, naming the selection `s0` as xterm does for the default
+/// selection, which is what esctest2 expects.
+fn apply_host_events(pty: &Pty, term: &mut Terminal, last: &mut (u16, u16), clipboard: &mut Vec<u8>) {
+    for event in term.take_events() {
+        match event {
+            Event::ResizeRequest { cols, rows } if (cols, rows) != (term.cols(), term.rows()) => {
+                term.resize(cols, rows);
+            }
+            Event::ClipboardWrite { data, .. } => *clipboard = data,
+            Event::ClipboardRead { selection } => {
+                let name = if selection == "c" { "s0" } else { selection.as_str() };
+                term.reply_clipboard(name, clipboard);
+            }
+            _ => {}
+        }
+    }
+    let now = (term.cols(), term.rows());
+    if now != *last {
+        *last = now;
+        let size = PtySize { cols: now.0, rows: now.1, pixel_width: 0, pixel_height: 0 };
+        let _ = pty.resize(size);
     }
 }
 

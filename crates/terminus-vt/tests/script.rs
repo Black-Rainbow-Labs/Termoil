@@ -127,25 +127,35 @@ fn unescape(s: &str) -> Vec<u8> {
     out
 }
 
-/// Quotes a string for a script, escaping what [`unescape`] reads back.
+/// Quotes a string for a script, escaping what [`unescape`] reads back. A byte that is not valid
+/// UTF-8, such as a raw C1 control, is written as `\xNN`.
 fn quote(bytes: &[u8]) -> String {
-    let text = String::from_utf8_lossy(bytes);
     let mut out = String::from("\"");
-    for c in text.chars() {
-        match c {
-            '\x1b' => out.push_str("\\e"),
-            '\r' => out.push_str("\\r"),
-            '\n' => out.push_str("\\n"),
-            '\t' => out.push_str("\\t"),
-            '\x07' => out.push_str("\\a"),
-            '\\' => out.push_str("\\\\"),
-            '"' => out.push_str("\\\""),
-            c if (c as u32) < 0x20 || c as u32 == 0x7f => out.push_str(&format!("\\x{:02x}", c as u32)),
-            c => out.push(c),
+    for chunk in bytes.utf8_chunks() {
+        for c in chunk.valid().chars() {
+            quote_char(&mut out, c);
+        }
+        for b in chunk.invalid() {
+            out.push_str(&format!("\\x{b:02x}"));
         }
     }
     out.push('"');
     out
+}
+
+/// Appends one character to a quoted string, escaping it when it needs it.
+fn quote_char(out: &mut String, c: char) {
+    match c {
+        '\x1b' => out.push_str("\\e"),
+        '\r' => out.push_str("\\r"),
+        '\n' => out.push_str("\\n"),
+        '\t' => out.push_str("\\t"),
+        '\x07' => out.push_str("\\a"),
+        '\\' => out.push_str("\\\\"),
+        '"' => out.push_str("\\\""),
+        c if (c as u32) < 0x20 || c as u32 == 0x7f => out.push_str(&format!("\\x{:02x}", c as u32)),
+        c => out.push(c),
+    }
 }
 
 /// Splits `KEYWORD rest`.

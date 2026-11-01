@@ -57,17 +57,30 @@ pub struct ParserStats {
 }
 
 /// The parameters of a CSI or DCS sequence: up to 16 groups, each a value and its sub parameters.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy)]
 pub struct Params {
     values: [[u16; MAX_SUBPARAMS + 1]; MAX_PARAMS],
     lens: [u8; MAX_PARAMS],
     count: u8,
+    /// Bit `i` is set when group `i` was written with no digits (`CSI 8 ; ; 80 t`), as opposed
+    /// to an explicit 0.
+    empty: u16,
 }
+
+impl PartialEq for Params {
+    /// Two lists are equal when they have the same groups. Slots past the count and the record
+    /// of empty groups are not part of the value.
+    fn eq(&self, other: &Self) -> bool {
+        self.count == other.count && self.iter().eq(other.iter())
+    }
+}
+
+impl Eq for Params {}
 
 impl Default for Params {
     /// An empty parameter list.
     fn default() -> Self {
-        Params { values: [[0; MAX_SUBPARAMS + 1]; MAX_PARAMS], lens: [0; MAX_PARAMS], count: 0 }
+        Params { values: [[0; MAX_SUBPARAMS + 1]; MAX_PARAMS], lens: [0; MAX_PARAMS], count: 0, empty: 0 }
     }
 }
 
@@ -102,6 +115,13 @@ impl Params {
     #[inline]
     pub fn get(&self, index: usize) -> u16 {
         if index < self.count as usize { self.values[index][0] } else { 0 }
+    }
+
+    /// The first value of the group at `index`; None when the group is missing or was left empty
+    /// (`CSI 8 ; ; 80 t` has no value for its second parameter, which is not the same as 0).
+    #[inline]
+    pub fn get_opt(&self, index: usize) -> Option<u16> {
+        (index < self.count as usize && self.empty & (1 << index) == 0).then(|| self.values[index][0])
     }
 
     /// The parameter at `index`, with 0 and a missing parameter both read as `default`.
@@ -235,6 +255,7 @@ pub struct Parser {
     sub_index: usize,
     seq_valid: bool,
     has_params: bool,
+    param_digits: bool,
     string: Vec<u8>,
     string_kind: StringKind,
     string_overflow: bool,
@@ -264,6 +285,7 @@ impl Parser {
             sub_index: 0,
             seq_valid: true,
             has_params: false,
+            param_digits: false,
             string: Vec::new(),
             string_kind: StringKind::Ignore,
             string_overflow: false,
@@ -353,6 +375,7 @@ impl Parser {
             match b {
                 b'0'..=b'9' => {
                     self.has_params = true;
+                    self.param_digits = true;
                     self.param = (self.param * 10 + (b - b'0') as u32).min(u16::MAX as u32);
                     self.state = State::CsiParam;
                 }
@@ -475,6 +498,7 @@ impl Parser {
     /// the counts are never read, so the 200 bytes of values are left as they are.
     fn clear_seq(&mut self) {
         self.seq.params.count = 0;
+        self.seq.params.empty = 0;
         self.seq.private = 0;
         self.seq.intermediate_len = 0;
         self.seq.final_byte = 0;
@@ -482,6 +506,7 @@ impl Parser {
         self.sub_index = 0;
         self.seq_valid = true;
         self.has_params = false;
+        self.param_digits = false;
     }
 
     /// Advances the state machine by one byte (every state but the bulk text paths).
@@ -668,6 +693,7 @@ impl Parser {
         self.has_params = true;
         match byte {
             b'0'..=b'9' => {
+                self.param_digits = true;
                 self.param = (self.param * 10 + (byte - b'0') as u32).min(u16::MAX as u32);
             }
             b':' => {
@@ -697,6 +723,10 @@ impl Parser {
             self.seq.params.values[group][self.sub_index] = self.param as u16;
             self.seq.params.lens[group] = self.sub_index as u8 + 1;
         }
+        if self.sub_index == 0 && !self.param_digits {
+            self.seq.params.empty |= 1 << group;
+        }
+        self.param_digits = false;
         self.param = 0;
     }
 

@@ -10,7 +10,7 @@ PUSH "\e]4;1;rgb:12/34/56\a\e]4;1;?\a"
 REPLY "\e]4;1;rgb:1212/3434/5656\a"
 EVENT ColorsChanged
 PUSH "\e]4;2;#abc\a\e]4;2;?\a"
-REPLY "\e]4;2;rgb:aaaa/bbbb/cccc\a"
+REPLY "\e]4;2;rgb:a0a0/b0b0/c0c0\a"
 PUSH "\e]4;3;#112233\a\e]4;3;?\a"
 REPLY "\e]4;3;rgb:1111/2222/3333\a"
 PUSH "\e]4;4;rgb:f/0/8\a\e]4;4;?\a"

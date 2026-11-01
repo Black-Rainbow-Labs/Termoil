@@ -172,10 +172,11 @@ fn cell_colors(state: &RenderState, cell: &CellState, r: u16, col: u16, opts: &B
     let s = &cell.style;
     let (dfg, dbg) = if state.reverse_video { (c.background, c.foreground) } else { (c.foreground, c.background) };
     let mut fg_color = s.fg;
-    if opts.bold_is_bright && s.has(attr::BOLD) {
-        if let terminus_vt::style::Color::Palette(i @ 0..=7) = fg_color {
-            fg_color = terminus_vt::style::Color::Palette(i + 8);
-        }
+    if opts.bold_is_bright
+        && s.has(attr::BOLD)
+        && let terminus_vt::style::Color::Palette(i @ 0..=7) = fg_color
+    {
+        fg_color = terminus_vt::style::Color::Palette(i + 8);
     }
     let mut fg = c.resolve(fg_color, dfg);
     let mut bg = c.resolve(s.bg, dbg);

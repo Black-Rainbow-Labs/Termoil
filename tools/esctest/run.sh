@@ -9,6 +9,10 @@
 #   tools/esctest/run.sh            run and compare with the ratchet
 #   tools/esctest/run.sh --bless    rewrite the ratchet from this run (TERMINUS_BLESS=1 does the same)
 #
+# The options tell esctest what the terminal is set up to do: xtermWinopsEnabled means window
+# operations are allowed, and disableWideChars means 8 bit C1 controls are accepted (Terminus
+# accepts them whenever the bytes are not valid UTF-8).
+#
 # Linux and macOS (esctest needs a Unix pty). On Windows run it inside WSL.
 set -euo pipefail
 
@@ -32,7 +36,7 @@ LOG="$OUT/esctest.log"
 rm -f "$LOG"
 "$HEADLESS" run --cols 80 --rows 25 -- python3 "$CACHE/esctest/esctest.py" \
   --expected-terminal=xterm --xterm-checksum=400 --xterm-reverse-wrap=383 \
-  --max-vt-level=5 --logfile="$LOG" --timeout=1 --no-print-logs --v=2 || true
+  --max-vt-level=5 --options xtermWinopsEnabled disableWideChars --logfile="$LOG" --timeout=1 --no-print-logs --v=2 || true
 
 BLESS=0
 if [ "${1:-}" = "--bless" ] || [ "${TERMINUS_BLESS:-0}" = "1" ]; then BLESS=1; fi
