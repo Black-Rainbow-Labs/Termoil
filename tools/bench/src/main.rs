@@ -8,6 +8,7 @@
 //! reaches its limit) and the steady state. Every run appends JSON rows to
 //! `_agent_output/bench/` with the machine, build and commit.
 
+mod render;
 mod streams;
 
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -199,11 +200,26 @@ fn parse_only() {
     }
 }
 
-/// Entry point: `throughput [samples]`, `parse`, or `alloc`.
+/// Entry point: `throughput [samples]`, `parse`, `alloc`, or `render [frames]`.
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     match args.get(1).map(String::as_str) {
         Some("parse") => parse_only(),
+        Some("render") => {
+            let frames = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(1200);
+            let results = render::measure(frames);
+            let rows: Vec<serde_json::Value> = results.iter().map(|r| serde_json::json!({"machine": machine(), "renderer": r.name, "frames": r.times.len(), "p50_ms": r.percentile(0.5).as_secs_f64() * 1e3, "p90_ms": r.percentile(0.9).as_secs_f64() * 1e3, "p99_ms": r.percentile(0.99).as_secs_f64() * 1e3, "build_ms": r.build.as_secs_f64() * 1e3, "glyphs": r.glyphs})).collect();
+            record("r4.jsonl", &rows);
+            let gpu = results.iter().filter(|r| r.name.starts_with("vello_gpu")).map(|r| r.percentile(0.99)).min();
+            match gpu {
+                Some(p99) => println!(
+                    "R4 gate (vello_gpu p99 < 8 ms): {:.2} ms {}",
+                    p99.as_secs_f64() * 1e3,
+                    if p99.as_secs_f64() < 0.008 { "PASS" } else { "FAIL" }
+                ),
+                None => println!("R4 gate: no GPU"),
+            }
+        }
         Some("alloc") => {
             let (warm, steady, bytes) = allocations();
             record(

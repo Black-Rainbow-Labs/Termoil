@@ -5,3 +5,4 @@
 *.png binary
 *.ps1 text eol=crlf
 corpus/fuzz/** binary
+*.ttf binary

@@ -8,6 +8,11 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+fontique = "0.12"
+harfrust = "0.12"
+skrifa = "0.44"
+kurbo = "0.13"
+unicode-script = "0.5"
 
 [lints]
 workspace = true
