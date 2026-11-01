@@ -1,0 +1,18 @@
+/target
+# Anything an agent writes while working: captures, logs, comparisons, benchmark rows.
+/_agent_output/
+# Pixel golden failures write these beside the accepted image; only the accepted image is kept.
+**/corpus/render/**/*.new.png
+**/corpus/render/**/*.diff.png
+# What the installer build scripts write; finished installers are uploaded to the GitHub release.
+/installer/dist/
+/releases/*.exe
+/releases/*.dmg
+/releases/*.AppImage
+/releases/*.deb
+/releases/*.zip
+# Per machine editor state.
+.idea/
+.unluminous/
+.vscode/
+.DS_Store
