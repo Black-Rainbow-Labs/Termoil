@@ -1,0 +1,20 @@
+P//~
+TITLE=Extreme Aspect Ratio
+\P//~
+
+COMMENT=A hand crafted sixel file that uses an extreme aspect ratio in
+the Raster Attributes ('"') of 80:1. That is, it is 80 times taller
+than it is wide. The VT340 shows this replicating each pixel in the
+image vertically, causing each sixel to be 480 screen pixels high.
+
+Note: Timing tests indicate that the VT340 takes about the same amount
+of time to render no matter if the aspect ratio is 1:1 to 100000:1.
+
+\P//~CREATOR=hackerb9\\P//~URL=https://github.com/hackerb9/vt340test/
+\P9;0;0q
+#0;2; 73;8;24  #1;2; 0;13;28  #2;1; 190; 15; 75
+"80;1;800;480
+#0 !80? !80T!80i!80T!80i!80T!80i!80T!80i !80? $
+#1 !80? !80i!80T!80i!80T!80i!80T!80i!80T !80? $
+#2 !80@ !640? !80_
+\* <- A VT340 leaves the text cursor at the top of the screen.

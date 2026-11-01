@@ -1,0 +1,93 @@
+# OSC: titles and the title stack, hyperlinks, cwd, notifications, progress, clipboard.
+SIZE 20 2
+PUSH "\e]0;both\a"
+TITLE "both"
+EVENT Title("both")
+EVENT IconName("both")
+PUSH "\e]2;only title\e\\"
+TITLE "only title"
+EVENT Title("only title")
+PUSH "\e]1;icon\a"
+EVENT IconName("icon")
+TITLE "only title"
+PUSH "\e]2;\u{1f600} UTF-8 \u{4e2d}\a"
+TITLE "😀 UTF-8 中"
+EVENT Title("😀 UTF-8 中")
+
+# Control characters are removed from titles.
+PUSH "\e]2;a\x08b\a"
+TITLE "ab"
+EVENT Title("ab")
+
+# The title stack (XTWINOPS 22 and 23).
+PUSH "\e]2;one\a\e[22t\e]2;two\a\e[23t"
+TITLE "one"
+EVENT Title("one")
+EVENT Title("two")
+EVENT Title("one")
+PUSH "\e[23t"
+TITLE "one"
+
+# OSC 8 hyperlinks: with and without id, and closed.
+SIZE 20 2
+PUSH "\e]8;;http://a.example\e\\ab\e]8;;\e\\c\e]8;id=x;http://b.example\aD\e]8;;\a"
+CELL 0 0 "a" w=1 link=0
+CELL 0 1 "b" w=1 link=0
+CELL 0 2 "c" w=1
+CELL 0 3 "D" w=1 link=1
+
+# The same URI and id reuse the same link; a URI without a scheme is ignored.
+SIZE 20 2
+PUSH "\e]8;;http://a\e\\a\e]8;;\e\\b\e]8;;http://a\e\\c\e]8;;nonsense\e\\d\e]8;;\e\\"
+CELL 0 0 "a" w=1 link=0
+CELL 0 1 "b" w=1
+CELL 0 2 "c" w=1 link=0
+CELL 0 3 "d" w=1
+
+# A link continues across a wrap.
+SIZE 3 2
+PUSH "\e]8;;http://w\e\\abcd\e]8;;\e\\"
+CELL 0 2 "c" w=1 link=0
+CELL 1 0 "d" w=1 link=0
+
+# OSC 7: only file URLs are accepted.
+SIZE 10 2
+PUSH "\e]7;file://host/home/me\a\e]7;http://evil/\a"
+EVENT WorkingDirectory("file://host/home/me")
+EVENT none
+PUSH "\e]1337;CurrentDir=/tmp\a"
+EVENT WorkingDirectory("/tmp")
+PUSH "\e]9;9;\"C:\\Users\"\a"
+EVENT WorkingDirectory("C:\\Users")
+
+# Notifications: OSC 9, OSC 777 and OSC 99 with chunks.
+SIZE 10 2
+PUSH "\e]9;hello\a"
+EVENT Notification { title: "", body: "hello" }
+PUSH "\e]777;notify;Build;done\a"
+EVENT Notification { title: "Build", body: "done" }
+PUSH "\e]99;i=1:d=0;Title\e\\\e]99;i=1:p=body;Body text\e\\"
+EVENT Notification { title: "Title", body: "Body text" }
+PUSH "\e]99;e=1;aGk=\e\\"
+EVENT Notification { title: "hi", body: "" }
+
+# OSC 9;4 progress.
+PUSH "\e]9;4;1;40\a\e]9;4;2\a\e]9;4;0;0\a\e]9;4;3\a"
+EVENT Progress { state: 1, value: 40 }
+EVENT Progress { state: 2, value: 0 }
+EVENT Progress { state: 0, value: 0 }
+EVENT Progress { state: 3, value: 0 }
+
+# OSC 52: writes reach the host; reads are refused by default.
+SIZE 10 2
+PUSH "\e]52;c;aGVsbG8=\a"
+EVENT ClipboardWrite { selection: "c", data: [104, 101, 108, 108, 111] }
+PUSH "\e]52;c;?\a"
+EVENT none
+REPLY ""
+PUSH "\e]52;;dGVzdA\a"
+EVENT ClipboardWrite { selection: "c", data: [116, 101, 115, 116] }
+
+# Bell.
+PUSH "\a"
+EVENT Bell

@@ -1,0 +1,40 @@
+S0: [wrap] | 'f' fg=p4 bold | 'o' fg=p4 bold | 'r' fg=p4 bold | 'k' fg=p4 bold | ' ' | 'o' | 'n' | ' ' | '' fg=p5 bold | ' ' fg=p5 bold | 'c' fg=p5 bold | 'o' fg=p5 bold | 'l' fg=p5 bold | 'o' fg=p5 bold | 'r' fg=p5 bold | 'e' fg=p5 bold | 'd' fg=p5 bold | '-' fg=p5 bold | 'u' fg=p5 bold | 'n' fg=p5 bold | 'd' fg=p5 bold | 'e' fg=p5 bold | 'r' fg=p5 bold | 'l' fg=p5 bold | 'i' fg=p5 bold | 'n' fg=p5 bold | 'e' fg=p5 bold | 's' fg=p5 bold | '-' fg=p5 bold | 'v' fg=p5 bold | '3' fg=p5 bold | ' ' | 'v' | 'i' | 'a' | ' ' | '🦀' w2 fg=p1 bold | ' ' tail fg=p1 bold | ' ' fg=p1 bold | 'v' fg=p1 bold | '1' fg=p1 bold | '.' fg=p1 bold | '5' fg=p1 bold | '9' fg=p1 bold | '.' fg=p1 bold | '0' fg=p1 bold | ' ' fg=p1 bold | '➜' fg=p7 bold | ' ' | 'e' fg=p10 bold | 'c' fg=p10 bold | 'h' fg=p10 bold | 'o' fg=p10 bold | ' ' | '-' | 'e' | ' ' | ''' fg=p10 | '\' fg=p10 | 'e' fg=p10 | '[' fg=p10 | '5' fg=p10 | '8' fg=p10 | ';' fg=p10 | '2' fg=p10 | ';' fg=p10 | '2' fg=p10 | '5' fg=p10 | '5' fg=p10 | ';' fg=p10 | '0' fg=p10 | ';' fg=p10 | '2' fg=p10 | '5' fg=p10 | '5' fg=p10 | 'm' fg=p10 | '\' fg=p10 | 'e' fg=p10 | '[' fg=p10 | '4' fg=p10 | ':' fg=p10 | '1' fg=p10 | 'm' fg=p10 | 'U' fg=p10 | 'N' fg=p10 | 'D' fg=p10 | 'E' fg=p10 | 'R' fg=p10 | 'L' fg=p10 | 'I' fg=p10 | 'N' fg=p10 | 'E' fg=p10 | '\' fg=p10 | 'e' fg=p10 | '[' fg=p10 | '4' fg=p10 | ':' fg=p10 | '2' fg=p10 | 'm' fg=p10 | 'D' fg=p10 | 'O' fg=p10 | 'U' fg=p10 | 'B' fg=p10 | 'L' fg=p10 | 'E' fg=p10 | '\' fg=p10 | 'e' fg=p10 | '[' fg=p10 | '5' fg=p10 | '8' fg=p10 | ':' fg=p10 | '5' fg=p10 | ':' fg=p10 | '1' fg=p10 | '9' fg=p10 | '6' fg=p10 | 'm' fg=p10 | '\' fg=p10 | 'e' fg=p10 | '[' fg=p10 | '4' fg=p10 | ':' fg=p10 | '3' fg=p10 | 'm' fg=p10 | 'U' fg=p10 | 'h̷̗' fg=p10 | 'E' fg=p10 | 'R' fg=p10 | 'C' fg=p10 | 'U' fg=p10 | 'R' fg=p10 | 'L' fg=p10 | '\' fg=p10 | 'e' fg=p10 | '[' fg=p10 | '4' fg=p10 | ':' fg=p10 | '4' fg=p10 | 'm' fg=p10 | 'D' fg=p10 | 'O' fg=p10 | 'T' fg=p10 | 'T' fg=p10 | 'E' fg=p10 | 'D' fg=p10 | '\' fg=p10 | 'e' fg=p10 | '[' fg=p10 | '4' fg=p10 | ':' fg=p10 | '5' fg=p10 | 'm' fg=p10 | 'D' fg=p10 | 'A' fg=p10 | 'S' fg=p10 | 'H' fg=p10 | 'E' fg=p10
+S1: 'D' fg=p10 | '\' fg=p10 | 'e' fg=p10 | '[' fg=p10 | '5' fg=p10 | '9' fg=p10 | 'm' fg=p10 | 'N' fg=p10 | 'O' fg=p10 | 'T' fg=p10 | '_' fg=p10 | 'C' fg=p10 | 'O' fg=p10 | 'L' fg=p10 | 'O' fg=p10 | 'R' fg=p10 | 'E' fg=p10 | 'D' fg=p10 | '_' fg=p10 | 'D' fg=p10 | 'A' fg=p10 | 'S' fg=p10 | 'H' fg=p10 | '\' fg=p10 | 'e' fg=p10 | '[' fg=p10 | '0' fg=p10 | 'm' fg=p10 | ''' fg=p10
+S2: 'U' ul=single ulc=#ff00ff | 'N' ul=single ulc=#ff00ff | 'D' ul=single ulc=#ff00ff | 'E' ul=single ulc=#ff00ff | 'R' ul=single ulc=#ff00ff | 'L' ul=single ulc=#ff00ff | 'I' ul=single ulc=#ff00ff | 'N' ul=single ulc=#ff00ff | 'E' ul=single ulc=#ff00ff | 'D' ul=double ulc=#ff00ff | 'O' ul=double ulc=#ff00ff | 'U' ul=double ulc=#ff00ff | 'B' ul=double ulc=#ff00ff | 'L' ul=double ulc=#ff00ff | 'E' ul=double ulc=#ff00ff | 'U' ul=curly ulc=p196 | 'h̷̗' ul=curly ulc=p196 | 'E' ul=curly ulc=p196 | 'R' ul=curly ulc=p196 | 'C' ul=curly ulc=p196 | 'U' ul=curly ulc=p196 | 'R' ul=curly ulc=p196 | 'L' ul=curly ulc=p196 | 'D' ul=dotted ulc=p196 | 'O' ul=dotted ulc=p196 | 'T' ul=dotted ulc=p196 | 'T' ul=dotted ulc=p196 | 'E' ul=dotted ulc=p196 | 'D' ul=dotted ulc=p196 | 'D' ul=dashed ulc=p196 | 'A' ul=dashed ulc=p196 | 'S' ul=dashed ulc=p196 | 'H' ul=dashed ulc=p196 | 'E' ul=dashed ulc=p196 | 'D' ul=dashed ulc=p196 | 'N' ul=dashed | 'O' ul=dashed | 'T' ul=dashed | '_' ul=dashed | 'C' ul=dashed | 'O' ul=dashed | 'L' ul=dashed | 'O' ul=dashed | 'R' ul=dashed | 'E' ul=dashed | 'D' ul=dashed | '_' ul=dashed | 'D' ul=dashed | 'A' ul=dashed | 'S' ul=dashed | 'H' ul=dashed
+S3: 'f' fg=p4 bold | 'o' fg=p4 bold | 'r' fg=p4 bold | 'k' fg=p4 bold | ' ' | 'o' | 'n' | ' ' | '' fg=p5 bold | ' ' fg=p5 bold | 'c' fg=p5 bold | 'o' fg=p5 bold | 'l' fg=p5 bold | 'o' fg=p5 bold | 'r' fg=p5 bold | 'e' fg=p5 bold | 'd' fg=p5 bold | '-' fg=p5 bold | 'u' fg=p5 bold | 'n' fg=p5 bold | 'd' fg=p5 bold | 'e' fg=p5 bold | 'r' fg=p5 bold | 'l' fg=p5 bold | 'i' fg=p5 bold | 'n' fg=p5 bold | 'e' fg=p5 bold | 's' fg=p5 bold | '-' fg=p5 bold | 'v' fg=p5 bold | '3' fg=p5 bold | ' ' | 'v' | 'i' | 'a' | ' ' | '🦀' w2 fg=p1 bold | ' ' tail fg=p1 bold | ' ' fg=p1 bold | 'v' fg=p1 bold | '1' fg=p1 bold | '.' fg=p1 bold | '5' fg=p1 bold | '9' fg=p1 bold | '.' fg=p1 bold | '0' fg=p1 bold | ' ' fg=p1 bold | '➜' fg=p7 bold
+S4: 
+S5: 
+S6: 
+S7: 
+S8: 
+S9: 
+S10: 
+S11: 
+S12: 
+S13: 
+S14: 
+S15: 
+S16: 
+S17: 
+S18: 
+S19: 
+S20: 
+S21: 
+S22: 
+S23: 
+S24: 
+S25: 
+S26: 
+S27: 
+S28: 
+S29: 
+S30: 
+S31: 
+S32: 
+S33: 
+S34: 
+S35: 
+S36: 
+S37: 
+S38: 
+S39: 

@@ -1,0 +1,13 @@
+[package]
+name = "terminus-font"
+description = "Terminus fonts: discovery, fallback, shaping, rasterising and procedurally drawn sprite glyphs."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

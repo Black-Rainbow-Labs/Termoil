@@ -1,0 +1,24 @@
+[package]
+name = "terminus-vt"
+description = "Terminus terminal core: parser, pages, screen, modes, selection, search, graphics store and Unicode tables. No window, GPU or font dependency."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+simdutf8.workspace = true
+memchr.workspace = true
+lz4_flex.workspace = true
+base64.workspace = true
+flate2.workspace = true
+png.workspace = true
+regex.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

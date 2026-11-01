@@ -1,0 +1,13 @@
+[package]
+name = "terminus-protocol"
+description = "Terminus IPC messages and the action catalogue shared by the app, the CLI and the generated MCP tool list."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

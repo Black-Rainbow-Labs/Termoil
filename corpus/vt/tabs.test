@@ -1,0 +1,42 @@
+# Tab stops: default every 8, HTS, TBC, CHT, CBT, DECST8C.
+SIZE 30 2
+PUSH "\t"
+CURSOR 0 8
+PUSH "\t"
+CURSOR 0 16
+PUSH "\t\t\t"
+CURSOR 0 29
+PUSH "\e[Z"
+CURSOR 0 24
+PUSH "\e[2Z"
+CURSOR 0 8
+PUSH "\e[99Z"
+CURSOR 0 0
+PUSH "\e[2I"
+CURSOR 0 16
+
+# HTS sets a stop, TBC 0 clears one, TBC 3 clears all.
+SIZE 30 2
+PUSH "\e[1;4H\eH\e[1;1H\t"
+CURSOR 0 3
+PUSH "\t"
+CURSOR 0 8
+PUSH "\e[g\e[1;4H\e[g\e[1;1H\t"
+CURSOR 0 16
+PUSH "\e[3g\e[1;1H\t"
+CURSOR 0 29
+PUSH "\e[?5W\e[1;1H\t"
+CURSOR 0 8
+
+# A tab past the last stop goes to the last column.
+SIZE 10 2
+PUSH "\e[1;9H\t"
+CURSOR 0 9
+PUSH "\t"
+CURSOR 0 9
+
+# Tab does not print anything over existing text.
+SIZE 20 2
+PUSH "abcdefghijkl\r\t"
+ROW 0 "abcdefghijkl"
+CURSOR 0 8

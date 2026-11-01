@@ -1,0 +1,37 @@
+S0: [wrap] | 'H' | 'e' | 'r' | 'e' | '%' bold inverse
+S1: ' ' fg=p0 bg=p9 | 'U' fg=p0 bg=p9 | 'L' fg=p0 bg=p9 | ' ' fg=p0 bg=p9 | ' ' fg=p7 bg=p8 | '~' fg=p7 bg=p8 | '/' fg=p7 bg=p8 | 'p' fg=p7 bg=p8 | 'r' fg=p7 bg=p8 | 'o' fg=p7 bg=p8 | 'g' fg=p7 bg=p8 | 'r' fg=p7 bg=p8 | 'a' fg=p7 bg=p8 | 'm' fg=p7 bg=p8 | 'm' fg=p7 bg=p8 | 'i' fg=p7 bg=p8 | 'n' fg=p7 bg=p8 | 'g' fg=p7 bg=p8 | '/' fg=p7 bg=p8 | 'a' fg=p7 bg=p8 | 'l' fg=p7 bg=p8 | 'a' fg=p7 bg=p8 | 'c' fg=p7 bg=p8 | 'r' fg=p7 bg=p8 | 'i' fg=p7 bg=p8 | 't' fg=p7 bg=p8 | 't' fg=p7 bg=p8 | 'y' fg=p7 bg=p8 | '/' fg=p7 bg=p8 | 'a' fg=p7 bg=p8 | 'l' fg=p7 bg=p8 | 'a' fg=p7 bg=p8 | 'c' fg=p7 bg=p8 | 'r' fg=p7 bg=p8 | 'i' fg=p7 bg=p8 | 't' fg=p7 bg=p8 | 't' fg=p7 bg=p8 | 'y' fg=p7 bg=p8 | ' ' fg=p7 bg=p8 | ' ' fg=p0 bg=p9 | 'o' fg=p0 bg=p9 | 'r' fg=p0 bg=p9 | 'i' fg=p0 bg=p9 | 'g' fg=p0 bg=p9 | 'i' fg=p0 bg=p9 | 'n' fg=p0 bg=p9 | '_' fg=p0 bg=p9 | 'm' fg=p0 bg=p9 | 'o' fg=p0 bg=p9 | 'd' fg=p0 bg=p9 | 'e' fg=p0 bg=p9 | ' ' fg=p0 bg=p9 | '↑' fg=p0 bg=p9 | ' ' fg=p0 bg=p9
+S2: 
+S3: 
+S4: 
+S5: 
+S6: 
+S7: 
+S8: 
+S9: 
+S10: 
+S11: 
+S12: 
+S13: 
+S14: 
+S15: 
+S16: 
+S17: 
+S18: 
+S19: 
+S20: 
+S21: 
+S22: 
+S23: 
+S24: 
+S25: 
+S26: 
+S27: 
+S28: 
+S29: 
+S30: 
+S31: 
+S32: 
+S33: 
+S34: 
+S35: 
+S36: 

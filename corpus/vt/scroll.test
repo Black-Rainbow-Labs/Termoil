@@ -1,0 +1,81 @@
+# Scrolling: SU, SD, DECSTBM, LF at the bottom of a region, scrollback.
+SIZE 5 4
+PUSH "1\r\n2\r\n3\r\n4\e[S"
+SCREEN
+|2
+|3
+|4
+|
+END
+HISTORY 1
+PUSH "\e[2T"
+SCREEN
+|
+|
+|2
+|3
+END
+CURSOR 3 1
+
+# A region leaves the rows outside it alone, and lines leaving it are not history.
+SIZE 5 5
+PUSH "1\r\n2\r\n3\r\n4\r\n5\e[2;4r"
+CURSOR 0 0
+PUSH "\e[4;1H\nX"
+SCREEN
+|1
+|3
+|4
+|X
+|5
+END
+HISTORY 0
+PUSH "\e[2S"
+SCREEN
+|1
+|X
+|
+|
+|5
+END
+
+# A region starting at the top of the primary screen keeps lines in history.
+SIZE 5 4
+PUSH "1\r\n2\r\n3\r\n4\e[1;3r\e[3;1H\n"
+SCREEN
+|2
+|3
+|
+|4
+END
+HISTORY 1
+HISTROW 0 "1"
+
+# DECSTBM with bad values is ignored; with none resets to the full screen.
+SIZE 5 5
+PUSH "\e[4;2r\e[5;1H\n"
+HISTORY 1
+PUSH "\e[r\e[2;2H"
+CURSOR 1 1
+
+# SD moves lines down within the region.
+SIZE 5 5
+PUSH "1\r\n2\r\n3\r\n4\r\n5\e[2;4r\e[T"
+SCREEN
+|1
+|
+|2
+|3
+|5
+END
+
+# The alternate screen never keeps history.
+SIZE 5 2
+PUSH "\e[?1049ha\r\nb\r\nc\r\nd"
+HISTORY 0
+SCREEN
+|c
+|d
+END
+PUSH "\e[?1049l"
+HISTORY 0

@@ -1,0 +1,32 @@
+S0: '[' ul=single | 'u' ul=single | 'n' ul=single | 'd' ul=single | 'e' ul=single | 'a' ul=single | 'd' ul=single | 'l' ul=single | 'e' ul=single | 'e' ul=single | 'c' ul=single | 'h' ul=single | '@' ul=single | 'u' ul=single | 'n' ul=single | 'd' ul=single | 'e' ul=single | 'a' ul=single | 'd' ul=single | 'l' ul=single | 'a' ul=single | 'p' ul=single | ' ' ul=single | 'a' ul=single | 'l' ul=single | 'a' ul=single | 'c' ul=single | 'r' ul=single | 'i' ul=single | 't' ul=single | 't' ul=single | 'y' ul=single | ']' ul=single | '$' ul=single | ' ' ul=single | 'e' ul=single | 'x' ul=single | 'i' ul=single | 't' ul=single
+S1: 'e' ul=single | 'x' ul=single | 'i' ul=single | 't' ul=single
+S2: 
+S3: 
+S4: 
+S5: 
+S6: 
+S7: 
+S8: 
+S9: 
+S10: 
+S11: 
+S12: 
+S13: 
+S14: 
+S15: 
+S16: 
+S17: 
+S18: 
+S19: 
+S20: 
+S21: 
+S22: 
+S23: 
+S24: 
+S25: 
+S26: 
+S27: 
+S28: 
+S29: 
+S30: 
+S31: 

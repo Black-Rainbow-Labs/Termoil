@@ -1,0 +1,35 @@
+S0: ' ' fg=p0 bg=p9 | 'U' fg=p0 bg=p9 | 'L' fg=p0 bg=p9 | ' ' fg=p0 bg=p9 | ' ' fg=p7 bg=p8 | '~' fg=p7 bg=p8 | '/' fg=p7 bg=p8 | '…' fg=p7 bg=p8 | '/' fg=p7 bg=p8 | 't' fg=p7 bg=p8 | 'e' fg=p7 bg=p8 | 's' fg=p7 bg=p8 | 't' fg=p7 bg=p8 | 's' fg=p7 bg=p8 | '/' fg=p7 bg=p8 | 'r' fg=p7 bg=p8 | 'e' fg=p7 bg=p8 | 'f' fg=p7 bg=p8 | '/' fg=p7 bg=p8 | 'z' fg=p7 bg=p8 | 'e' fg=p7 bg=p8 | 'r' fg=p7 bg=p8 | 'o' fg=p7 bg=p8 | 'w' fg=p7 bg=p8 | 'i' fg=p7 bg=p8 | 'd' fg=p7 bg=p8 | 't' fg=p7 bg=p8 | 'h' fg=p7 bg=p8 | ' ' fg=p7 bg=p8 | ' ' fg=p0 bg=p9 | 'z' fg=p0 bg=p9 | 'e' fg=p0 bg=p9 | 'r' fg=p0 bg=p9 | 'o' fg=p0 bg=p9 | 'w' fg=p0 bg=p9 | 'i' fg=p0 bg=p9 | 'd' fg=p0 bg=p9 | 't' fg=p0 bg=p9 | 'h' fg=p0 bg=p9 | '-' fg=p0 bg=p9 | 's' fg=p0 bg=p9 | 'l' fg=p0 bg=p9 | 'i' fg=p0 bg=p9 | 'c' fg=p0 bg=p9 | 'e' fg=p0 bg=p9 | ' ' fg=p0 bg=p9 | ' ' | 'e' | 'c' | 'h' | 'o' | ' ' | '"' | '(' | ' ' | '<' inverse | '0' inverse | '3' inverse | '6' inverse | '1' inverse | '>' inverse | '°' | ' ' | '<' inverse | '0' inverse | '3' inverse | '5' inverse | 'c' inverse | '>' inverse | 'ʖ' | ' ' | '<' inverse | '0' inverse | '3' inverse | '6' inverse | '1' inverse | '>' inverse | '°' | ')' | '"'
+S1: '(' | ' ͡' | '°' | ' ͜' | 'ʖ' | ' ͡' | '°' | ')'
+S2: ' ' fg=p0 bg=p9 | 'U' fg=p0 bg=p9 | 'L' fg=p0 bg=p9 | ' ' fg=p0 bg=p9 | ' ' fg=p7 bg=p8 | '~' fg=p7 bg=p8 | '/' fg=p7 bg=p8 | '…' fg=p7 bg=p8 | '/' fg=p7 bg=p8 | 't' fg=p7 bg=p8 | 'e' fg=p7 bg=p8 | 's' fg=p7 bg=p8 | 't' fg=p7 bg=p8 | 's' fg=p7 bg=p8 | '/' fg=p7 bg=p8 | 'r' fg=p7 bg=p8 | 'e' fg=p7 bg=p8 | 'f' fg=p7 bg=p8 | '/' fg=p7 bg=p8 | 'z' fg=p7 bg=p8 | 'e' fg=p7 bg=p8 | 'r' fg=p7 bg=p8 | 'o' fg=p7 bg=p8 | 'w' fg=p7 bg=p8 | 'i' fg=p7 bg=p8 | 'd' fg=p7 bg=p8 | 't' fg=p7 bg=p8 | 'h' fg=p7 bg=p8 | ' ' fg=p7 bg=p8 | ' ' fg=p0 bg=p9 | 'z' fg=p0 bg=p9 | 'e' fg=p0 bg=p9 | 'r' fg=p0 bg=p9 | 'o' fg=p0 bg=p9 | 'w' fg=p0 bg=p9 | 'i' fg=p0 bg=p9 | 'd' fg=p0 bg=p9 | 't' fg=p0 bg=p9 | 'h' fg=p0 bg=p9 | '-' fg=p0 bg=p9 | 's' fg=p0 bg=p9 | 'l' fg=p0 bg=p9 | 'i' fg=p0 bg=p9 | 'c' fg=p0 bg=p9 | 'e' fg=p0 bg=p9 | ' ' fg=p0 bg=p9
+S3: 
+S4: 
+S5: 
+S6: 
+S7: 
+S8: 
+S9: 
+S10: 
+S11: 
+S12: 
+S13: 
+S14: 
+S15: 
+S16: 
+S17: 
+S18: 
+S19: 
+S20: 
+S21: 
+S22: 
+S23: 
+S24: 
+S25: 
+S26: 
+S27: 
+S28: 
+S29: 
+S30: 
+S31: 
+S32: 
+S33: 
+S34: 

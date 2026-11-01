@@ -1,0 +1,29 @@
+S0: 'j' | 'w' | 'i' | 'l' | 'm' | '@' | 'k' | 'u' | 'r' | 'a' | 's' | 't' | '.' | 'l' | 'o' | 'c' | 'a' | 'l' | ' ' | '➜' fg=p2 bold | ' ' fg=p2 bold | ' ' fg=p2 bold | '~' fg=p6 bold | '/' fg=p6 bold | 'c' fg=p6 bold | 'o' fg=p6 bold | 'd' fg=p6 bold | 'e' fg=p6 bold | '/' fg=p6 bold | 'a' fg=p6 bold | 'l' fg=p6 bold | 'a' fg=p6 bold | 'c' fg=p6 bold | 'r' fg=p6 bold | 'i' fg=p6 bold | 't' fg=p6 bold | 't' fg=p6 bold | 'y' fg=p6 bold | ' ' fg=p6 bold | ' ' | 'c' fg=p5 | 'a' fg=p5 | 't' fg=p5 | ' ' | 'c'
+S1: 'C' | 'a' | 'r' | 'g' | 'o' | '.' | 'l' | 'o' | 'c' | 'k' | ' ' | ' ' | 'C' | 'a' | 'r' | 'g' | 'o' | '.' | 't' | 'o' | 'm' | 'l' | ' ' | ' ' | 'c' fg=p2 bold | 'o' fg=p2 bold | 'l' fg=p2 bold | 'o' fg=p2 bold | 'r' fg=p2 bold | 's' fg=p2 bold | '.' fg=p2 bold | 'p' fg=p2 bold | 'l' fg=p2 bold | '*' | ' ' | ' ' | 'c' fg=p1 bold | 'o' fg=p1 bold | 'p' fg=p1 bold | 'y' fg=p1 bold | 'p' fg=p1 bold | 'a' fg=p1 bold | 's' fg=p1 bold | 't' fg=p1 bold | 'a' fg=p1 bold | '/'
+S2: 
+S3: 
+S4: 
+S5: 
+S6: 
+S7: 
+S8: 
+S9: 
+S10: 
+S11: 
+S12: 
+S13: 
+S14: 
+S15: 
+S16: 
+S17: 
+S18: 
+S19: 
+S20: 
+S21: 
+S22: 
+S23: 
+S24: 
+S25: 
+S26: 
+S27: 
+S28: 

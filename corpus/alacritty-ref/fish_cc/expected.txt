@@ -1,0 +1,29 @@
+S0: 'W' | 'e' | 'l' | 'c' | 'o' | 'm' | 'e' | ' ' | 't' | 'o' | ' ' | 'f' | 'i' | 's' | 'h' | ',' | ' ' | 't' | 'h' | 'e' | ' ' | 'f' | 'r' | 'i' | 'e' | 'n' | 'd' | 'l' | 'y' | ' ' | 'i' | 'n' | 't' | 'e' | 'r' | 'a' | 'c' | 't' | 'i' | 'v' | 'e' | ' ' | 's' | 'h' | 'e' | 'l' | 'l'
+S1: 'T' | 'y' | 'p' | 'e' | ' ' | 'h' fg=p2 | 'e' fg=p2 | 'l' fg=p2 | 'p' fg=p2 | ' ' | 'f' | 'o' | 'r' | ' ' | 'i' | 'n' | 's' | 't' | 'r' | 'u' | 'c' | 't' | 'i' | 'o' | 'n' | 's' | ' ' | 'o' | 'n' | ' ' | 'h' | 'o' | 'w' | ' ' | 't' | 'o' | ' ' | 'u' | 's' | 'e' | ' ' | 'f' | 'i' | 's' | 'h'
+S2: '[' fg=p7 bg=p2 bold | 'I' fg=p7 bg=p2 bold | ']' fg=p7 bg=p2 bold | ' ' | '➜' fg=p2 bold | ' ' fg=p2 bold | ' ' fg=p2 bold | 'a' fg=p6 bold | 'l' fg=p6 bold | 'a' fg=p6 bold | 'c' fg=p6 bold | 'r' fg=p6 bold | 'i' fg=p6 bold | 't' fg=p6 bold | 't' fg=p6 bold | 'y' fg=p6 bold | ' ' fg=p4 bold | 'g' fg=p4 bold | 'i' fg=p4 bold | 't' fg=p4 bold | ':' fg=p4 bold | '(' fg=p4 bold | 'm' fg=p1 bold | 'a' fg=p1 bold | 's' fg=p1 bold | 't' fg=p1 bold | 'e' fg=p1 bold | 'r' fg=p1 bold | ')' fg=p4 bold | ' ' fg=p3 bold | '✗' fg=p3 bold | ' ' | 'a' fg=p1 bold | '^' inverse | 'C' inverse
+S3: '[' fg=p7 bg=p2 bold | 'I' fg=p7 bg=p2 bold | ']' fg=p7 bg=p2 bold | ' ' | '➜' fg=p2 bold | ' ' fg=p2 bold | ' ' fg=p2 bold | 'a' fg=p6 bold | 'l' fg=p6 bold | 'a' fg=p6 bold | 'c' fg=p6 bold | 'r' fg=p6 bold | 'i' fg=p6 bold | 't' fg=p6 bold | 't' fg=p6 bold | 'y' fg=p6 bold | ' ' fg=p4 bold | 'g' fg=p4 bold | 'i' fg=p4 bold | 't' fg=p4 bold | ':' fg=p4 bold | '(' fg=p4 bold | 'm' fg=p1 bold | 'a' fg=p1 bold | 's' fg=p1 bold | 't' fg=p1 bold | 'e' fg=p1 bold | 'r' fg=p1 bold | ')' fg=p4 bold | ' ' fg=p3 bold | '✗' fg=p3 bold | ' ' | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | '^' inverse | 'C' inverse
+S4: '[' fg=p7 bg=p2 bold | 'I' fg=p7 bg=p2 bold | ']' fg=p7 bg=p2 bold | ' ' | '➜' fg=p2 bold | ' ' fg=p2 bold | ' ' fg=p2 bold | 'a' fg=p6 bold | 'l' fg=p6 bold | 'a' fg=p6 bold | 'c' fg=p6 bold | 'r' fg=p6 bold | 'i' fg=p6 bold | 't' fg=p6 bold | 't' fg=p6 bold | 'y' fg=p6 bold | ' ' fg=p4 bold | 'g' fg=p4 bold | 'i' fg=p4 bold | 't' fg=p4 bold | ':' fg=p4 bold | '(' fg=p4 bold | 'm' fg=p1 bold | 'a' fg=p1 bold | 's' fg=p1 bold | 't' fg=p1 bold | 'e' fg=p1 bold | 'r' fg=p1 bold | ')' fg=p4 bold | ' ' fg=p3 bold | '✗' fg=p3 bold | ' ' | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | 'a' fg=p1 bold | '^' inverse | 'C' inverse
+S5: '[' fg=p7 bg=p2 bold | 'I' fg=p7 bg=p2 bold | ']' fg=p7 bg=p2 bold | ' ' | '➜' fg=p2 bold | ' ' fg=p2 bold | ' ' fg=p2 bold | 'a' fg=p6 bold | 'l' fg=p6 bold | 'a' fg=p6 bold | 'c' fg=p6 bold | 'r' fg=p6 bold | 'i' fg=p6 bold | 't' fg=p6 bold | 't' fg=p6 bold | 'y' fg=p6 bold | ' ' fg=p4 bold | 'g' fg=p4 bold | 'i' fg=p4 bold | 't' fg=p4 bold | ':' fg=p4 bold | '(' fg=p4 bold | 'm' fg=p1 bold | 'a' fg=p1 bold | 's' fg=p1 bold | 't' fg=p1 bold | 'e' fg=p1 bold | 'r' fg=p1 bold | ')' fg=p4 bold | ' ' fg=p3 bold | '✗' fg=p3 bold
+S6: 
+S7: 
+S8: 
+S9: 
+S10: 
+S11: 
+S12: 
+S13: 
+S14: 
+S15: 
+S16: 
+S17: 
+S18: 
+S19: 
+S20: 
+S21: 
+S22: 
+S23: 
+S24: 
+S25: 
+S26: 
+S27: 
+S28: 

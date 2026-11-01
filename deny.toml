@@ -1,0 +1,33 @@
+# cargo deny configuration. The licence allow list is the one in docs/TDD.md section 4.1:
+# MIT, Apache 2.0, BSD, Zlib, Unicode, and OFL for fonts.
+[graph]
+all-features = false
+
+[licenses]
+allow = [
+    "MIT",
+    "MIT-0",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "0BSD",
+    "Zlib",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "OFL-1.1",
+    # ISC is the two clause BSD licence in other words; counted as BSD.
+    "ISC",
+]
+confidence-threshold = 0.9
+
+[bans]
+multiple-versions = "allow"
+wildcards = "allow"
+
+[advisories]
+ignore = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

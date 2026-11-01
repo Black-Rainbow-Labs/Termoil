@@ -1,0 +1,99 @@
+# Synchronized output, kitty keyboard stack, bracketed paste and focus modes, DECALN, line size,
+# rectangle operations, OSC 133 prompts, DECSCUSR, tmux passthrough.
+
+# Mode 2026 opens and closes a synchronized update; DECRQM answers it.
+SIZE 10 2
+PUSH "\e[?2026h"
+MODE ?2026 1
+EVENT ModeChanged(SynchronizedOutput)
+PUSH "text\e[?2026l"
+MODE ?2026 2
+EVENT ModeChanged(SynchronizedOutput)
+ROW 0 "text"
+
+# Kitty keyboard flags: push, pop, set, query; separate stacks per screen.
+SIZE 10 2
+PUSH "\e[>1u"
+KITTY 1
+PUSH "\e[>5u"
+KITTY 5
+PUSH "\e[?u"
+REPLY "\e[?5u"
+PUSH "\e[<u"
+KITTY 1
+PUSH "\e[=2;2u"
+KITTY 3
+PUSH "\e[=1;3u"
+KITTY 2
+PUSH "\e[=31u"
+KITTY 31
+PUSH "\e[<9u"
+KITTY 0
+PUSH "\e[>1u\e[?1049h"
+KITTY 0
+PUSH "\e[>8u"
+KITTY 8
+PUSH "\e[?1049l"
+KITTY 1
+
+# The stack holds 16 entries; the oldest is dropped.
+SIZE 10 2
+PUSH "\e[>1u\e[>2u\e[>3u\e[>4u\e[>5u\e[>6u\e[>7u\e[>8u\e[>9u\e[>10u\e[>11u\e[>12u\e[>13u\e[>14u\e[>15u\e[>16u\e[>17u"
+KITTY 17
+PUSH "\e[16u"
+PUSH "\e[<16u"
+KITTY 1
+
+# DECALN fills the screen with E.
+SIZE 4 2
+PUSH "\e#8"
+SCREEN
+|EEEE
+|EEEE
+END
+CURSOR 0 0
+
+# DECFRA, DECERA, DECCRA.
+SIZE 6 3
+PUSH "\e[88;1;2;2;4$x"
+SCREEN
+| XXX
+| XXX
+|
+END
+PUSH "\e[2;3;2;3$z"
+ROW 1 " X X"
+PUSH "\e[1;2;1;4;1;3;3;1$v"
+ROW 2 "  XXX"
+
+# OSC 133 marks set the semantic content of the cells that follow.
+SIZE 20 3
+PUSH "\e]133;A\a$ \e]133;B\als\r\n\e]133;C\aout\r\n\e]133;D;1\a"
+CELL 0 0 "$" w=1 sem=prompt
+CELL 0 2 "l" w=1 sem=input
+CELL 1 0 "o" w=1
+EVENT Prompt(PromptStart)
+EVENT Prompt(InputStart)
+EVENT Prompt(OutputStart)
+EVENT Prompt(CommandFinished(Some(1)))
+PUSH "\e]133;D\a"
+EVENT Prompt(CommandFinished(None))
+
+# DECSCUSR.
+SIZE 10 2
+PUSH "\e[5 q"
+EVENT CursorShapeChanged
+PUSH "\eP$q q\e\\"
+REPLY "\eP1$r5 q\e\\"
+
+# tmux passthrough applies the wrapped sequence.
+SIZE 10 2
+PUSH "\ePtmux;\e\e]2;from tmux\a\e\\"
+TITLE "from tmux"
+EVENT Title("from tmux")
+
+# Making a line double width moves a cursor in its right half to the last column that is shown.
+SIZE 10 2
+PUSH "\e[1;9H\e#6x"
+CURSOR 0 5
+ROW 0 "    x"

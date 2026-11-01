@@ -1,0 +1,112 @@
+# Cursor movement: CUU, CUD, CUF, CUB, CNL, CPL, CHA, CUP, HVP, VPA, HPA, HPR, VPR.
+SIZE 20 10
+PUSH "\e[5;5H"
+CURSOR 4 4
+PUSH "\e[A"
+CURSOR 3 4
+PUSH "\e[2A"
+CURSOR 1 4
+PUSH "\e[99A"
+CURSOR 0 4
+PUSH "\e[0B"
+CURSOR 1 4
+PUSH "\e[3B"
+CURSOR 4 4
+PUSH "\e[99B"
+CURSOR 9 4
+PUSH "\e[C"
+CURSOR 9 5
+PUSH "\e[99C"
+CURSOR 9 19
+PUSH "\e[3D"
+CURSOR 9 16
+PUSH "\e[99D"
+CURSOR 9 0
+PUSH "\e[5;10H\e[2E"
+CURSOR 6 0
+PUSH "\e[5;10H\e[3F"
+CURSOR 1 0
+PUSH "\e[7G"
+CURSOR 1 6
+PUSH "\e[G"
+CURSOR 1 0
+PUSH "\e[99G"
+CURSOR 1 19
+PUSH "\e[H"
+CURSOR 0 0
+PUSH "\e[3;7f"
+CURSOR 2 6
+PUSH "\e[99;99H"
+CURSOR 9 19
+PUSH "\e[0;0H"
+CURSOR 0 0
+PUSH "\e[8d"
+CURSOR 7 0
+PUSH "\e[12`"
+CURSOR 7 11
+PUSH "\e[2a"
+CURSOR 7 13
+PUSH "\e[e"
+CURSOR 8 13
+PUSH "\e[;5H"
+CURSOR 0 4
+PUSH "\e[5;H"
+CURSOR 4 0
+
+# CUU and CUD stop at the scrolling margins when the cursor is inside the region.
+SIZE 10 10
+PUSH "\e[3;7r\e[5;1H\e[99A"
+CURSOR 2 0
+PUSH "\e[99B"
+CURSOR 6 0
+# Outside the region they stop at the screen edge.
+PUSH "\e[9;1H\e[99A"
+CURSOR 2 0
+PUSH "\e[1;1H\e[99B"
+CURSOR 6 0
+PUSH "\e[10;1H\e[A"
+CURSOR 8 0
+PUSH "\e[r"
+
+# Origin mode: CUP is relative to the region and confined to it.
+SIZE 10 10
+PUSH "\e[3;7r\e[?6h"
+CURSOR 2 0
+MODE ?6 1
+PUSH "\e[2;3H"
+CURSOR 3 2
+PUSH "\e[99;1H"
+CURSOR 6 0
+PUSH "\e[6n"
+REPLY "\e[5;1R"
+PUSH "\e[?6l"
+CURSOR 0 0
+MODE ?6 2
+
+# IND, RI and NEL.
+SIZE 10 4
+PUSH "\e[2;3H\eD"
+CURSOR 2 2
+PUSH "\eM\eM"
+CURSOR 0 2
+PUSH "\e[2;5H\eE"
+CURSOR 2 0
+
+# RI at the top scrolls the screen down.
+SIZE 5 3
+PUSH "a\r\nb\r\nc\e[H\eM"
+SCREEN
+|
+|a
+|b
+END
+
+# IND at the bottom scrolls up.
+SIZE 5 3
+PUSH "a\r\nb\r\nc\eD"
+SCREEN
+|b
+|c
+|
+END
+CURSOR 2 1

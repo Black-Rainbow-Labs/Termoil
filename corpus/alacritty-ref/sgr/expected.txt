@@ -1,0 +1,35 @@
+S0: '[' | 'u' | 'n' | 'd' | 'e' | 'a' | 'd' | 'l' | 'e' | 'e' | 'c' | 'h' | '@' | 'a' | 'r' | 'c' | 'h' | 'h' | 'q' | ' ' | 's' | 'g' | 'r' | ']' | '$' | ' ' | 'e' | 'c' | 'h' | 'o' | ' ' | '-' | 'e' | ' ' | '"' | '\' | 'e' | '[' | '9' | ';' | '3' | '8' | ':' | '2' | ':' | '2' | '5' | '5' | ':' | '0' | ':' | '2' | '5' | '5' | ';' | '4' | 'm' | 'T' | 'E' | 'S' | 'T' | '\' | 'e' | '[' | '0' | 'm' | '"'
+S1: 'T' fg=#ff00ff ul=single strike | 'E' fg=#ff00ff ul=single strike | 'S' fg=#ff00ff ul=single strike | 'T' fg=#ff00ff ul=single strike
+S2: '[' | 'u' | 'n' | 'd' | 'e' | 'a' | 'd' | 'l' | 'e' | 'e' | 'c' | 'h' | '@' | 'a' | 'r' | 'c' | 'h' | 'h' | 'q' | ' ' | 's' | 'g' | 'r' | ']' | '$' | ' ' | 'e' | 'c' | 'h' | 'o' | ' ' | '-' | 'e' | ' ' | '"' | '\' | 'e' | '[' | '9' | ';' | '3' | '8' | ':' | '2' | ':' | '0' | ':' | '2' | '5' | '5' | ':' | '0' | ':' | '2' | '5' | '5' | ';' | '4' | 'm' | 'T' | 'E' | 'S' | 'T' | '\' | 'e' | '[' | '0' | 'm' | '"'
+S3: 'T' fg=#ff00ff ul=single strike | 'E' fg=#ff00ff ul=single strike | 'S' fg=#ff00ff ul=single strike | 'T' fg=#ff00ff ul=single strike
+S4: '[' | 'u' | 'n' | 'd' | 'e' | 'a' | 'd' | 'l' | 'e' | 'e' | 'c' | 'h' | '@' | 'a' | 'r' | 'c' | 'h' | 'h' | 'q' | ' ' | 's' | 'g' | 'r' | ']' | '$' | ' ' | 'e' | 'c' | 'h' | 'o' | ' ' | '-' | 'e' | ' ' | '"' | '\' | 'e' | '[' | '9' | ';' | '3' | '8' | ':' | '5' | ':' | '1' | ';' | '4' | 'm' | 'T' | 'E' | 'S' | 'T' | '\' | 'e' | '[' | '0' | 'm' | '"'
+S5: 'T' fg=p1 ul=single strike | 'E' fg=p1 ul=single strike | 'S' fg=p1 ul=single strike | 'T' fg=p1 ul=single strike
+S6: '[' | 'u' | 'n' | 'd' | 'e' | 'a' | 'd' | 'l' | 'e' | 'e' | 'c' | 'h' | '@' | 'a' | 'r' | 'c' | 'h' | 'h' | 'q' | ' ' | 's' | 'g' | 'r' | ']' | '$' | ' ' | 'e' | 'c' | 'h' | 'o' | ' ' | '-' | 'e' | ' ' | '"' | '\' | 'e' | '[' | '9' | ';' | '4' | '8' | ':' | '2' | ':' | '2' | '5' | '5' | ':' | '0' | ':' | '2' | '5' | '5' | ';' | '4' | 'm' | 'T' | 'E' | 'S' | 'T' | '\' | 'e' | '[' | '0' | 'm' | '"'
+S7: 'T' bg=#ff00ff ul=single strike | 'E' bg=#ff00ff ul=single strike | 'S' bg=#ff00ff ul=single strike | 'T' bg=#ff00ff ul=single strike
+S8: '[' | 'u' | 'n' | 'd' | 'e' | 'a' | 'd' | 'l' | 'e' | 'e' | 'c' | 'h' | '@' | 'a' | 'r' | 'c' | 'h' | 'h' | 'q' | ' ' | 's' | 'g' | 'r' | ']' | '$' | ' ' | 'e' | 'c' | 'h' | 'o' | ' ' | '-' | 'e' | ' ' | '"' | '\' | 'e' | '[' | '9' | ';' | '4' | '8' | ':' | '2' | ':' | '0' | ':' | '2' | '5' | '5' | ':' | '0' | ':' | '2' | '5' | '5' | ';' | '4' | 'm' | 'T' | 'E' | 'S' | 'T' | '\' | 'e' | '[' | '0' | 'm' | '"'
+S9: 'T' bg=#ff00ff ul=single strike | 'E' bg=#ff00ff ul=single strike | 'S' bg=#ff00ff ul=single strike | 'T' bg=#ff00ff ul=single strike
+S10: '[' | 'u' | 'n' | 'd' | 'e' | 'a' | 'd' | 'l' | 'e' | 'e' | 'c' | 'h' | '@' | 'a' | 'r' | 'c' | 'h' | 'h' | 'q' | ' ' | 's' | 'g' | 'r' | ']' | '$' | ' ' | 'e' | 'c' | 'h' | 'o' | ' ' | '-' | 'e' | ' ' | '"' | '\' | 'e' | '[' | '9' | ';' | '4' | '8' | ':' | '5' | ':' | '1' | ';' | '4' | 'm' | 'T' | 'E' | 'S' | 'T' | '\' | 'e' | '[' | '0' | 'm' | '"'
+S11: 'T' bg=p1 ul=single strike | 'E' bg=p1 ul=single strike | 'S' bg=p1 ul=single strike | 'T' bg=p1 ul=single strike
+S12: '[' | 'u' | 'n' | 'd' | 'e' | 'a' | 'd' | 'l' | 'e' | 'e' | 'c' | 'h' | '@' | 'a' | 'r' | 'c' | 'h' | 'h' | 'q' | ' ' | 's' | 'g' | 'r' | ']' | '$' | ' ' | 'e' | 'c' | 'h' | 'o' | ' ' | '-' | 'e' | ' ' | '"' | '\' | 'e' | '[' | '9' | ';' | '3' | '8' | ';' | '2' | ';' | '2' | '5' | '5' | ';' | '0' | ';' | '2' | '5' | '5' | ';' | '4' | 'm' | 'T' | 'E' | 'S' | 'T' | '\' | 'e' | '[' | '0' | 'm' | '"'
+S13: 'T' fg=#ff00ff ul=single strike | 'E' fg=#ff00ff ul=single strike | 'S' fg=#ff00ff ul=single strike | 'T' fg=#ff00ff ul=single strike
+S14: '[' | 'u' | 'n' | 'd' | 'e' | 'a' | 'd' | 'l' | 'e' | 'e' | 'c' | 'h' | '@' | 'a' | 'r' | 'c' | 'h' | 'h' | 'q' | ' ' | 's' | 'g' | 'r' | ']' | '$' | ' ' | 'e' | 'c' | 'h' | 'o' | ' ' | '-' | 'e' | ' ' | '"' | '\' | 'e' | '[' | '9' | ';' | '3' | '8' | ';' | '2' | ';' | '0' | ';' | '2' | '5' | '5' | ';' | '0' | ';' | '2' | '5' | '5' | ';' | '4' | 'm' | 'T' | 'E' | 'S' | 'T' | '\' | 'e' | '[' | '0' | 'm' | '"'
+S15: 'T' fg=#00ff00 ul=single strike | 'E' fg=#00ff00 ul=single strike | 'S' fg=#00ff00 ul=single strike | 'T' fg=#00ff00 ul=single strike
+S16: '[' | 'u' | 'n' | 'd' | 'e' | 'a' | 'd' | 'l' | 'e' | 'e' | 'c' | 'h' | '@' | 'a' | 'r' | 'c' | 'h' | 'h' | 'q' | ' ' | 's' | 'g' | 'r' | ']' | '$' | ' ' | 'e' | 'c' | 'h' | 'o' | ' ' | '-' | 'e' | ' ' | '"' | '\' | 'e' | '[' | '9' | ';' | '3' | '8' | ';' | '5' | ';' | '1' | ';' | '4' | 'm' | 'T' | 'E' | 'S' | 'T' | '\' | 'e' | '[' | '0' | 'm' | '"'
+S17: 'T' fg=p1 ul=single strike | 'E' fg=p1 ul=single strike | 'S' fg=p1 ul=single strike | 'T' fg=p1 ul=single strike
+S18: '[' | 'u' | 'n' | 'd' | 'e' | 'a' | 'd' | 'l' | 'e' | 'e' | 'c' | 'h' | '@' | 'a' | 'r' | 'c' | 'h' | 'h' | 'q' | ' ' | 's' | 'g' | 'r' | ']' | '$' | ' ' | 'e' | 'c' | 'h' | 'o' | ' ' | '-' | 'e' | ' ' | '"' | '\' | 'e' | '[' | '9' | ';' | '4' | '8' | ';' | '2' | ';' | '2' | '5' | '5' | ';' | '0' | ';' | '2' | '5' | '5' | ';' | '4' | 'm' | 'T' | 'E' | 'S' | 'T' | '\' | 'e' | '[' | '0' | 'm' | '"'
+S19: 'T' bg=#ff00ff ul=single strike | 'E' bg=#ff00ff ul=single strike | 'S' bg=#ff00ff ul=single strike | 'T' bg=#ff00ff ul=single strike
+S20: '[' | 'u' | 'n' | 'd' | 'e' | 'a' | 'd' | 'l' | 'e' | 'e' | 'c' | 'h' | '@' | 'a' | 'r' | 'c' | 'h' | 'h' | 'q' | ' ' | 's' | 'g' | 'r' | ']' | '$' | ' ' | 'e' | 'c' | 'h' | 'o' | ' ' | '-' | 'e' | ' ' | '"' | '\' | 'e' | '[' | '9' | ';' | '4' | '8' | ';' | '2' | ';' | '0' | ';' | '2' | '5' | '5' | ';' | '0' | ';' | '2' | '5' | '5' | ';' | '4' | 'm' | 'T' | 'E' | 'S' | 'T' | '\' | 'e' | '[' | '0' | 'm' | '"'
+S21: 'T' bg=#00ff00 ul=single strike | 'E' bg=#00ff00 ul=single strike | 'S' bg=#00ff00 ul=single strike | 'T' bg=#00ff00 ul=single strike
+S22: '[' | 'u' | 'n' | 'd' | 'e' | 'a' | 'd' | 'l' | 'e' | 'e' | 'c' | 'h' | '@' | 'a' | 'r' | 'c' | 'h' | 'h' | 'q' | ' ' | 's' | 'g' | 'r' | ']' | '$' | ' ' | 'e' | 'c' | 'h' | 'o' | ' ' | '-' | 'e' | ' ' | '"' | '\' | 'e' | '[' | '9' | ';' | '4' | '8' | ';' | '5' | ';' | '1' | ';' | '4' | 'm' | 'T' | 'E' | 'S' | 'T' | '\' | 'e' | '[' | '0' | 'm' | '"'
+S23: 'T' bg=p1 ul=single strike | 'E' bg=p1 ul=single strike | 'S' bg=p1 ul=single strike | 'T' bg=p1 ul=single strike
+S24: '[' | 'u' | 'n' | 'd' | 'e' | 'a' | 'd' | 'l' | 'e' | 'e' | 'c' | 'h' | '@' | 'a' | 'r' | 'c' | 'h' | 'h' | 'q' | ' ' | 's' | 'g' | 'r' | ']' | '$' | ' ' | 'e' | 'x' | 'i' | 't'
+S25: 'e' | 'x' | 'i' | 't'
+S26: 
+S27: 
+S28: 
+S29: 
+S30: 
+S31: 
+S32: 
+S33: 
+S34: 

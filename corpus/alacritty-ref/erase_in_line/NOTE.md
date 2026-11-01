@@ -1,0 +1,1 @@
+Terminus differs from Alacritty here on purpose. EL with the cursor in the pending wrap state erases from the cursor column and clears the pending wrap and the row's wrap flag, as Ghostty does. Alacritty keeps the last character and wraps the next one. Expected grid: terminus.txt.

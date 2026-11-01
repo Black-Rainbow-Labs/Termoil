@@ -1,0 +1,30 @@
+S0: '[' | 'k' | 'c' | 'h' | 'i' | 'b' | 'i' | 's' | 'o' | 'v' | '@' | 'N' | 'i' | 'g' | 'h' | 't' | 'L' | 'o' | 'r' | 'd' | ' ' | 'a' | 'l' | 'a' | 'c' | 'r' | 'i' | 't' | 't' | 'y' | ']' | '$' | ' ' | 'p' | 'r' | 'i' | 'n' | 't' | 'f' | ' ' | '"' | '\' | 'e' | '[' | '3' | '1' | ';' | '1' | ';' | '4' | ';' | '9' | 'm' | 'T' | 'E' | 'S' | 'T' | ' ' | 'a' | 's' | 'd' | '\' | 'n' | '"'
+S1: 'T' fg=p1 ul=single bold strike | 'E' fg=p1 ul=single bold strike | 'S' fg=p1 ul=single bold strike | 'T' fg=p1 ul=single bold strike | ' ' fg=p1 ul=single bold strike | 'a' fg=p1 ul=single bold strike | 's' fg=p1 ul=single bold strike | 'd' fg=p1 ul=single bold strike
+S2: '[' fg=p1 ul=single bold strike | 'k' fg=p1 ul=single bold strike | 'c' fg=p1 ul=single bold strike | 'h' fg=p1 ul=single bold strike | 'i' fg=p1 ul=single bold strike | 'b' fg=p1 ul=single bold strike | 'i' fg=p1 ul=single bold strike | 's' fg=p1 ul=single bold strike | 'o' fg=p1 ul=single bold strike | 'v' fg=p1 ul=single bold strike | '@' fg=p1 ul=single bold strike | 'N' fg=p1 ul=single bold strike | 'i' fg=p1 ul=single bold strike | 'g' fg=p1 ul=single bold strike | 'h' fg=p1 ul=single bold strike | 't' fg=p1 ul=single bold strike | 'L' fg=p1 ul=single bold strike | 'o' fg=p1 ul=single bold strike | 'r' fg=p1 ul=single bold strike | 'd' fg=p1 ul=single bold strike | ' ' fg=p1 ul=single bold strike | 'a' fg=p1 ul=single bold strike | 'l' fg=p1 ul=single bold strike | 'a' fg=p1 ul=single bold strike | 'c' fg=p1 ul=single bold strike | 'r' fg=p1 ul=single bold strike | 'i' fg=p1 ul=single bold strike | 't' fg=p1 ul=single bold strike | 't' fg=p1 ul=single bold strike | 'y' fg=p1 ul=single bold strike | ']' fg=p1 ul=single bold strike | '$' fg=p1 ul=single bold strike | ' ' fg=p1 ul=single bold strike | 'e' fg=p1 ul=single bold strike | 'c' fg=p1 ul=single bold strike | 'h' fg=p1 ul=single bold strike | 'o' fg=p1 ul=single bold strike | ' ' fg=p1 ul=single bold strike | '-' fg=p1 ul=single bold strike | 'e' fg=p1 ul=single bold strike | ' ' fg=p1 ul=single bold strike | '"' fg=p1 ul=single bold strike | '\' fg=p1 ul=single bold strike | '0' fg=p1 ul=single bold strike | '3' fg=p1 ul=single bold strike | '3' fg=p1 ul=single bold strike | '[' fg=p1 ul=single bold strike | '1' fg=p1 ul=single bold strike | '0' fg=p1 ul=single bold strike | '0' fg=p1 ul=single bold strike | ';' fg=p1 ul=single bold strike | '@' fg=p1 ul=single bold strike | '"' fg=p1 ul=single bold strike
+S3: 
+S4: '[' fg=p1 ul=single bold strike | 'k' fg=p1 ul=single bold strike | 'c' fg=p1 ul=single bold strike | 'h' fg=p1 ul=single bold strike | 'i' fg=p1 ul=single bold strike | 'b' fg=p1 ul=single bold strike | 'i' fg=p1 ul=single bold strike | 's' fg=p1 ul=single bold strike | 'o' fg=p1 ul=single bold strike | 'v' fg=p1 ul=single bold strike | '@' fg=p1 ul=single bold strike | 'N' fg=p1 ul=single bold strike | 'i' fg=p1 ul=single bold strike | 'g' fg=p1 ul=single bold strike | 'h' fg=p1 ul=single bold strike | 't' fg=p1 ul=single bold strike | 'L' fg=p1 ul=single bold strike | 'o' fg=p1 ul=single bold strike | 'r' fg=p1 ul=single bold strike | 'd' fg=p1 ul=single bold strike | ' ' fg=p1 ul=single bold strike | 'a' fg=p1 ul=single bold strike | 'l' fg=p1 ul=single bold strike | 'a' fg=p1 ul=single bold strike | 'c' fg=p1 ul=single bold strike | 'r' fg=p1 ul=single bold strike | 'i' fg=p1 ul=single bold strike | 't' fg=p1 ul=single bold strike | 't' fg=p1 ul=single bold strike | 'y' fg=p1 ul=single bold strike | ']' fg=p1 ul=single bold strike | '$' fg=p1 ul=single bold strike | ' ' fg=p1 ul=single bold strike
+S5: 
+S6: 
+S7: 
+S8: 
+S9: 
+S10: 
+S11: 
+S12: 
+S13: 
+S14: 
+S15: 
+S16: 
+S17: 
+S18: 
+S19: 
+S20: 
+S21: 
+S22: 
+S23: 
+S24: 
+S25: 
+S26: 
+S27: 
+S28: 
+S29: 

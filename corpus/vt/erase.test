@@ -1,0 +1,93 @@
+# Erase: ED, EL, ECH, with background colour erase and protected cells.
+SIZE 10 4
+PUSH "AAAAAAAAAA\r\nBBBBBBBBBB\r\nCCCCCCCCCC\r\nDDDDDDDDDD"
+PUSH "\e[2;5H\e[K"
+SCREEN
+|AAAAAAAAAA
+|BBBB
+|CCCCCCCCCC
+|DDDDDDDDDD
+END
+PUSH "\e[3;5H\e[1K"
+ROW 2 "     CCCCC"
+PUSH "\e[4;5H\e[2K"
+ROW 3 ""
+CURSOR 3 4
+
+SIZE 10 4
+PUSH "AAAAAAAAAA\r\nBBBBBBBBBB\r\nCCCCCCCCCC\r\nDDDDDDDDDD"
+PUSH "\e[2;5H\e[J"
+SCREEN
+|AAAAAAAAAA
+|BBBB
+|
+|
+END
+
+SIZE 10 4
+PUSH "AAAAAAAAAA\r\nBBBBBBBBBB\r\nCCCCCCCCCC\r\nDDDDDDDDDD"
+PUSH "\e[3;5H\e[1J"
+SCREEN
+|
+|
+|     CCCCC
+|DDDDDDDDDD
+END
+
+SIZE 10 4
+PUSH "AAAAAAAAAA\r\nBBBBBBBBBB\r\nCCCCCCCCCC\r\nDDDDDDDDDD"
+PUSH "\e[2J"
+SCREEN
+|
+|
+|
+|
+END
+CURSOR 3 9
+
+# ED 3 clears the scrollback, not the screen.
+SIZE 5 2
+PUSH "1\r\n2\r\n3\r\n4"
+HISTORY 2
+PUSH "\e[3J"
+HISTORY 0
+SCREEN
+|3
+|4
+END
+
+# ECH erases from the cursor without moving it.
+SIZE 10 2
+PUSH "abcdefghij\e[1;3H\e[4X"
+ROW 0 "ab    ghij"
+CURSOR 0 2
+PUSH "\e[99X"
+ROW 0 "ab"
+PUSH "\e[1;1H\e[X"
+ROW 0 " b"
+
+# Erase uses the pen's background colour (and only the background).
+SIZE 5 2
+PUSH "abcde\e[1;3H\e[1;4;41m\e[K"
+ROW 0 "ab"
+CELL 0 2 "" w=1 bg=p1
+CELL 0 4 "" w=1 bg=p1
+CELL 0 1 "b" w=1
+PUSH "\e[0m"
+
+# Protected cells survive selective erase (DECSED, DECSEL) and not plain erase.
+SIZE 10 2
+PUSH "ab\e[1\"qcd\e[0\"qef"
+CELL 0 2 "c" w=1 protected
+PUSH "\e[1;1H\e[?2K"
+ROW 0 "  cd"
+PUSH "\e[1;1H\e[2K"
+ROW 0 ""
+PUSH "ab\e[1\"qcd\e[0\"qef\e[1;1H\e[?2J"
+ROW 0 "  cd"
+
+# Erasing half of a wide character clears the whole character.
+SIZE 6 2
+PUSH "a\u{4e2d}b\e[1;3H\e[X"
+ROW 0 "a  b"
+CELL 0 1 "" w=1

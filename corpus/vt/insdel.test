@@ -1,0 +1,78 @@
+# Insert and delete: ICH, DCH, IL, DL, IRM.
+SIZE 10 3
+PUSH "abcdefghij\e[1;3H\e[2@"
+ROW 0 "ab  cdefgh"
+CURSOR 0 2
+PUSH "\e[3P"
+ROW 0 "abdefgh"
+PUSH "\e[99P"
+ROW 0 "ab"
+PUSH "\e[1;1H\e[@"
+ROW 0 " ab"
+
+# ICH pushes cells off the right edge; DCH pulls blanks in at the right.
+SIZE 5 2
+PUSH "12345\e[1;2H\e[2@"
+ROW 0 "1  23"
+PUSH "\e[1;1H\e[P"
+ROW 0 "  23"
+
+# Insert mode (IRM) shifts the line as characters are typed.
+SIZE 10 2
+PUSH "abcdef\e[1;3H\e[4hXY"
+ROW 0 "abXYcdef"
+MODE 4 1
+PUSH "\e[4lZ"
+ROW 0 "abXYZdef"
+MODE 4 2
+
+# IL and DL inside the scrolling region.
+SIZE 5 5
+PUSH "1\r\n2\r\n3\r\n4\r\n5\e[2;1H\e[L"
+SCREEN
+|1
+|
+|2
+|3
+|4
+END
+PUSH "\e[2M"
+SCREEN
+|1
+|3
+|4
+|
+|
+END
+SIZE 5 5
+PUSH "1\r\n2\r\n3\r\n4\r\n5\e[2;4r\e[3;1H\e[L"
+SCREEN
+|1
+|2
+|
+|3
+|5
+END
+PUSH "\e[3;1H\e[5M"
+SCREEN
+|1
+|2
+|
+|
+|5
+END
+# IL outside the region does nothing.
+PUSH "\e[5;1H\e[L"
+ROW 4 "5"
+
+# IL and DL move the cursor to the left margin.
+SIZE 5 3
+PUSH "\e[2;3H\e[L"
+CURSOR 1 0
+PUSH "\e[2;3H\e[M"
+CURSOR 1 0
+
+# Inserting splits a wide character at the right edge: the half that would fall off is cleared.
+SIZE 4 2
+PUSH "ab\u{4e2d}\e[1;1H\e[@"
+ROW 0 " ab"

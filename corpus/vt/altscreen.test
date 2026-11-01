@@ -1,0 +1,47 @@
+# Alternate screen: modes 47, 1047, 1048, 1049.
+SIZE 10 3
+PUSH "main\e[?1049h"
+ALT 1
+MODE ?1049 1
+ROW 0 ""
+CURSOR 0 4
+PUSH "alt"
+ROW 0 "    alt"
+PUSH "\e[?1049l"
+ALT 0
+MODE ?1049 2
+ROW 0 "main"
+CURSOR 0 4
+
+# 1049 saves the cursor and restores it on exit.
+SIZE 10 3
+PUSH "\e[2;3H\e[?1049h\e[3;8Hx\e[?1049l"
+CURSOR 1 2
+
+# 1047 clears the alternate screen on exit; 47 does not.
+SIZE 10 3
+PUSH "\e[?47hkeep\e[?47l\e[?47h"
+ROW 0 "keep"
+PUSH "\e[?47l\e[?1047hdrop\e[?1047l\e[?1047h"
+ROW 0 ""
+PUSH "\e[?1047l"
+ALT 0
+
+# 1048 is DECSC and DECRC as a mode.
+SIZE 10 3
+PUSH "\e[2;4H\e[?1048h\e[H\e[?1048l"
+CURSOR 1 3
+
+# The pen carries into the alternate screen.
+SIZE 10 3
+PUSH "\e[1m\e[?1049hX"
+CELL 0 0 "X" w=1 bold
+PUSH "\e[?1049l"
+PEN bold
+
+# Erase on the alternate screen with a background colour.
+SIZE 4 2
+PUSH "\e[?1049h\e[44m\e[2J"
+CELL 0 0 "" w=1 bg=p4
+PUSH "\e[0m\e[?1049l"
+CELL 0 0 "" w=1

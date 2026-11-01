@@ -1,0 +1,94 @@
+# SGR: every attribute on and off, colours in every form, underline styles and colours, the stack.
+SIZE 40 2
+PUSH "\e[1mA\e[2mB\e[22mC\e[3mD\e[23mE\e[4mF\e[24mG\e[5mH\e[25mI\e[7mJ\e[27mK\e[8mL\e[28mM\e[9mN\e[29mO\e[53mP\e[55mQ"
+CELL 0 0 "A" w=1 bold
+CELL 0 1 "B" w=1 bold faint
+CELL 0 2 "C" w=1
+CELL 0 3 "D" w=1 italic
+CELL 0 4 "E" w=1
+CELL 0 5 "F" w=1 ul=single
+CELL 0 6 "G" w=1
+CELL 0 7 "H" w=1 blink
+CELL 0 8 "I" w=1
+CELL 0 9 "J" w=1 inverse
+CELL 0 10 "K" w=1
+CELL 0 11 "L" w=1 invisible
+CELL 0 12 "M" w=1
+CELL 0 13 "N" w=1 strike
+CELL 0 14 "O" w=1
+CELL 0 15 "P" w=1 overline
+CELL 0 16 "Q" w=1
+
+SIZE 40 2
+PUSH "\e[31mA\e[42mB\e[39mC\e[49mD\e[91mE\e[102mF\e[0m"
+CELL 0 0 "A" w=1 fg=p1
+CELL 0 1 "B" w=1 fg=p1 bg=p2
+CELL 0 2 "C" w=1 bg=p2
+CELL 0 3 "D" w=1
+CELL 0 4 "E" w=1 fg=p9
+CELL 0 5 "F" w=1 fg=p9 bg=p10
+
+# 256 colour and true colour, semicolon and colon forms.
+SIZE 40 2
+PUSH "\e[38;5;196mA\e[38:5:21mB\e[38;2;1;2;3mC\e[38:2::4:5:6mD\e[38:2:7:8:9mE\e[48;2;10;20;30mF\e[0m"
+CELL 0 0 "A" w=1 fg=p196
+CELL 0 1 "B" w=1 fg=p21
+CELL 0 2 "C" w=1 fg=#010203
+CELL 0 3 "D" w=1 fg=#040506
+CELL 0 4 "E" w=1 fg=#070809
+CELL 0 5 "F" w=1 fg=#070809 bg=#0a141e
+
+# Attributes after an extended colour in the same sequence still apply.
+SIZE 40 2
+PUSH "\e[38;5;1;1mA\e[0;38;2;1;2;3;4mB\e[0m"
+CELL 0 0 "A" w=1 fg=p1 bold
+CELL 0 1 "B" w=1 fg=#010203 ul=single
+
+# An incomplete extended colour is ignored and ends the sequence.
+SIZE 40 2
+PUSH "\e[38;5mA\e[38;2;1mB\e[0m"
+CELL 0 0 "A" w=1
+CELL 0 1 "B" w=1
+
+# Underline styles 4:0 to 4:5, SGR 21 double, and the underline colour 58 and 59.
+SIZE 40 2
+PUSH "\e[4:1mA\e[4:2mB\e[4:3mC\e[4:4mD\e[4:5mE\e[4:0mF\e[21mG\e[58;5;3mH\e[58:2::1:2:3mI\e[59mJ\e[0m"
+CELL 0 0 "A" w=1 ul=single
+CELL 0 1 "B" w=1 ul=double
+CELL 0 2 "C" w=1 ul=curly
+CELL 0 3 "D" w=1 ul=dotted
+CELL 0 4 "E" w=1 ul=dashed
+CELL 0 5 "F" w=1
+CELL 0 6 "G" w=1 ul=double
+CELL 0 7 "H" w=1 ul=double ulc=p3
+CELL 0 8 "I" w=1 ul=double ulc=#010203
+CELL 0 9 "J" w=1 ul=double
+
+# SGR 0 and an empty SGR reset everything.
+SIZE 10 2
+PUSH "\e[1;3;4;31;42mA\e[mB\e[1mC\e[0mD"
+CELL 0 0 "A" w=1 fg=p1 bg=p2 ul=single bold italic
+CELL 0 1 "B" w=1
+CELL 0 3 "D" w=1
+
+# XTPUSHSGR and XTPOPSGR.
+SIZE 10 2
+PUSH "\e[1;31m\e[#{\e[0;32mA\e[#}B"
+CELL 0 0 "A" w=1 fg=p2
+CELL 0 1 "B" w=1 fg=p1 bold
+PUSH "\e[0m\e[#}C"
+CELL 0 2 "C" w=1
+
+# The stack keeps 10 entries; pushing an eleventh drops the oldest.
+SIZE 20 2
+PUSH "\e[31m\e[#{\e[32m\e[#{\e[33m\e[#{\e[34m\e[#{\e[35m\e[#{\e[36m\e[#{\e[37m\e[#{\e[91m\e[#{\e[92m\e[#{\e[93m\e[#{\e[94m\e[#{\e[0m"
+PUSH "\e[#}\e[#}\e[#}\e[#}\e[#}\e[#}\e[#}\e[#}\e[#}\e[#}X\e[#}Y"
+CELL 0 0 "X" w=1 fg=p2
+CELL 0 1 "Y" w=1 fg=p2
+
+# DECRQSS for SGR reports the pen.
+SIZE 10 2
+PUSH "\e[1;4:3;38;2;1;2;3;48;5;200m\eP$qm\e\\"
+REPLY "\eP1$r0;1;4:3;38:2::1:2:3;48:5:200m\e\\"
+PUSH "\e[0m\eP$qm\e\\"
+REPLY "\eP1$r0m\e\\"

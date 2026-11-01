@@ -1,0 +1,45 @@
+# Colours: OSC 4, 10 to 19, 104, 110 to 119, the query form, rgb: and # syntaxes.
+SIZE 10 2
+PUSH "\e]4;1;?\a"
+REPLY "\e]4;1;rgb:cdcd/0000/0000\a"
+PUSH "\e]4;196;?\e\\"
+REPLY "\e]4;196;rgb:ffff/0000/0000\e\\"
+PUSH "\e]4;232;?\a"
+REPLY "\e]4;232;rgb:0808/0808/0808\a"
+PUSH "\e]4;1;rgb:12/34/56\a\e]4;1;?\a"
+REPLY "\e]4;1;rgb:1212/3434/5656\a"
+EVENT ColorsChanged
+PUSH "\e]4;2;#abc\a\e]4;2;?\a"
+REPLY "\e]4;2;rgb:aaaa/bbbb/cccc\a"
+PUSH "\e]4;3;#112233\a\e]4;3;?\a"
+REPLY "\e]4;3;rgb:1111/2222/3333\a"
+PUSH "\e]4;4;rgb:f/0/8\a\e]4;4;?\a"
+REPLY "\e]4;4;rgb:ffff/0000/8888\a"
+PUSH "\e]4;5;rgb:ffff/0000/8080\a\e]4;5;?\a"
+REPLY "\e]4;5;rgb:ffff/0000/8080\a"
+# Several pairs in one sequence.
+PUSH "\e]4;6;#010101;7;#020202\a\e]4;6;?;7;?\a"
+REPLY "\e]4;6;rgb:0101/0101/0101\a\e]4;7;rgb:0202/0202/0202\a"
+# OSC 104 resets one entry or all.
+PUSH "\e]104;1\a\e]4;1;?\a"
+REPLY "\e]4;1;rgb:cdcd/0000/0000\a"
+PUSH "\e]104\a\e]4;3;?\a"
+REPLY "\e]4;3;rgb:cdcd/cdcd/0000\a"
+# A bad colour spec is ignored.
+PUSH "\e]4;1;bogus\a\e]4;1;?\a"
+REPLY "\e]4;1;rgb:cdcd/0000/0000\a"
+
+# Dynamic colours: set, query, reset.
+SIZE 10 2
+PUSH "\e]10;#ff0000\a\e]10;?\a"
+REPLY "\e]10;rgb:ffff/0000/0000\a"
+PUSH "\e]11;rgb:00/00/80\a\e]11;?\e\\"
+REPLY "\e]11;rgb:0000/0000/8080\e\\"
+PUSH "\e]110\a\e]10;?\a"
+REPLY "\e]10;rgb:0000/0000/0000\a"
+PUSH "\e]10;#010203;#040506\a\e]11;?\a"
+REPLY "\e]11;rgb:0404/0505/0606\a"
+PUSH "\e]12;#0a0b0c\a\e]12;?\a"
+REPLY "\e]12;rgb:0a0a/0b0b/0c0c\a"
+PUSH "\e]112\a\e]12;?\a"
+REPLY "\e]12;rgb:0101/0202/0303\a"

@@ -1,0 +1,132 @@
+# DECRQM for every mode: the default answer, set, reset, and the fixed ones.
+SIZE 10 2
+PUSH "\e[2$p"
+REPLY "\e[2;4$y"
+PUSH "\e[4$p"
+REPLY "\e[4;2$y"
+PUSH "\e[12$p"
+REPLY "\e[12;3$y"
+PUSH "\e[20$p"
+REPLY "\e[20;2$y"
+PUSH "\e[3$p"
+REPLY "\e[3;0$y"
+MODE ?1 2
+MODE ?2 3
+MODE ?3 2
+MODE ?4 4
+MODE ?5 2
+MODE ?6 2
+MODE ?7 1
+MODE ?8 3
+MODE ?9 2
+MODE ?12 2
+MODE ?25 1
+MODE ?40 2
+MODE ?45 2
+MODE ?47 2
+MODE ?66 2
+MODE ?67 2
+MODE ?69 2
+MODE ?80 2
+MODE ?95 2
+MODE ?1000 2
+MODE ?1001 4
+MODE ?1002 2
+MODE ?1003 2
+MODE ?1004 2
+MODE ?1005 2
+MODE ?1006 2
+MODE ?1007 2
+MODE ?1015 2
+MODE ?1016 2
+MODE ?1036 1
+MODE ?1039 1
+MODE ?1045 2
+MODE ?1047 2
+MODE ?1048 2
+MODE ?1049 2
+MODE ?1070 1
+MODE ?2004 2
+MODE ?2026 2
+MODE ?2027 1
+MODE ?2031 2
+MODE ?2048 2
+MODE ?9001 4
+# Not recognised: VT52 is a non goal, so are Tektronix (38) and the rest.
+MODE ?38 0
+MODE ?1234 0
+PUSH "\e[?1234$p"
+REPLY "\e[?1234;0$y"
+
+# Set and reset each mode a program commonly changes.
+PUSH "\e[?1h\e[?12h\e[?25l\e[?66h\e[?1004h\e[?2004h\e[?2027l"
+MODE ?1 1
+MODE ?12 1
+MODE ?25 2
+MODE ?66 1
+MODE ?1004 1
+MODE ?2004 1
+MODE ?2027 2
+PUSH "\e[?1l\e[?12l\e[?25h\e[?66l\e[?1004l\e[?2004l\e[?2027h"
+MODE ?1 2
+MODE ?12 2
+MODE ?25 1
+MODE ?66 2
+MODE ?1004 2
+MODE ?2004 2
+MODE ?2027 1
+
+# Fixed modes cannot change.
+PUSH "\e[?2l\e[?8l\e[12l\e[?1001h"
+MODE ?2 3
+MODE ?8 3
+MODE 12 3
+MODE ?1001 4
+
+# Several modes in one sequence.
+PUSH "\e[?1;66;2004h"
+MODE ?1 1
+MODE ?66 1
+MODE ?2004 1
+PUSH "\e[?1;66;2004l"
+
+# Mouse tracking modes replace each other; so do mouse encodings.
+PUSH "\e[?1000h"
+MODE ?1000 1
+PUSH "\e[?1002h"
+MODE ?1000 2
+MODE ?1002 1
+PUSH "\e[?1003h"
+MODE ?1002 2
+MODE ?1003 1
+PUSH "\e[?1006h\e[?1015h"
+MODE ?1006 2
+MODE ?1015 1
+PUSH "\e[?1016h"
+MODE ?1015 2
+MODE ?1016 1
+PUSH "\e[?1003l\e[?1016l"
+MODE ?1003 2
+MODE ?1016 2
+
+# XTSAVE and XTRESTORE.
+PUSH "\e[?2004h\e[?2004s\e[?2004l"
+MODE ?2004 2
+PUSH "\e[?2004r"
+MODE ?2004 1
+PUSH "\e[?7s\e[?7l\e[?7r"
+MODE ?7 1
+
+# DECKPAM and DECKPNM set mode 66.
+PUSH "\e="
+MODE ?66 1
+PUSH "\e>"
+MODE ?66 2
+
+# DECCOLM only works when mode 40 allows it, and asks the host to resize.
+PUSH "\e[?3h"
+MODE ?3 2
+PUSH "\e[?40h\e[?3h"
+MODE ?3 1
+PUSH "\e[?3l\e[?40l"
+MODE ?3 2

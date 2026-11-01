@@ -1,0 +1,51 @@
+# Left and right margins (DECLRMM and DECSLRM), and scrolling inside them.
+SIZE 10 4
+PUSH "\e[?69h\e[3;6s"
+MODE ?69 1
+CURSOR 0 0
+PUSH "\e[1;3Habcdefg"
+SCREEN
+|  abcd
+|  efg
+|
+|
+END
+
+# CR goes to the left margin when the cursor is inside the margins.
+SIZE 10 4
+PUSH "\e[?69h\e[3;6s\e[1;5H\rX"
+ROW 0 "  X"
+
+# IL, DL, ICH and DCH stay inside the margins.
+SIZE 10 4
+PUSH "0123456789\r\n0123456789\r\n0123456789\e[?69h\e[3;6s\e[2;3H\e[L"
+SCREEN
+|0123456789
+|01    6789
+|0123456789
+|  2345
+END
+SIZE 10 2
+PUSH "0123456789\e[?69h\e[3;6s\e[1;4H\e[@"
+ROW 0 "012 346789"
+PUSH "\e[1;4H\e[2P"
+ROW 0 "0124  6789"
+
+# SU scrolls only the columns inside the margins.
+SIZE 6 3
+PUSH "aaaaaa\r\nbbbbbb\r\ncccccc\e[?69h\e[2;4s\e[S"
+SCREEN
+|abbbaa
+|bcccbb
+|c   cc
+END
+
+# DECSLRM is ignored when DECLRMM is off (CSI s is save cursor then).
+SIZE 10 2
+PUSH "\e[1;5H\e[3;6s\e[H\e[u"
+CURSOR 0 4
+
+# Turning DECLRMM off resets the margins.
+SIZE 10 2
+PUSH "\e[?69h\e[3;6s\e[?69l\e[1;9Habc"
+ROW 1 "c"

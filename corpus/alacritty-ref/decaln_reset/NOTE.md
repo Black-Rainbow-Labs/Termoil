@@ -1,0 +1,1 @@
+Terminus differs from Alacritty here on purpose. DECALN (ESC # 8) moves the cursor to the home position, as xterm and Ghostty do and as esctest's DECALN tests require. Alacritty leaves the cursor where it was, so the prompt that follows lands on a different row. Expected grid: terminus.txt.

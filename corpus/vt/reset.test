@@ -1,0 +1,34 @@
+# Resets: RIS clears everything; DECSTR resets modes and the pen and keeps the screen.
+SIZE 10 3
+PUSH "text\e[1m\e[?25l\e[2;3r\e]2;title\a\e[>1u\ec"
+ROW 0 ""
+CURSOR 0 0
+PEN
+MODE ?25 1
+KITTY 0
+EVENT ModeChanged(CursorVisible)
+EVENT Title("title")
+EVENT ModeChanged(CursorKeys)
+EVENT ColorsChanged
+EVENT CursorShapeChanged
+PUSH "\e[r"
+
+SIZE 10 3
+PUSH "keep\e[4h\e[?6h\e[?7l\e[1;31m\e[2;3r\e[!p"
+ROW 0 "keep"
+MODE 4 2
+MODE ?6 2
+MODE ?7 1
+PEN
+PUSH "\e[3;1H\n"
+HISTORY 1
+
+# RIS resets tab stops.
+SIZE 20 2
+PUSH "\e[3g\ec\t"
+CURSOR 0 8
+
+# RIS resets the palette.
+SIZE 10 2
+PUSH "\e]4;1;#102030\a\ec\e]4;1;?\a"
+REPLY "\e]4;1;rgb:cdcd/0000/0000\a"

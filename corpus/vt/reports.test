@@ -1,0 +1,85 @@
+# Reports: DA1, DA2, DA3, DSR, CPR, DECXCPR, DECRQSS, XTVERSION, XTGETTCAP, XTWINOPS.
+SIZE 80 24
+PUSH "\e[c"
+REPLY "\e[?62;1;4;6;22;28;52c"
+PUSH "\e[0c"
+REPLY "\e[?62;1;4;6;22;28;52c"
+PUSH "\e[>c"
+REPLY "\e[>1;100;0c"
+PUSH "\e[=c"
+REPLY "\eP!|5445524d\e\\"
+PUSH "\e[5n"
+REPLY "\e[0n"
+PUSH "\e[3;7H\e[6n"
+REPLY "\e[3;7R"
+PUSH "\e[?6n"
+REPLY "\e[?3;7;1R"
+PUSH "\e[?15n\e[?25n\e[?26n"
+REPLY "\e[?13n\e[?21n\e[?27;1;0;0n"
+PUSH "\e[>q"
+REPLY "\eP>|Terminus(0.1.0)\e\\"
+PUSH "\e[>0q"
+REPLY "\eP>|Terminus(0.1.0)\e\\"
+
+# CPR after a pending wrap reports the last column.
+SIZE 5 3
+PUSH "abcde\e[6n"
+REPLY "\e[1;5R"
+
+# DECRQSS for each setting it knows; an unknown request answers 0.
+SIZE 80 24
+PUSH "\e[5;20r\eP$qr\e\\"
+REPLY "\eP1$r5;20r\e\\"
+PUSH "\e[r\eP$qr\e\\"
+REPLY "\eP1$r1;24r\e\\"
+PUSH "\e[4 q\eP$q q\e\\"
+REPLY "\eP1$r4 q\e\\"
+PUSH "\e[ q\eP$q q\e\\"
+REPLY "\eP1$r0 q\e\\"
+PUSH "\e[1\"q\eP$q\"q\e\\"
+REPLY "\eP1$r1\"q\e\\"
+PUSH "\e[0\"q\eP$q\"p\e\\"
+REPLY "\eP1$r64;1\"p\e\\"
+PUSH "\e[?69h\e[3;40s\eP$qs\e\\"
+REPLY "\eP1$r3;40s\e\\"
+PUSH "\e[?69l\eP$qx\e\\"
+REPLY "\eP0$r\e\\"
+PUSH "\eP$qt\e\\"
+REPLY "\eP1$r24t\e\\"
+
+# XTGETTCAP: known names, several at once, an unknown name.
+PUSH "\eP+q544e\e\\"
+REPLY "\eP1+r544E=787465726D2D7465726D696E7573\e\\"
+PUSH "\eP+q436f;524742\e\\"
+REPLY "\eP1+r436F=323536\e\\\eP1+r524742=382F382F38\e\\"
+PUSH "\eP+q5463\e\\"
+REPLY "\eP1+r5463\e\\"
+PUSH "\eP+q6e6f7065\e\\"
+REPLY "\eP0+r6e6f7065\e\\"
+
+# XTWINOPS size reports.
+SIZE 80 24
+PUSH "\e[18t"
+REPLY "\e[8;24;80t"
+PUSH "\e[16t"
+REPLY "\e[6;20;10t"
+PUSH "\e[14t"
+REPLY "\e[4;480;800t"
+PUSH "\e[8;30;100t"
+EVENT ResizeRequest { cols: 100, rows: 30 }
+
+# Mode 2048 reports the size when turned on and on every resize.
+SIZE 80 24
+PUSH "\e[?2048h"
+REPLY "\e[48;24;80;480;800t"
+RESIZE 100 30
+REPLY "\e[48;30;100;600;1000t"
+PUSH "\e[?2048l"
+
+# The colour scheme query goes to the host.
+PUSH "\e[?996n"
+EVENT ColorSchemeQuery
+
+# The kitty keyboard flags query.
+PUSH "\e[?u"
+REPLY "\e[?0u"

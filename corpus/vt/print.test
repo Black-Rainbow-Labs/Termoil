@@ -1,0 +1,109 @@
+# Printing, autowrap and the pending wrap state.
+SIZE 10 4
+PUSH "hello"
+CURSOR 0 5
+ROW 0 "hello"
+PUSH "worldXY"
+SCREEN
+|helloworld
+|XY
+|
+|
+END
+CURSOR 1 2
+WRAP 0 1
+WRAP 1 0
+
+# The last column sets pending wrap; the cursor stays on it.
+SIZE 5 3
+PUSH "abcde"
+CURSOR 0 4 wrap
+# BS clears pending wrap and moves left, as xterm does when reverse wrap is off.
+PUSH "\b"
+CURSOR 0 3
+PUSH "X"
+ROW 0 "abcXe"
+CURSOR 0 4
+
+# CR after pending wrap returns to column 0 of the same row.
+SIZE 5 3
+PUSH "abcde\rZ"
+ROW 0 "Zbcde"
+CURSOR 0 1
+
+# CUP clears pending wrap.
+SIZE 5 3
+PUSH "abcde\e[1;1HQ"
+ROW 0 "Qbcde"
+ROW 1 ""
+
+# Autowrap off: characters past the end overwrite the last column.
+SIZE 5 3
+PUSH "\e[?7labcdefgh"
+ROW 0 "abcdh"
+CURSOR 0 4
+ROW 1 ""
+MODE ?7 2
+PUSH "\e[?7h"
+MODE ?7 1
+
+# A line feed at the bottom scrolls into history.
+SIZE 4 2
+PUSH "a\r\nb\r\nc\r\nd"
+SCREEN
+|c
+|d
+END
+HISTORY 2
+HISTROW 0 "a"
+HISTROW 1 "b"
+
+# Wrapping at the bottom scrolls too.
+SIZE 3 2
+PUSH "abcdefgh"
+SCREEN
+|def
+|gh
+END
+HISTORY 1
+HISTROW 0 "abc"
+WRAP 0 1
+
+# LNM: line feed also returns the carriage.
+SIZE 10 3
+PUSH "\e[20hab\ncd"
+SCREEN
+|ab
+|cd
+|
+END
+MODE 20 1
+PUSH "\e[20l"
+MODE 20 2
+
+# VT and FF act as LF.
+SIZE 10 4
+PUSH "a\x0bb\x0cc"
+SCREEN
+|a
+| b
+|  c
+|
+END
+
+# NUL and other C0 controls print nothing.
+SIZE 10 2
+PUSH "a\x00\x01\x02\x03\x04\x05\x06\x10\x11b"
+ROW 0 "ab"
+
+# REP repeats the last printed character.
+SIZE 10 2
+PUSH "x\e[3b"
+ROW 0 "xxxx"
+CURSOR 0 4
+
+# Unicode text in UTF-8.
+SIZE 10 2
+PUSH "h\u{e9}llo"
+ROW 0 "héllo"
+CURSOR 0 5

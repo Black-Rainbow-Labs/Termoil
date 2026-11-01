@@ -1,0 +1,63 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/terminus-vt",
+    "crates/terminus-input",
+    "crates/terminus-pty",
+    "crates/terminus-protocol",
+    "crates/terminus-font",
+    "crates/terminus-render",
+    "crates/terminus-app",
+    "crates/terminus-cli",
+    "tools/unicode-tables",
+]
+
+# The version is written here once. tools/release.ps1 bumps it and every crate inherits it.
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/jasonmcaffee/terminus"
+
+[workspace.dependencies]
+terminus-vt = { path = "crates/terminus-vt" }
+terminus-input = { path = "crates/terminus-input" }
+terminus-pty = { path = "crates/terminus-pty" }
+terminus-protocol = { path = "crates/terminus-protocol" }
+terminus-font = { path = "crates/terminus-font" }
+terminus-render = { path = "crates/terminus-render" }
+memchr = "2.8"
+simdutf8 = "0.1.5"
+lz4_flex = { version = "0.11", default-features = false, features = ["safe-encode", "safe-decode"] }
+regex = "1.11"
+proptest = "1.6"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+flate2 = "1"
+png = "0.17"
+crossbeam-channel = "0.5"
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+too_many_arguments = "allow"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+debug = "line-tables-only"
+
+# The performance gates are measured on this profile: release code with symbols for profilers.
+[profile.bench]
+inherits = "release"
+
+# The property and conformance suites run many thousands of cases; level 1 keeps them quick while
+# leaving debug assertions and overflow checks on.
+[profile.test]
+opt-level = 1
+
+[profile.test.package."*"]
+opt-level = 2

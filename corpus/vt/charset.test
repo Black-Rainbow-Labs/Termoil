@@ -1,0 +1,39 @@
+# Character sets: SCS G0 to G3, SI, SO, SS2, SS3, LS2, LS3, DEC special graphics, UK.
+SIZE 20 2
+PUSH "\e(0lqqk\e(B lqqk"
+ROW 0 "┌──┐ lqqk"
+
+# SO and SI switch between G1 and G0.
+SIZE 20 2
+PUSH "\e)0a\x0ea\x0fa"
+ROW 0 "a▒a"
+
+# SS2 and SS3 affect one character.
+SIZE 20 2
+PUSH "\e*0\e+0\eNxx\eOxx"
+ROW 0 "│x│x"
+
+# LS2 and LS3 invoke G2 and G3 into GL.
+SIZE 20 2
+PUSH "\e*0\eny\e(B\eo"
+ROW 0 "≤"
+
+# UK: # is the pound sign.
+SIZE 20 2
+PUSH "\e(A#1\e(B#1"
+ROW 0 "£1#1"
+
+# Every DEC special graphics character.
+SIZE 40 2
+PUSH "\e(0_`abcdefghijklmnopqrstuvwxyz{|}~\e(B"
+ROW 0 " ◆▒␉␌␍␊°±␤␋┘┐┌└┼⎺⎻─⎼⎽├┤┴┬│≤≥π≠£·"
+
+# Non ASCII text is never translated.
+SIZE 20 2
+PUSH "\e(0\u{e9}q\e(B"
+ROW 0 "é─"
+
+# An unknown designation leaves the set unchanged.
+SIZE 20 2
+PUSH "\e(0\e(Wq\e(B"
+ROW 0 "─"
