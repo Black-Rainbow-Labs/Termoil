@@ -7,6 +7,10 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[[bin]]
+name = "terminus-gui"
+path = "src/main.rs"
+
 [dependencies]
 terminus-vt.workspace = true
 terminus-input.workspace = true
@@ -18,9 +22,31 @@ serde.workspace = true
 serde_json.workspace = true
 crossbeam-channel.workspace = true
 toml = "1"
+winit = "0.30"
+softbuffer = "0.4"
+wgpu = "30"
 
 [lints]
 workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+    "Win32_System_Pipes",
+    "Win32_System_Threading",
+    "Win32_System_DataExchange",
+    "Win32_System_Memory",
+    "Win32_System_Ole",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[build-dependencies]
+embed-resource = "3"
 
 [dev-dependencies]
 terminus-vt.workspace = true

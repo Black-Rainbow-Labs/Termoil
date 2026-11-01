@@ -1,16 +1,17 @@
 //! Live reload: watches the config file and reports each change, debounced, as a freshly parsed config.
 //!
-//! The file is polled for its modification time and length rather than watched through the operating
-//! system's change notifications. The `notify` crate is CC0 licensed, which the dependency allow list
-//! does not include, and one `metadata` call every quarter second on one file costs nothing measurable.
-//! Polling also handles every way an editor saves (in place, by rename, by delete and create) without
-//! special cases, and a file created after start.
+//! The file's contents are polled rather than watched through the operating system's change
+//! notifications. The `notify` crate is CC0 licensed, which the dependency allow list does not
+//! include, and reading one small file every quarter second costs nothing measurable. Comparing the
+//! contents rather than the modification time and length catches two saves of the same length within
+//! one clock tick. Polling also handles every way an editor saves (in place, by rename, by delete and
+//! create) without special cases, and a file created after start.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant};
 
 use super::{Config, ConfigError, Warning};
 
@@ -30,32 +31,31 @@ pub struct Watcher {
     worker: Option<JoinHandle<()>>,
 }
 
-/// What identifies a version of the file: its modification time and length, or None when it is missing.
-type Stamp = Option<(SystemTime, u64)>;
+/// What identifies a version of the file: its contents, or None when it is missing.
+type Stamp = Option<Vec<u8>>;
 
 /// Reads the file's stamp.
 fn stamp(path: &Path) -> Stamp {
-    let m = std::fs::metadata(path).ok()?;
-    Some((m.modified().ok()?, m.len()))
+    std::fs::read(path).ok()
 }
 
 /// The polling loop: when the stamp changes, wait until it has stayed the same for `debounce`, then load the
 /// file and call `on_change`.
 fn run_worker(
-    path: PathBuf, debounce: Duration, poll: Duration, stop: Arc<AtomicBool>, on_change: impl Fn(LoadResult),
+    path: PathBuf, mut seen: Stamp, debounce: Duration, poll: Duration, stop: Arc<AtomicBool>,
+    on_change: impl Fn(LoadResult),
 ) {
-    let mut seen = stamp(&path);
     let mut pending: Option<(Stamp, Instant)> = None;
     while !stop.load(Ordering::Acquire) {
         thread::sleep(poll);
         let now = stamp(&path);
         match pending {
-            Some((s, since)) if s == now && since.elapsed() >= debounce => {
+            Some((ref s, since)) if *s == now && since.elapsed() >= debounce => {
                 pending = None;
                 seen = now;
                 on_change(Config::load(&path));
             }
-            Some((s, _)) if s == now => {}
+            Some((ref s, _)) if *s == now => {}
             _ if now != seen || pending.is_some() => pending = Some((now, Instant::now())),
             _ => {}
         }
@@ -77,9 +77,10 @@ impl Watcher {
         let stop = Arc::new(AtomicBool::new(false));
         let flag = stop.clone();
         let poll = POLL_INTERVAL.min(debounce.max(Duration::from_millis(10)));
+        let seen = stamp(&path);
         let worker = thread::Builder::new()
             .name("terminus config watcher".into())
-            .spawn(move || run_worker(path, debounce, poll, flag, on_change))
+            .spawn(move || run_worker(path, seen, debounce, poll, flag, on_change))
             .map_err(|e| format!("cannot start the config watcher: {e}"))?;
         Ok(Watcher { stop, worker: Some(worker) })
     }

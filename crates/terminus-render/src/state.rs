@@ -152,8 +152,10 @@ pub struct RenderState {
     pub cursor: Option<CursorState>,
     /// Selected cells as (row, first column, last column) per visible row.
     pub selection: Vec<(u16, u16, u16)>,
-    /// Colours.
+    /// The colours in effect: the defaults with the program's OSC changes applied.
     pub colors: Colors,
+    /// The configured colours, which an OSC reset (110 to 119) returns to.
+    pub defaults: Colors,
     /// DECSCNM.
     pub reverse_video: bool,
     /// The window has focus (a hollow cursor otherwise).
@@ -181,6 +183,7 @@ impl RenderState {
             lines: vec![row; rows as usize],
             cursor: None,
             selection: Vec::new(),
+            defaults: colors.clone(),
             colors,
             reverse_video: false,
             focused: true,
@@ -196,7 +199,8 @@ impl RenderState {
         let (cols, rows) = (term.cols(), term.rows());
         let resized = cols != self.cols || rows != self.rows;
         if resized {
-            *self = RenderState::new(cols, rows, self.colors.clone());
+            let defaults = self.defaults.clone();
+            *self = RenderState::new(cols, rows, defaults);
         }
         let top = {
             let pages = &term.screen().pages;
@@ -267,14 +271,14 @@ impl RenderState {
     /// Applies the terminal's palette and dynamic colour overrides.
     fn copy_colors(&mut self, term: &Terminal) {
         let dynamic = term.dynamic_colors();
-        let base = Colors::dark_default();
+        let base = &self.defaults;
         let colors = Colors {
             palette: *term.palette(),
-            foreground: dynamic.foreground.unwrap_or(self.colors.foreground),
-            background: dynamic.background.unwrap_or(self.colors.background),
-            cursor: dynamic.cursor.unwrap_or(self.colors.cursor),
+            foreground: dynamic.foreground.unwrap_or(base.foreground),
+            background: dynamic.background.unwrap_or(base.background),
+            cursor: dynamic.cursor.unwrap_or(base.cursor),
             selection_background: dynamic.selection_background.unwrap_or(base.selection_background),
-            selection_foreground: dynamic.selection_foreground,
+            selection_foreground: dynamic.selection_foreground.or(base.selection_foreground),
         };
         if colors != self.colors {
             self.colors = colors;

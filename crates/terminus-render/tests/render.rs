@@ -266,3 +266,45 @@ fn r1_frame_builder_reuses_rows_that_only_moved() {
     let full = build_frame(&state, &mut g, &BuildOptions::default());
     assert_eq!(second.rows, full.rows, "reused rows equal freshly built ones");
 }
+
+/// An OSC 111 reset returns the background to the configured default, not to the colour an
+/// earlier OSC 11 set.
+#[test]
+fn r1_osc_reset_returns_to_configured_colours() {
+    let mut t = Terminal::new(4, 1, TerminalConfig::default());
+    let mut colors = Colors::dark_default();
+    colors.background = terminus_vt::style::Rgb::new(1, 2, 3);
+    let mut state = RenderState::new(4, 1, colors);
+    t.advance(b"\x1b]11;rgb:ff/00/00\x1b\\");
+    state.update(&mut t, 0);
+    assert_eq!(state.colors.background, terminus_vt::style::Rgb::new(255, 0, 0));
+    t.advance(b"\x1b]111\x1b\\");
+    state.update(&mut t, 0);
+    assert_eq!(state.colors.background, terminus_vt::style::Rgb::new(1, 2, 3));
+}
+
+/// Two frames drawn as layers side by side give the same pixels as each frame drawn alone.
+#[test]
+fn r2_layers_match_frames_drawn_alone() {
+    let mut g = grid(16.0);
+    let a = scene(6, 2, b"\x1b[31mleft\r\nAB", &mut g);
+    let b = scene(6, 2, b"\x1b[44mright\x1b[m\r\nCD", &mut g);
+    let (alone_a, alone_b) = (render_cpu(&a, &g), render_cpu(&b, &g));
+    let mut r = VelloCpuRenderer::new(a.width + b.width, a.height, 0, false);
+    let layers = [
+        terminus_render::Layer { x: 0.0, y: 0.0, frame: &a },
+        terminus_render::Layer { x: a.width as f32, y: 0.0, frame: &b },
+    ];
+    r.render_layers(Rgba::rgb(0, 0, 0), &layers, &g).expect("render");
+    let both = r.read_pixels().expect("pixels");
+    for y in 0..a.height as usize {
+        let row = &both.rgba[y * both.width as usize * 4..(y + 1) * both.width as usize * 4];
+        let wa = a.width as usize * 4;
+        assert_eq!(&row[..wa], &alone_a.rgba[y * wa..(y + 1) * wa], "left pane row {y}");
+        assert_eq!(
+            &row[wa..],
+            &alone_b.rgba[y * b.width as usize * 4..(y + 1) * b.width as usize * 4],
+            "right pane row {y}"
+        );
+    }
+}

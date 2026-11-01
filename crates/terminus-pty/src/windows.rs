@@ -11,15 +11,17 @@ use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
 use windows::Win32::Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE, WAIT_OBJECT_0};
 use windows::Win32::System::Console::{COORD, HPCON};
 use windows::Win32::System::JobObjects::{
-    CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
-    JobObjectExtendedLimitInformation, SetInformationJobObject, TerminateJobObject,
+    AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation, SetInformationJobObject,
+    TerminateJobObject,
 };
 use windows::Win32::System::Pipes::CreatePipe;
 use windows::Win32::System::Threading::{
-    CREATE_UNICODE_ENVIRONMENT, CreateProcessW, DeleteProcThreadAttributeList, EXTENDED_STARTUPINFO_PRESENT,
-    GetExitCodeProcess, INFINITE, InitializeProcThreadAttributeList, LPPROC_THREAD_ATTRIBUTE_LIST,
-    PROC_THREAD_ATTRIBUTE_JOB_LIST, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, PROCESS_INFORMATION, STARTF_USESTDHANDLES,
-    STARTUPINFOEXW, STARTUPINFOW, UpdateProcThreadAttribute, WaitForSingleObject,
+    CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, CreateProcessW, DeleteProcThreadAttributeList,
+    EXTENDED_STARTUPINFO_PRESENT, GetExitCodeProcess, INFINITE, InitializeProcThreadAttributeList,
+    LPPROC_THREAD_ATTRIBUTE_LIST, PROC_THREAD_ATTRIBUTE_JOB_LIST, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE,
+    PROCESS_INFORMATION, ResumeThread, STARTF_USESTDHANDLES, STARTUPINFOEXW, STARTUPINFOW, TerminateProcess,
+    UpdateProcThreadAttribute, WaitForSingleObject,
 };
 use windows::core::{PCWSTR, PWSTR};
 
@@ -98,10 +100,14 @@ impl PtyImpl {
         self.exit_status()
     }
 
-    /// Terminates every process in the job, which is the child and its descendants.
+    /// Terminates every process in the job, which is the child and its descendants, and the child
+    /// itself in case it could not join the job (a Store app in its package's job).
     pub fn kill(&mut self) -> io::Result<()> {
-        // SAFETY: the job handle is owned and open.
-        unsafe { TerminateJobObject(handle_of(&self.job), 1) }.map_err(io::Error::from)
+        // SAFETY: the job and process handles are owned and open.
+        let job = unsafe { TerminateJobObject(handle_of(&self.job), 1) };
+        // SAFETY: as above; terminating a process that already ended fails harmlessly.
+        let _ = unsafe { TerminateProcess(handle_of(&self.process), 1) };
+        job.map_err(io::Error::from)
     }
 
     /// The child's process id.
@@ -205,14 +211,17 @@ struct AttributeList {
 }
 
 impl AttributeList {
-    /// Builds the list that attaches a new process to `hpc` and puts it in `job` from its first instruction.
-    fn new(hpc: HPCON, job: &OwnedHandle) -> io::Result<AttributeList> {
+    /// Builds the list that attaches a new process to `hpc` and, when `job` is given, puts it in the
+    /// job from its first instruction.
+    fn new(hpc: HPCON, job: Option<&OwnedHandle>) -> io::Result<AttributeList> {
+        let count = if job.is_some() { 2 } else { 1 };
         let mut size = 0usize;
         // SAFETY: a null list with a size out pointer asks for the required size and fails by design.
-        unsafe { InitializeProcThreadAttributeList(None, 2, None, &mut size).ok() };
-        let mut list = AttributeList { buffer: vec![0u64; size.div_ceil(8)], job_handles: Box::new([handle_of(job)]) };
+        unsafe { InitializeProcThreadAttributeList(None, count, None, &mut size).ok() };
+        let handle = job.map_or(HANDLE::default(), handle_of);
+        let mut list = AttributeList { buffer: vec![0u64; size.div_ceil(8)], job_handles: Box::new([handle]) };
         // SAFETY: the buffer is at least `size` bytes and 8 byte aligned.
-        unsafe { InitializeProcThreadAttributeList(Some(list.pointer()), 2, None, &mut size) }
+        unsafe { InitializeProcThreadAttributeList(Some(list.pointer()), count, None, &mut size) }
             .map_err(io::Error::from)?;
         // SAFETY: the pseudoconsole attribute value is the HPCON itself, passed by value.
         unsafe {
@@ -227,6 +236,9 @@ impl AttributeList {
             )
         }
         .map_err(io::Error::from)?;
+        if job.is_none() {
+            return Ok(list);
+        }
         let jobs = list.job_handles.as_ptr().cast::<c_void>();
         // SAFETY: the job list value points to one handle that `list` keeps alive.
         unsafe {
@@ -259,7 +271,41 @@ impl Drop for AttributeList {
 }
 
 /// Starts the child attached to `hpc` and inside `job`, returning its process handle and id.
+///
+/// A Microsoft Store app (pwsh installed from the Store) runs inside a job the system makes for its
+/// package. While one instance is alive, a second one created with our job in its attribute list is
+/// refused with access denied. In that case the child is created suspended without the job list,
+/// added to the job afterwards (best effort: a package job may not allow it, and then closing the
+/// pseudoconsole still ends the shell), and resumed.
 fn start_child(opts: &SpawnOptions, hpc: HPCON, job: &OwnedHandle) -> io::Result<(OwnedHandle, u32)> {
+    let info = match create_process(opts, hpc, Some(job), false) {
+        Ok(info) => info,
+        Err(err) if is_access_denied(&err) => {
+            let info = create_process(opts, hpc, None, true)?;
+            // SAFETY: both handles are open; the thread was created suspended and is resumed once.
+            unsafe {
+                let _ = AssignProcessToJobObject(handle_of(job), info.hProcess);
+                ResumeThread(info.hThread);
+            }
+            info
+        }
+        Err(err) => return Err(err),
+    };
+    // SAFETY: CreateProcessW returned two open handles that nothing else owns; the thread handle is not needed.
+    unsafe { CloseHandle(info.hThread).ok() };
+    // SAFETY: as above, the process handle becomes owned here.
+    Ok((unsafe { OwnedHandle::from_raw_handle(info.hProcess.0) }, info.dwProcessId))
+}
+
+/// True for the access denied error in its Win32, HRESULT and NTSTATUS forms.
+fn is_access_denied(err: &io::Error) -> bool {
+    matches!(err.raw_os_error(), Some(5) | Some(-2147024891) | Some(-1073283067))
+}
+
+/// Calls CreateProcessW with the pseudoconsole and, when given, the job in the attribute list.
+fn create_process(
+    opts: &SpawnOptions, hpc: HPCON, job: Option<&OwnedHandle>, suspended: bool,
+) -> io::Result<PROCESS_INFORMATION> {
     let mut command_line = to_wide(build_command_line(&opts.program, &opts.args));
     let environment = build_environment_block(&opts.env);
     let cwd = opts.cwd.as_ref().map(|dir| to_wide(dir.as_os_str()));
@@ -274,7 +320,10 @@ fn start_child(opts: &SpawnOptions, hpc: HPCON, job: &OwnedHandle) -> io::Result
     startup.StartupInfo.hStdError = INVALID_HANDLE_VALUE;
     let mut info = PROCESS_INFORMATION::default();
     let cwd_ptr = cwd.as_ref().map_or(PCWSTR::null(), |wide| PCWSTR(wide.as_ptr()));
-    let flags = EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT;
+    let mut flags = EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT;
+    if suspended {
+        flags |= CREATE_SUSPENDED;
+    }
     let startup_ptr = (&raw const startup).cast::<STARTUPINFOW>();
     let env_ptr = Some(environment.as_ptr().cast::<c_void>());
     // SAFETY: every pointer refers to a buffer that lives until the call returns; the command line is mutable and nul terminated.
@@ -293,10 +342,7 @@ fn start_child(opts: &SpawnOptions, hpc: HPCON, job: &OwnedHandle) -> io::Result
         )
     }
     .map_err(io::Error::from)?;
-    // SAFETY: CreateProcessW returned two open handles that nothing else owns; the thread handle is not needed.
-    unsafe { CloseHandle(info.hThread).ok() };
-    // SAFETY: as above, the process handle becomes owned here.
-    Ok((unsafe { OwnedHandle::from_raw_handle(info.hProcess.0) }, info.dwProcessId))
+    Ok(info)
 }
 
 /// Encodes a string as nul terminated UTF-16.

@@ -186,3 +186,25 @@ mod windows_process {
         unsafe { WaitForSingleObject(*handle, 10_000) == WAIT_OBJECT_0 }
     }
 }
+
+/// Two pwsh sessions alive at once. pwsh from the Microsoft Store runs in a job the system makes
+/// for its package, and a second instance created with our job in its attribute list was refused
+/// with access denied while the first was alive.
+#[cfg(windows)]
+#[test]
+fn two_pwsh_sessions_at_once() {
+    if std::process::Command::new("pwsh").arg("-NoProfile").arg("-Command").arg("exit 0").status().is_err() {
+        println!("pwsh not on PATH; skipping");
+        return;
+    }
+    for (name, config) in configs() {
+        let first = command("pwsh.exe", &["-NoProfile", "-Command", "'FIRST_' + 'UP'; Start-Sleep 5"], size(100, 30));
+        let mut a = Session::start(&first, &config);
+        assert!(a.wait_for("FIRST_UP"), "{name}: {}", show_bytes(&a.bytes()));
+        let second = command("pwsh.exe", &["-NoProfile", "-Command", "'TERMINUS_' + 'MARK'; exit 5"], size(100, 30));
+        let mut b = Session::start(&second, &config);
+        assert!(b.wait_for("TERMINUS_MARK"), "{name}: {}", show_bytes(&b.bytes()));
+        assert_eq!(b.pty.wait().unwrap(), ExitStatus::Code(5), "{name}");
+        a.pty.kill().unwrap();
+    }
+}

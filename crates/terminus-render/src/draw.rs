@@ -17,6 +17,31 @@ pub trait Canvas {
     fn path(&mut self, p: &BezPath);
     /// Draws glyphs of one font at one size in the current colour.
     fn glyphs(&mut self, font: &FontData, run: &GlyphRun);
+    /// Sets the transform applied to everything drawn after it.
+    fn transform(&mut self, t: Affine);
+}
+
+/// One frame placed in the window at a pixel offset: a pane, the tab bar, an overlay.
+#[derive(Clone, Copy, Debug)]
+pub struct Layer<'a> {
+    /// Left edge in window pixels.
+    pub x: f32,
+    /// Top edge in window pixels.
+    pub y: f32,
+    /// The frame.
+    pub frame: &'a Frame,
+}
+
+/// Fills the window with `background`, then draws each layer at its offset, in order.
+pub fn draw_layers<C: Canvas>(c: &mut C, size: (u32, u32), background: Rgba, layers: &[Layer<'_>], grid: &FontGrid) {
+    c.transform(Affine::IDENTITY);
+    c.paint(background);
+    c.rect(Rect::new(0.0, 0.0, size.0 as f64, size.1 as f64));
+    for l in layers {
+        c.transform(Affine::translate((l.x.round() as f64, l.y.round() as f64)));
+        draw_frame(c, l.frame, grid);
+    }
+    c.transform(Affine::IDENTITY);
 }
 
 /// Draws the whole frame: background, then each row, then the cursor.

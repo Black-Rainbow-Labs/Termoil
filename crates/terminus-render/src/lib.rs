@@ -20,6 +20,7 @@ use std::time::Duration;
 
 pub use build::{BuildOptions, FrameBuilder, build_frame, contrast};
 pub use cpu::VelloCpuRenderer;
+pub use draw::Layer;
 pub use frame::{
     BgSpan, CursorFrame, CursorStyle, Decoration, DecorationKind, Frame, GlyphPos, GlyphRun, Rgba, RowFrame, SpriteCell,
 };
@@ -70,8 +71,15 @@ impl std::error::Error for RenderError {}
 pub trait Renderer {
     /// Changes the size of what is drawn.
     fn resize(&mut self, width: u32, height: u32);
-    /// Draws a frame.
-    fn render(&mut self, frame: &Frame, grid: &terminus_font::FontGrid) -> Result<FrameStats, RenderError>;
+    /// Draws one frame filling the target.
+    fn render(&mut self, frame: &Frame, grid: &terminus_font::FontGrid) -> Result<FrameStats, RenderError> {
+        self.render_layers(frame.background, &[Layer { x: 0.0, y: 0.0, frame }], grid)
+    }
+    /// Fills the target with `background` and draws the layers at their offsets: the panes of a
+    /// split, the tab bar and overlays.
+    fn render_layers(
+        &mut self, background: Rgba, layers: &[Layer<'_>], grid: &terminus_font::FontGrid,
+    ) -> Result<FrameStats, RenderError>;
     /// The last frame's pixels.
     fn read_pixels(&mut self) -> Result<Image, RenderError>;
     /// A name for logs and test output, including the adapter for the GPU renderer.

@@ -7,10 +7,14 @@
 //! written by hand. The crate has no window, GPU or font dependency and builds for wasm.
 
 mod catalogue;
+#[cfg(any(windows, unix))]
+mod client;
 mod docs;
 mod ipc;
 
 pub use catalogue::{ActionDef, CATALOGUE, Context, ParamDef, ParamKind, action};
+#[cfg(any(windows, unix))]
+pub use client::Client;
 pub use docs::{commands_markdown, mcp_tools_json};
 pub use ipc::{
     ActionCall, ActionError, Request, Response, decode_request, decode_response, encode_request, encode_response,

@@ -7,7 +7,17 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[[bin]]
+name = "terminus"
+path = "src/main.rs"
+
 [dependencies]
+terminus-protocol.workspace = true
+terminus-app = { path = "../terminus-app" }
+serde_json.workspace = true
+
+[build-dependencies]
+embed-resource = "3"
 
 [lints]
 workspace = true

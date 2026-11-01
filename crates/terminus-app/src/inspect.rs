@@ -56,19 +56,16 @@ pub fn screen_text(term: &Terminal, scroll: usize) -> Vec<String> {
     (0..term.rows() as usize).map(|r| pages.row_text(top + r).trim_end().to_string()).collect()
 }
 
-/// The last `lines` rows of history and screen as text, oldest first, with trailing empty rows
-/// below the cursor dropped.
+/// The last `lines` rows of history and screen as text, oldest first. The rows end at the cursor's
+/// row or the last row with text, whichever is lower, so the empty rows below the prompt are not
+/// counted.
 pub fn scrollback_text(term: &Terminal, lines: usize) -> Vec<String> {
     let pages = &term.screen().pages;
     let total = pages.total_rows();
-    let cursor_y = pages.active_y(term.screen().cursor.row);
-    let mut out: Vec<String> =
-        (0..total).skip(total.saturating_sub(lines)).map(|y| pages.row_text(y).trim_end().to_string()).collect();
-    let keep = out.len().saturating_sub(total - 1 - cursor_y.min(total - 1));
-    while out.len() > keep && out.last().is_some_and(String::is_empty) {
-        out.pop();
-    }
-    out
+    let cursor_y = pages.active_y(term.screen().cursor.row).min(total.saturating_sub(1));
+    let last_text = (cursor_y..total).rev().find(|&y| !pages.row_text(y).trim_end().is_empty()).unwrap_or(cursor_y);
+    let end = last_text.max(cursor_y) + 1;
+    (end.saturating_sub(lines)..end).map(|y| pages.row_text(y).trim_end().to_string()).collect()
 }
 
 /// The visible screen as JSON: size, cursor, title and, per row, runs of text sharing one style.
@@ -149,4 +146,21 @@ fn style_json(s: &Style) -> Value {
         }
     }
     Value::Object(m)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use terminus_vt::TerminalConfig;
+
+    /// The last lines end at the cursor, not at the blank bottom of the screen.
+    #[test]
+    fn scrollback_ends_at_the_cursor() {
+        let mut t = Terminal::new(20, 10, TerminalConfig::default());
+        t.advance(b"one\r\ntwo\r\nthree\r\n> ");
+        assert_eq!(scrollback_text(&t, 2), vec!["three", ">"]);
+        assert_eq!(scrollback_text(&t, 100), vec!["one", "two", "three", ">"]);
+        t.advance(b"\x1b[8;1Hlow\x1b[2;1H");
+        assert_eq!(scrollback_text(&t, 1), vec!["low"]);
+    }
 }

@@ -49,6 +49,8 @@ pub enum Effect {
     OpenPath(PathBuf),
     /// The configuration changed; reapply fonts, colours and bindings.
     ConfigChanged,
+    /// The last window closed. The window runtime exits; the headless runtime keeps serving IPC.
+    LastWindowClosed,
     /// Exit the process.
     Quit,
 }
@@ -57,6 +59,8 @@ pub enum Effect {
 pub trait Clipboard: Send {
     /// The clipboard's text.
     fn get(&mut self) -> Option<String>;
+    /// Replaces the clipboard's text.
+    fn set(&mut self, text: &str);
 }
 
 /// A clipboard that holds text in memory, for headless use.
@@ -67,6 +71,11 @@ impl Clipboard for MemoryClipboard {
     /// The stored text.
     fn get(&mut self) -> Option<String> {
         self.0.clone()
+    }
+
+    /// Stores the text.
+    fn set(&mut self, text: &str) {
+        self.0 = Some(text.to_string());
     }
 }
 
@@ -104,6 +113,8 @@ pub struct Pane {
     pub scroll: usize,
     /// The selection.
     pub selection: Option<Selection>,
+    /// The selection was started by a single click and has not been dragged yet.
+    pub selection_empty: bool,
     /// The search.
     pub search: Option<PaneSearch>,
     /// The title from the program.
@@ -199,8 +210,19 @@ impl App {
             Session::spawn(opts, waker).map_err(|e| ActionError::Failed(format!("could not start the shell: {e}")))?;
         session.resize(grid.cols, grid.rows, grid.cell_w, grid.cell_h);
         let cwd = session.start_cwd().map(|p| p.to_string_lossy().into_owned());
-        self.panes
-            .insert(id, Pane { id, session, scroll: 0, selection: None, search: None, title: String::new(), cwd });
+        self.panes.insert(
+            id,
+            Pane {
+                id,
+                session,
+                scroll: 0,
+                selection: None,
+                selection_empty: false,
+                search: None,
+                title: String::new(),
+                cwd,
+            },
+        );
         Ok(id)
     }
 
@@ -283,7 +305,7 @@ impl App {
                 self.grids.remove(&closed);
                 self.effects.push(Effect::CloseWindow(closed));
                 if self.model.windows.is_empty() {
-                    self.effects.push(Effect::Quit);
+                    self.effects.push(Effect::LastWindowClosed);
                 }
             }
             None => {

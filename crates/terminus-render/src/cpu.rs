@@ -10,8 +10,8 @@ use vello_common::kurbo::{BezPath, Rect};
 use vello_common::peniko::FontData;
 use vello_cpu::{Level, Pixmap, RenderContext, RenderMode, RenderSettings, Resources};
 
-use crate::draw::{Canvas, draw_frame, hint_enabled, skew_transform};
-use crate::frame::{Frame, GlyphRun, Rgba};
+use crate::draw::{Canvas, Layer, draw_layers, hint_enabled, skew_transform};
+use crate::frame::{GlyphRun, Rgba};
 use crate::{FrameStats, Image, RenderError, Renderer};
 
 /// The CPU renderer.
@@ -93,6 +93,11 @@ impl Canvas for CpuCanvas<'_> {
         }
         let _ = b.fill_glyphs(glyphs);
     }
+
+    /// Sets the context's transform.
+    fn transform(&mut self, t: vello_common::kurbo::Affine) {
+        self.ctx.set_transform(t);
+    }
 }
 
 impl Renderer for VelloCpuRenderer {
@@ -103,19 +108,22 @@ impl Renderer for VelloCpuRenderer {
         self.pixmap = Pixmap::new(w, h);
     }
 
-    /// Draws the frame into the pixmap.
-    fn render(&mut self, frame: &Frame, grid: &FontGrid) -> Result<FrameStats, RenderError> {
+    /// Draws the layers into the pixmap.
+    fn render_layers(
+        &mut self, background: Rgba, layers: &[Layer<'_>], grid: &FontGrid,
+    ) -> Result<FrameStats, RenderError> {
         let start = Instant::now();
         self.ctx.reset();
+        let size = (self.pixmap.width() as u32, self.pixmap.height() as u32);
         {
             let mut canvas = CpuCanvas { ctx: &mut self.ctx, resources: &mut self.resources, atlas: self.atlas };
-            draw_frame(&mut canvas, frame, grid);
+            draw_layers(&mut canvas, size, background, layers, grid);
         }
         self.ctx.flush();
         let encode = start.elapsed();
         let settings = vello_cpu::RasterizerSettings { render_mode: RenderMode::OptimizeSpeed, ..Default::default() };
         self.ctx.render_with(&mut self.pixmap, &mut self.resources, settings);
-        Ok(FrameStats { encode, total: start.elapsed(), glyphs: frame.glyph_count() })
+        Ok(FrameStats { encode, total: start.elapsed(), glyphs: layers.iter().map(|l| l.frame.glyph_count()).sum() })
     }
 
     /// The pixmap as straight RGBA8.
