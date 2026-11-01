@@ -21,3 +21,7 @@ embed-resource = "3"
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+terminus-protocol.workspace = true
+serde_json.workspace = true

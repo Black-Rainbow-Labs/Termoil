@@ -56,7 +56,8 @@ pub struct Gui {
     /// Windows by model id.
     pub windows: HashMap<WinId, WinState>,
     by_winit: HashMap<WindowId, WinId>,
-    bound: Vec<Bound>,
+    /// The resolved keybindings.
+    pub bound: Vec<Bound>,
     initial: Option<(Option<String>, Option<String>)>,
     os_dark: bool,
     _watcher: Option<Watcher>,
@@ -82,31 +83,54 @@ pub fn run(
     config: Config, config_path: PathBuf, socket: &str, cwd: Option<String>, command: Option<String>,
 ) -> Result<(), String> {
     let event_loop = EventLoop::<UserEvent>::with_user_event().build().map_err(|e| format!("no event loop: {e}"))?;
-    let proxy = event_loop.create_proxy();
-    let ipc_proxy = proxy.clone();
-    match start(socket, bridge(move |call, reply| ipc_proxy.send_event(UserEvent::Ipc(call, reply)).is_ok())) {
-        Ok(()) => {}
-        Err(ServeError::AlreadyRunning) => return hand_to_running(cwd, command),
-        Err(ServeError::Io(e)) => eprintln!("terminus: IPC is off: {e}"),
+    match Gui::new(&event_loop, config, config_path, socket, cwd, command)? {
+        Some(mut gui) => event_loop.run_app(&mut gui).map_err(|e| format!("event loop: {e}")),
+        None => Ok(()),
     }
-    let cfg_proxy = proxy.clone();
-    let watcher = Watcher::start(config_path.clone(), DEFAULT_DEBOUNCE, move |r| {
-        let _ = cfg_proxy.send_event(UserEvent::Config(Box::new(r)));
-    })
-    .ok();
-    let bound = resolve(&config.resolved_keybindings(Platform::current()));
-    let app = App::new(config, config_path, Box::new(crate::platform::SystemClipboard), proxy_wakers(proxy));
-    let mut gui = Gui {
-        app,
-        windows: HashMap::new(),
-        by_winit: HashMap::new(),
-        bound,
-        initial: Some((cwd, command)),
-        os_dark: true,
-        _watcher: watcher,
-        probe_done: false,
-    };
-    event_loop.run_app(&mut gui).map_err(|e| format!("event loop: {e}"))
+}
+
+impl Gui {
+    /// Starts the IPC server and the config watcher and builds the front end for `event_loop`.
+    /// Returns None when another instance serves the socket and took the window instead.
+    pub fn new(
+        event_loop: &EventLoop<UserEvent>, config: Config, config_path: PathBuf, socket: &str, cwd: Option<String>,
+        command: Option<String>,
+    ) -> Result<Option<Gui>, String> {
+        let proxy = event_loop.create_proxy();
+        let ipc_proxy = proxy.clone();
+        match start(socket, bridge(move |call, reply| ipc_proxy.send_event(UserEvent::Ipc(call, reply)).is_ok())) {
+            Ok(()) => {}
+            Err(ServeError::AlreadyRunning) => return hand_to_running(cwd, command).map(|_| None),
+            Err(ServeError::Io(e)) => eprintln!("terminus: IPC is off: {e}"),
+        }
+        let cfg_proxy = proxy.clone();
+        let watcher = Watcher::start(config_path.clone(), DEFAULT_DEBOUNCE, move |r| {
+            let _ = cfg_proxy.send_event(UserEvent::Config(Box::new(r)));
+        })
+        .ok();
+        let bound = resolve(&config.resolved_keybindings(Platform::current()));
+        let app = App::new(config, config_path, Box::new(crate::platform::SystemClipboard), proxy_wakers(proxy));
+        Ok(Some(Gui {
+            app,
+            windows: HashMap::new(),
+            by_winit: HashMap::new(),
+            bound,
+            initial: Some((cwd, command)),
+            os_dark: true,
+            _watcher: watcher,
+            probe_done: false,
+        }))
+    }
+
+    /// The resolved keybindings, for the E6 tests that press keys.
+    pub fn bindings(&self) -> &[Bound] {
+        &self.bound
+    }
+
+    /// Applies queued effects; the E6 harness calls it after acting on the app directly.
+    pub fn flush(&mut self, el: &ActiveEventLoop) {
+        self.apply_effects(el);
+    }
 }
 
 /// Opens the window in the instance that is already running.

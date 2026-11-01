@@ -79,6 +79,12 @@ pub fn bridge(
     })
 }
 
+/// The DACL of the socket as SDDL (Windows) or its mode bits as octal (Unix), for the test that
+/// checks only the owner can connect.
+pub fn describe_access(name: &str) -> std::io::Result<String> {
+    imp::describe_access(name)
+}
+
 /// Starts the server on `name` with an accept thread. Fails with `AlreadyRunning` when another
 /// instance has the name.
 pub fn start(name: &str, handler: Handler) -> Result<(), ServeError> {
@@ -171,6 +177,46 @@ mod imp {
         if h == INVALID_HANDLE_VALUE { Err(std::io::Error::last_os_error()) } else { Ok(h) }
     }
 
+    /// Opens the pipe and returns its DACL in SDDL form.
+    pub fn describe_access(name: &str) -> std::io::Result<String> {
+        use std::os::windows::io::AsRawHandle;
+        use windows::Win32::Security::Authorization::{
+            ConvertSecurityDescriptorToStringSecurityDescriptorW, GetSecurityInfo, SE_KERNEL_OBJECT,
+        };
+        use windows::Win32::Security::{DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR};
+        let file = std::fs::OpenOptions::new().read(true).write(true).open(name)?;
+        let mut sd = PSECURITY_DESCRIPTOR::default();
+        // SAFETY: the handle is open for the call; the descriptor and string are allocated by the
+        // system and freed with LocalFree.
+        unsafe {
+            let err = GetSecurityInfo(
+                HANDLE(file.as_raw_handle()),
+                SE_KERNEL_OBJECT,
+                DACL_SECURITY_INFORMATION,
+                None,
+                None,
+                None,
+                None,
+                Some(&mut sd),
+            );
+            if err.is_err() {
+                return Err(std::io::Error::from_raw_os_error(err.0 as i32));
+            }
+            let mut s = PWSTR::null();
+            ConvertSecurityDescriptorToStringSecurityDescriptorW(
+                sd,
+                SDDL_REVISION_1,
+                DACL_SECURITY_INFORMATION,
+                &mut s,
+                None,
+            )?;
+            let out = s.to_string().unwrap_or_default();
+            let _ = LocalFree(Some(HLOCAL(s.0.cast())));
+            let _ = LocalFree(Some(HLOCAL(sd.0)));
+            Ok(out)
+        }
+    }
+
     /// Creates the first pipe instance (proving no other instance runs) and starts accepting.
     pub fn start(name: &str, handler: Handler) -> Result<(), ServeError> {
         let wname = HSTRING::from(name);
@@ -228,6 +274,11 @@ mod imp {
     use std::os::unix::net::{UnixListener, UnixStream};
 
     use super::{Handler, ServeError, serve_connection};
+
+    /// The socket file's permission bits in octal.
+    pub fn describe_access(name: &str) -> std::io::Result<String> {
+        Ok(format!("{:o}", std::fs::metadata(name)?.permissions().mode() & 0o777))
+    }
 
     /// Binds the socket (removing a stale one left by a crash), restricts it to the owner, and
     /// starts accepting.

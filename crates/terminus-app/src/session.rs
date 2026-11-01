@@ -37,6 +37,8 @@ pub struct SessionOptions {
     pub lock_slice: usize,
     /// How often the exit watcher checks the child.
     pub exit_poll: Duration,
+    /// Keep a copy of every byte written to the program, for tests.
+    pub record_input: bool,
 }
 
 impl SessionOptions {
@@ -50,6 +52,7 @@ impl SessionOptions {
             channel_depth: 16,
             lock_slice: 64 << 10,
             exit_poll: Duration::from_millis(100),
+            record_input: false,
         }
     }
 }
@@ -89,6 +92,7 @@ pub struct Session {
     shared: Arc<Shared>,
     pid: u32,
     cwd: Option<PathBuf>,
+    recorded: Option<Mutex<Vec<u8>>>,
 }
 
 /// Locks a mutex, recovering the data if a thread panicked while holding it.
@@ -120,6 +124,7 @@ impl Session {
             pty: Arc::new(Mutex::new(pty)),
             shared,
             cwd: opts.spawn.cwd.clone(),
+            recorded: opts.record_input.then(|| Mutex::new(Vec::new())),
         };
         let (tx, rx) = bounded::<Vec<u8>>(opts.channel_depth.max(1));
         spawn_reader(reader, tx, opts.read_buffer.max(1024), session.shared.clone())?;
@@ -152,9 +157,17 @@ impl Session {
         if bytes.iter().any(|&b| b == b'\r' || b == b'\n') {
             lock(&self.shared.prompt).enter_count += 1;
         }
+        if let Some(r) = &self.recorded {
+            lock(r).extend_from_slice(bytes);
+        }
         let mut w = lock(&self.writer);
         w.write_all(bytes)?;
         w.flush()
+    }
+
+    /// The bytes written to the program so far, when recording was asked for.
+    pub fn recorded_input(&self) -> Vec<u8> {
+        self.recorded.as_ref().map(|r| lock(r).clone()).unwrap_or_default()
     }
 
     /// Resizes the PTY and the terminal.

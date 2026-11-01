@@ -14,6 +14,7 @@ pub mod inspect;
 pub mod ipc_server;
 pub mod keymap;
 pub mod model;
+pub mod palette;
 pub mod paths;
 pub mod platform;
 pub mod session;

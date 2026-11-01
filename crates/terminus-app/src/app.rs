@@ -164,6 +164,8 @@ pub struct App {
     pub grids: HashMap<WinId, Grid>,
     /// The clipboard.
     pub clipboard: Box<dyn Clipboard>,
+    /// Record the input of new sessions (the E6 tests read it).
+    pub record_input: bool,
     wakers: WakerFactory,
 }
 
@@ -179,6 +181,7 @@ impl App {
             effects: Vec::new(),
             grids: HashMap::new(),
             clipboard,
+            record_input: false,
             wakers,
         }
     }
@@ -245,6 +248,7 @@ impl App {
             inject_shell_integration(&mut opts.spawn);
         }
         opts.terminal = self.terminal_config();
+        opts.record_input = self.record_input;
         opts
     }
 

@@ -103,6 +103,12 @@ pub fn ime(ws: &mut WinState, app: &mut App, ev: Ime) {
 pub fn focus(ws: &mut WinState, app: &mut App, focused: bool) {
     ws.focused = focused;
     ws.mods = winit::keyboard::ModifiersState::empty();
+    if !focused {
+        // Windows ends the composition when focus leaves (committing or cancelling it through its
+        // own IME events); the preedit drawn here goes with it.
+        ws.preedit = None;
+        ws.chords.clear();
+    }
     if let Some(pane) = focus_of(ws, app)
         && let Some(p) = app.panes.get(&pane)
         && p.session.lock().mode(Mode::FocusEvents)
