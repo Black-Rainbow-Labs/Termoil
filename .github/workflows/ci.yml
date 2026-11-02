@@ -87,9 +87,8 @@ jobs:
           path: _agent_output/vttest/
 
   esctest:
-    # C2 starts as a report; it becomes a gate when the ratchet file holds no surprises.
+    # C2: the ratchet file and the 1.0 gate (every test Ghostty 1.4 passes, corpus/esctest).
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - run: rustup show

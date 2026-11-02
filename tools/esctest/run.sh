@@ -40,4 +40,5 @@ rm -f "$LOG"
 
 BLESS=0
 if [ "${1:-}" = "--bless" ] || [ "${TERMINUS_BLESS:-0}" = "1" ]; then BLESS=1; fi
-python3 "$ROOT/tools/esctest/ratchet.py" "$LOG" "$ROOT/corpus/esctest/known-failures.txt" "$BLESS" "$OUT/summary.txt"
+python3 "$ROOT/tools/esctest/ratchet.py" "$LOG" "$ROOT/corpus/esctest/known-failures.txt" "$BLESS" "$OUT/summary.txt" \
+  "$ROOT/corpus/esctest/ghostty-1.4-pass-set.txt"

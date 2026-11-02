@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """Reads an esctest2 log and compares its failures with the ratchet file.
 
-usage: ratchet.py LOG KNOWN_FAILURES BLESS SUMMARY
+usage: ratchet.py LOG KNOWN_FAILURES BLESS SUMMARY [PASS_SET]
 
 The ratchet file has one test per line, `TestName  # reason`, sorted. A failure that is not in it
 fails the run, and so does a listed test that now passes, so the list only ever shrinks. With BLESS
 set to 1 the file is rewritten from this run instead, keeping the reasons already written.
+
+PASS_SET is the 1.0 gate (corpus/esctest/ghostty-1.4-pass-set.txt): every test Ghostty 1.4 passes.
+Any of them that this run did not pass fails the run, even when blessing.
 """
 
 import re
@@ -52,6 +55,22 @@ def read_ratchet(path):
     return known
 
 
+def read_pass_set(path):
+    """Returns the set of test names in a pass set file (comments and blank lines skipped)."""
+    with open(path, encoding="utf-8") as f:
+        return {line.strip() for line in f if line.strip() and not line.startswith("#")}
+
+
+def gate_lines(pass_set, passed):
+    """The summary lines for the 1.0 gate, and the tests of the pass set this run did not pass."""
+    missing = sorted(pass_set - passed)
+    lines = [f"1.0 gate: {len(pass_set) - len(missing)} of the {len(pass_set)} tests Ghostty 1.4 passes also pass here"]
+    if missing:
+        lines.append("Tests Ghostty 1.4 passes that this run did not pass:")
+        lines += [f"  {n}" for n in missing]
+    return lines, missing
+
+
 def write_ratchet(path, failed, known):
     """Writes the ratchet file for `failed`, keeping existing reasons."""
     header = "# esctest2 tests Terminus fails today, one per line with the reason. Maintained by\n# tools/esctest/run.sh: it may only shrink. Regenerate with TERMINUS_BLESS=1.\n"
@@ -64,6 +83,7 @@ def write_ratchet(path, failed, known):
 
 def main():
     log, ratchet, bless, summary = sys.argv[1], sys.argv[2], sys.argv[3] == "1", sys.argv[4]
+    pass_set = read_pass_set(sys.argv[5]) if len(sys.argv) > 5 else None
     passed, failed, skipped = parse_log(log)
     known = read_ratchet(ratchet)
     new_failures = sorted(failed - set(known))
@@ -76,6 +96,10 @@ def main():
     if now_passing:
         lines.append("Listed in the ratchet file but passing now (remove them):")
         lines += [f"  {n}" for n in now_passing]
+    gate_missing = []
+    if pass_set is not None:
+        more, gate_missing = gate_lines(pass_set, passed)
+        lines += more
     text = "\n".join(lines)
     print(text)
     with open(summary, "w", encoding="utf-8") as f:
@@ -83,8 +107,8 @@ def main():
     if bless:
         write_ratchet(ratchet, failed, known)
         print(f"wrote {ratchet}")
-        return 0
-    return 1 if new_failures or now_passing else 0
+        return 1 if gate_missing else 0
+    return 1 if new_failures or now_passing or gate_missing else 0
 
 
 if __name__ == "__main__":
