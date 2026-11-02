@@ -10,7 +10,7 @@
 use crate::cell::{Cell, Semantic, Wide, row_flags};
 use crate::page::Page;
 use crate::screen::{LastPrint, Screen};
-use crate::unicode::{GraphemeBreaker, char_width, cluster_width};
+use crate::unicode::{GraphemeBreaker, char_width, cluster_width_parts, packed_props, props};
 
 /// The kitty graphics Unicode placeholder.
 const KITTY_PLACEHOLDER: char = '\u{10EEEE}';
@@ -47,6 +47,7 @@ struct Seg {
     pending: bool,
     last: Option<Last>,
     ascii_refs: u32,
+    raw_end: usize,
 }
 
 /// Writes text from the start of `text` onto the cursor row of `s`. Returns the bytes consumed.
@@ -65,12 +66,13 @@ pub(super) fn write_segment(s: &mut Screen, text: &str, m: PrintModes) -> usize 
         pending: cursor.pending_wrap && m.autowrap,
         last: joinable.map(|lp| Last { col: lp.col, breaker: lp.state, ascii: lp.ascii }),
         ascii_refs: 0,
+        raw_end: 0,
     };
     // With autowrap off the cursor stays on the tail of a wide character written in the last
     // column. When the text joins that character (a zero width joiner, say) it must not be
     // cleared first, so this runs only when there is no cell to join; the general write clears a
     // tail it overwrites.
-    if seg.last.is_none() && seg.x > 0 && !seg.pending && page.cells(i)[seg.x as usize].wide() == Wide::SpacerTail {
+    if seg.last.is_none() && seg.x > 0 && !seg.pending && page.wide_at(i, seg.x as usize) == Wide::SpacerTail {
         page.clear_cells(i, seg.x as usize - 1, seg.x as usize + 1, Cell::BLANK, false);
     }
     let start_x = seg.x;
@@ -94,18 +96,7 @@ fn pen_on_page(page: &mut Page, cursor: &mut crate::screen::Cursor) -> Cell {
     let id = match cursor.style_cache {
         Some((u, id)) if u == uid && page.style_id_valid(id, &style) => id,
         _ => {
-            let recent = cursor
-                .recent_styles
-                .iter()
-                .flatten()
-                .find(|(u, s, id)| *u == uid && *s == style && page.style_id_valid(*id, &style))
-                .map(|e| e.2);
-            let id = recent.unwrap_or_else(|| page.intern_style(&style));
-            if recent.is_none() && id != 0 {
-                let slot = cursor.recent_next as usize % cursor.recent_styles.len();
-                cursor.recent_styles[slot] = Some((uid, style, id));
-                cursor.recent_next = cursor.recent_next.wrapping_add(1);
-            }
+            let id = page.intern_style(&style);
             cursor.style_cache = Some((uid, id));
             id
         }
@@ -136,7 +127,7 @@ fn write_loop(
             continue;
         }
         let c = text[pos..].chars().next().unwrap_or(' ');
-        match write_char(page, i, c, base, link, cols, m, seg) {
+        match write_char(page, i, c, base, link, side, cols, m, seg) {
             Step::Done => pos += c.len_utf8(),
             Step::Stop => break,
         }
@@ -156,7 +147,9 @@ fn ascii_run(
     let n = crate::scan::first_non_printable(&bytes[..bytes.len().min(room)]).max(1);
     let x = seg.x as usize;
     if side {
-        for col in x..x + n {
+        // Cells at or past the written mark are blank and hold nothing to release.
+        let upto = (x + n).min(page.row(i).written as usize);
+        for col in x..upto {
             page.release_at(i, col);
         }
     }
@@ -167,6 +160,13 @@ fn ascii_run(
         }
     }
     seg.ascii_refs += n as u32;
+    seg.raw_end = seg.raw_end.max(x + n);
+    page.mark_written(i, x + n);
+    // A wide character overwritten up to its head leaves its tail; clearing it now keeps a later
+    // write at that column from taking out the cell just written.
+    if x + n < page.cols() as usize && page.wide_at(i, x + n) == Wide::SpacerTail {
+        page.clear_cells(i, x + n, x + n + 1, Cell::BLANK, false);
+    }
     seg.last = Some(Last { col: (x + n - 1) as u16, breaker: None, ascii: bytes[n - 1] });
     advance(seg, n as u16, m);
     n
@@ -180,41 +180,116 @@ enum Step {
     Stop,
 }
 
-/// Writes or joins one character through the general rules.
+/// Writes or joins one character through the general rules. A plain character (see
+/// [`packed_props`]) skips the grapheme state machine: it never joins what came before unless
+/// that ended in a Prepend character, and it leaves the breaker in its plain state.
 fn write_char(
-    page: &mut Page, i: usize, c: char, base: Cell, link: Option<u32>, cols: u16, m: PrintModes, seg: &mut Seg,
+    page: &mut Page, i: usize, c: char, base: Cell, link: Option<u32>, side: bool, cols: u16, m: PrintModes,
+    seg: &mut Seg,
 ) -> Step {
     if ('\u{80}'..='\u{9f}').contains(&c) {
         return Step::Done;
     }
-    if let Some(l) = seg.last {
-        let mut br = l.breaker();
-        let joins = if m.cluster { !br.should_break(c) } else { char_width(c) == 0 };
-        if joins {
-            join(page, i, l, c, br, cols, m, seg);
-            return Step::Done;
+    let packed = packed_props(c);
+    let after_prepend = seg.last.is_some_and(|l| l.breaker.is_some_and(|b| b.joins_ascii()));
+    let general = packed & !3 != 0 || packed & 3 == 0 || after_prepend || c == KITTY_PLACEHOLDER;
+    let (width, breaker) = if general {
+        let p = props(c);
+        if let Some(l) = seg.last {
+            let mut br = l.breaker();
+            let joins = if m.cluster { !br.should_break_props(&p) } else { char_width(c) == 0 };
+            if joins {
+                join(page, i, l, c, br, cols, m, seg);
+                return Step::Done;
+            }
         }
-    }
+        (
+            if m.cluster { p.width.max(1) } else { char_width(c).max(1) }.clamp(1, 2) as u16,
+            GraphemeBreaker::from_props(p),
+        )
+    } else {
+        (packed & 3, GraphemeBreaker::PLAIN)
+    };
     if seg.pending {
         return Step::Stop;
     }
-    let width = if m.cluster { cluster_width(&[c]) } else { char_width(c).max(1) }.clamp(1, 2) as u16;
     if width == 2 && seg.x >= m.right {
-        if !m.autowrap || m.right == 0 {
-            return Step::Done;
-        }
-        if seg.x + 1 == cols {
-            let mut head = Cell::BLANK;
-            head.set_wide(Wide::SpacerHead);
-            page.write_cell(i, seg.x as usize, head);
-        }
-        seg.pending = true;
-        return Step::Stop;
+        return no_room_for_wide(page, i, cols, m, seg);
     }
-    put_cell(page, i, seg.x as usize, c, width, base, link);
-    seg.last = Some(Last { col: seg.x, breaker: Some(GraphemeBreaker::new(c)), ascii: 0 });
+    let simple = link.is_none() && c != KITTY_PLACEHOLDER;
+    match (simple, width) {
+        (true, 2) => put_wide(page, i, seg.x as usize, c, base, side, seg),
+        (true, _) => put_narrow(page, i, seg.x as usize, c, base, side, seg),
+        _ => put_cell(page, i, seg.x as usize, c, width, base, link),
+    }
+    seg.last = Some(Last { col: seg.x, breaker: Some(breaker), ascii: 0 });
     advance(seg, width, m);
     Step::Done
+}
+
+/// Handles a wide character at the last column: it is dropped when the row cannot wrap, and
+/// otherwise a spacer head is left in the last column and the segment stops so the caller wraps.
+fn no_room_for_wide(page: &mut Page, i: usize, cols: u16, m: PrintModes, seg: &mut Seg) -> Step {
+    if !m.autowrap || m.right == 0 {
+        return Step::Done;
+    }
+    if seg.x + 1 == cols {
+        let mut head = Cell::BLANK;
+        head.set_wide(Wide::SpacerHead);
+        page.write_cell(i, seg.x as usize, head);
+    }
+    seg.pending = true;
+    Step::Stop
+}
+
+/// Releases what the cell at `col` holds before a character is written over it. A cell at or
+/// past both the row's written mark and the segment's raw end is blank and holds nothing. A cell
+/// this segment already wrote raw has its style reference still pending, so the pending
+/// references are added first, which lets the release take one back.
+fn release_old(page: &mut Page, i: usize, col: usize, base: Cell, side: bool, seg: &mut Seg) {
+    if col < seg.raw_end {
+        page.add_style_refs(base.style_id(), seg.ascii_refs);
+        seg.ascii_refs = 0;
+        page.release_at(i, col);
+    } else if side && col < page.row(i).written as usize {
+        page.release_at(i, col);
+    }
+}
+
+/// Writes one narrow character with no hyperlink: the style reference is counted in bulk at the
+/// end of the row like an ASCII run.
+fn put_narrow(page: &mut Page, i: usize, col: usize, c: char, base: Cell, side: bool, seg: &mut Seg) {
+    page.clear_split_wide(i, col, col);
+    page.clear_tail_of_overwritten_head(i, col);
+    release_old(page, i, col, base, side, seg);
+    let mut cell = base;
+    cell.set_char(c);
+    page.put_raw(i, col, cell);
+    seg.ascii_refs += 1;
+    seg.raw_end = seg.raw_end.max(col + 1);
+    page.mark_written(i, col + 1);
+}
+
+/// Writes one wide character with no hyperlink: a head and a spacer tail raw, the two style
+/// references added at once (a later join can narrow the character and release the tail, so the
+/// references are not left for the end of the row).
+fn put_wide(page: &mut Page, i: usize, col: usize, c: char, base: Cell, side: bool, seg: &mut Seg) {
+    page.clear_split_wide(i, col, col);
+    if page.wide_at(i, col + 1) == Wide::Wide {
+        page.clear_split_wide(i, col + 2, col + 2);
+    }
+    release_old(page, i, col, base, side, seg);
+    release_old(page, i, col + 1, base, side, seg);
+    let mut head = base;
+    head.set_char(c);
+    head.set_wide(Wide::Wide);
+    let mut tail = base;
+    tail.set_wide(Wide::SpacerTail);
+    page.put_raw(i, col, head);
+    page.put_raw(i, col + 1, tail);
+    page.add_style_refs(base.style_id(), 2);
+    seg.raw_end = seg.raw_end.max(col + 2);
+    page.mark_written(i, col + 2);
 }
 
 /// Writes one cell (and its tail when wide) through the releasing write.
@@ -222,6 +297,9 @@ fn put_cell(page: &mut Page, i: usize, col: usize, c: char, width: u16, base: Ce
     // Writing over the tail of a wide character (with autowrap off the last column is written
     // again and again) clears that character first.
     page.clear_split_wide(i, col, col);
+    if width == 1 {
+        page.clear_tail_of_overwritten_head(i, col);
+    }
     let mut cell = base;
     cell.set_char(c);
     if width == 2 {
@@ -269,9 +347,7 @@ fn join(page: &mut Page, i: usize, l: Last, c: char, br: GraphemeBreaker, cols: 
         return;
     }
     let cell = page.cells(i)[col];
-    let mut chars = vec![cell.char().unwrap_or(' ')];
-    chars.extend_from_slice(page.grapheme(page.cell_index(i, col)));
-    let width = cluster_width(&chars);
+    let width = cluster_width_parts(cell.char().unwrap_or(' '), page.grapheme(page.cell_index(i, col)));
     if width == 2 && cell.wide() == Wide::Narrow && !seg.pending && l.col < m.right && l.col + 1 < cols {
         widen(page, i, col, cell);
         seg.x = l.col + 1;
@@ -302,18 +378,20 @@ fn widen(page: &mut Page, i: usize, col: usize, cell: Cell) {
 /// Adds the bulk style references and row flags, and clears a tail orphaned at the end.
 fn finish_row(page: &mut Page, i: usize, base: Cell, start_x: u16, seg: &Seg, cols: u16) {
     page.add_style_refs(base.style_id(), seg.ascii_refs);
+    // Looked at before the written mark moves, so a cell past the old mark (blank by the mark's
+    // meaning) is not read from memory that may be cold.
+    let end = if seg.pending { seg.x as usize + 1 } else { seg.x as usize };
+    let orphan = end > start_x as usize
+        && end < cols as usize
+        && page.wide_at(i, end) == Wide::SpacerTail
+        && page.cells(i)[end - 1].wide() != Wide::Wide;
     page.mark_written(i, seg.x as usize + 1);
     let flags = &mut page.row_mut(i).flags;
     *flags |= row_flags::DIRTY;
     if base.style_id() != 0 {
         *flags |= row_flags::STYLED;
     }
-    let end = if seg.pending { seg.x as usize + 1 } else { seg.x as usize };
-    if end > start_x as usize
-        && end < cols as usize
-        && page.cells(i)[end].wide() == Wide::SpacerTail
-        && page.cells(i)[end - 1].wide() != Wide::Wide
-    {
+    if orphan {
         page.clear_cells(i, end, end + 1, Cell::BLANK, false);
     }
 }

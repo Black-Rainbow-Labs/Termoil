@@ -237,11 +237,25 @@ fn actual_line(run: &mut Run, word: &str, rest: &str) -> Option<String> {
 /// Normalises an expectation line for comparison. The package version and its DA2 number are
 /// written `{version}` and `{vnum}` in scripts so a release bump does not change expectations.
 fn norm(s: &str) -> String {
+    placeholders(s).split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// A line with the package version written `{version}` and its DA2 number `{vnum}`. Bless writes
+/// lines through it, so a blessed script keeps passing after a version bump.
+fn placeholders(s: &str) -> String {
     let v = env!("CARGO_PKG_VERSION");
     let mut parts = v.split('.').map(|p| p.parse::<u32>().unwrap_or(0));
     let num = parts.next().unwrap_or(0) * 10000 + parts.next().unwrap_or(0) * 100 + parts.next().unwrap_or(0);
-    let s = s.replace(v, "{version}").replace(&format!(">1;{num};0c"), ">1;{vnum};0c");
-    s.split_whitespace().collect::<Vec<_>>().join(" ")
+    s.replace(v, "{version}").replace(&format!(">1;{num};0c"), ">1;{vnum};0c")
+}
+
+#[test]
+fn bless_writes_the_version_as_a_placeholder() {
+    let v = env!("CARGO_PKG_VERSION");
+    assert_eq!(
+        placeholders(&format!("REPLY \"\\eP>|Terminus({v})\\e\\\\\"")),
+        "REPLY \"\\eP>|Terminus({version})\\e\\\\\""
+    );
 }
 
 /// Runs one script; returns the rewritten text when blessing.
@@ -305,7 +319,7 @@ fn run_script(path: &Path, text: &str, feed: Feed, bless: bool) -> String {
                         actual
                     );
                 }
-                out.push(actual);
+                out.push(placeholders(&actual));
             }
         }
     }

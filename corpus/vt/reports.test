@@ -20,9 +20,9 @@ REPLY "\e[?3;7;1R"
 PUSH "\e[?15n\e[?25n\e[?26n"
 REPLY "\e[?13n\e[?21n\e[?27;1;0;0n"
 PUSH "\e[>q"
-REPLY "\eP>|Terminus(0.1.0)\e\\"
+REPLY "\eP>|Terminus({version})\e\\"
 PUSH "\e[>0q"
-REPLY "\eP>|Terminus(0.1.0)\e\\"
+REPLY "\eP>|Terminus({version})\e\\"
 
 # CPR after a pending wrap reports the last column.
 SIZE 5 3

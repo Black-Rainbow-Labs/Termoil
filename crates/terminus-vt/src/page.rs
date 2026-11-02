@@ -34,6 +34,9 @@ pub fn standard_rows(cols: u16) -> u16 {
     (STANDARD_CELLS / cols.max(1) as usize).clamp(1, u16::MAX as usize) as u16
 }
 
+/// How many rows ahead of the one taken into use `push_row` prefetches the old cells of.
+pub const PREFETCH_ROWS: usize = 4;
+
 /// Reference count value that marks a freed style table entry.
 const FREE: u32 = u32::MAX;
 
@@ -146,8 +149,8 @@ impl Page {
         let start = row.offset as usize;
         self.cells[start..start + row.written as usize].fill(Cell::BLANK);
         self.rows[i] = Row { offset: row.offset, flags: 0, written: 0 };
-        if let Some(next) = self.rows.get(i + 1) {
-            prefetch_cells(&self.cells, next.offset as usize, self.cols as usize);
+        if let Some(next) = self.rows.get(i + PREFETCH_ROWS) {
+            prefetch_cells(&self.cells, next.offset as usize, next.written as usize);
         }
         Some(i)
     }
@@ -175,13 +178,23 @@ impl Page {
 
     /// Clears any wide character of row `i` that columns `from..to` would cut in half: one whose
     /// head is left of `from` with its tail inside, or whose head is inside with its tail at `to`.
+    #[inline]
     pub fn clear_split_wide(&mut self, i: usize, from: usize, to: usize) {
         let cols = self.cols as usize;
-        if from > 0 && from < cols && self.cells(i)[from].wide() == Wide::SpacerTail {
+        if from > 0 && from < cols && self.wide_at(i, from) == Wide::SpacerTail {
             self.clear_cells(i, from - 1, from + 1, Cell::BLANK, false);
         }
-        if to > 0 && to < cols && self.cells(i)[to].wide() == Wide::SpacerTail {
+        if to > 0 && to < cols && self.wide_at(i, to) == Wide::SpacerTail {
             self.clear_cells(i, to - 1, to + 1, Cell::BLANK, false);
+        }
+    }
+
+    /// Clears the spacer tail of a wide character whose head at column `col` of row `i` is about
+    /// to be overwritten by a narrow character, so the tail is not left without a head.
+    #[inline]
+    pub fn clear_tail_of_overwritten_head(&mut self, i: usize, col: usize) {
+        if self.wide_at(i, col) == Wide::Wide && col + 1 < self.cols as usize {
+            self.clear_cells(i, col + 1, col + 2, Cell::BLANK, false);
         }
     }
 
@@ -209,6 +222,17 @@ impl Page {
         self.styles.free.clear();
         self.oversized = false;
         self.uid = next_uid();
+    }
+
+    /// The width property of the cell at row `i`, column `col`. A column at or past the row's
+    /// written mark is blank by definition, so it is answered without reading the cell, which in a
+    /// recycled page may be cold in memory.
+    #[inline]
+    pub fn wide_at(&self, i: usize, col: usize) -> Wide {
+        if col >= self.rows[i].written as usize {
+            return Wide::Narrow;
+        }
+        self.cells(i)[col].wide()
     }
 
     /// The header of row `i`.
@@ -256,9 +280,11 @@ impl Page {
         if style.is_default() {
             return 0;
         }
-        if let Some(&id) = self.styles.map.get(style) {
-            return id;
-        }
+        // One hash serves both the lookup and the insert of a new style.
+        let slot = match self.styles.map.entry(*style) {
+            std::collections::hash_map::Entry::Occupied(e) => return *e.get(),
+            std::collections::hash_map::Entry::Vacant(v) => v,
+        };
         let id = match self.styles.free.pop() {
             Some(id) => {
                 self.styles.entries[id as usize] = (*style, 0);
@@ -272,7 +298,7 @@ impl Page {
                 (self.styles.entries.len() - 1) as u16
             }
         };
-        self.styles.map.insert(*style, id);
+        slot.insert(id);
         if self.styles.live() > STANDARD_STYLES {
             self.oversized = true;
         }
@@ -410,8 +436,11 @@ impl Page {
     /// cell's style. The new cell must not carry the cluster or hyperlink flags.
     pub fn write_cell(&mut self, i: usize, col: usize, cell: Cell) {
         let index = self.cell_index(i, col);
-        let old = self.cells[index as usize];
-        self.release_cell(index, old);
+        // A cell at or past the written mark is blank and holds nothing to release.
+        if col < self.rows[i].written as usize {
+            let old = self.cells[index as usize];
+            self.release_cell(index, old);
+        }
         self.add_style_refs(cell.style_id(), 1);
         self.cells[index as usize] = cell;
         let row = &mut self.rows[i];
@@ -768,7 +797,7 @@ impl Page {
             let refs = r.u32()?;
             self.styles.entries.push((style, refs));
             if id > 0 && refs > 0 && refs != FREE {
-                self.styles.map.insert(style, id as u16);
+                self.styles.map.entry(style).or_insert(id as u16);
             } else if id > 0 {
                 self.styles.free.push(id as u16);
             }
@@ -791,19 +820,21 @@ impl Page {
     }
 }
 
-/// Asks the CPU to start loading the first cells of a row the terminal is about to write, so
-/// the next line feed does not wait for memory. Scrollback pages are recycled and cold.
+/// Asks the CPU to start loading `count` cells from `start`, the old content of a row the terminal
+/// will write a few lines from now, into the second level cache (the hint that does not occupy a
+/// first level fill buffer, which stalled the core when many were issued). Scrollback pages are
+/// recycled and cold, so the loads are started `PREFETCH_ROWS` lines early.
 #[inline]
-fn prefetch_cells(cells: &[Cell], start: usize, cols: usize) {
+fn prefetch_cells(cells: &[Cell], start: usize, count: usize) {
     #[cfg(all(target_arch = "x86_64", not(miri)))]
     {
-        let end = (start + cols.min(32)).min(cells.len());
+        let end = (start + count).min(cells.len());
         let mut k = start;
         while k < end {
             // SAFETY: `k < cells.len()`, so the pointer is inside the slice; a prefetch never
             // faults and does not change memory.
             unsafe {
-                core::arch::x86_64::_mm_prefetch::<{ core::arch::x86_64::_MM_HINT_T0 }>(
+                core::arch::x86_64::_mm_prefetch::<{ core::arch::x86_64::_MM_HINT_T1 }>(
                     cells.as_ptr().add(k) as *const i8
                 )
             };
@@ -812,7 +843,7 @@ fn prefetch_cells(cells: &[Cell], start: usize, cols: usize) {
     }
     #[cfg(not(all(target_arch = "x86_64", not(miri))))]
     {
-        let _ = (cells, start, cols);
+        let _ = (cells, start, count);
     }
 }
 

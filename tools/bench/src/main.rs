@@ -53,6 +53,10 @@ static GLOBAL: Counting = Counting;
 /// Bytes the parser thread applies per terminal lock in the app; the bench feeds the same slices.
 const SLICE: usize = 64 * 1024;
 
+/// The P1 gate from `docs/TEST-SUITE.md` section 13 (restated in task-2459): the `mixed` stream
+/// through `Terminal` on one core.
+const P1_GATE_MB_PER_S: f64 = 250.0;
+
 /// One measured result.
 struct Sample {
     scenario: String,
@@ -257,8 +261,9 @@ fn main() {
             let rows: Vec<serde_json::Value> = results.iter().map(|s| serde_json::json!({"machine": machine(), "scenario": s.scenario, "bytes": s.bytes, "seconds": s.seconds, "mb_per_s": s.bytes as f64 / s.seconds / 1e6})).collect();
             record("p1.jsonl", &rows);
             let mixed =
-                results.iter().find(|s| s.scenario == "mixed").map(|s| s.bytes as f64 / s.seconds / 1e9).unwrap_or(0.0);
-            println!("P1 gate (mixed >= 1.0 GB/s): {mixed:.2} GB/s {}", if mixed >= 1.0 { "PASS" } else { "FAIL" });
+                results.iter().find(|s| s.scenario == "mixed").map(|s| s.bytes as f64 / s.seconds / 1e6).unwrap_or(0.0);
+            let gate = P1_GATE_MB_PER_S;
+            println!("P1 gate (mixed >= {gate} MB/s): {mixed:.0} MB/s {}", if mixed >= gate { "PASS" } else { "FAIL" });
         }
     }
 }

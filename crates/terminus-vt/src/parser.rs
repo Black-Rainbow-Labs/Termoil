@@ -689,6 +689,7 @@ impl Parser {
     }
 
     /// Accumulates a digit, `;` or `:` into the parameter list.
+    #[inline(always)]
     fn param_byte(&mut self, byte: u8) {
         self.has_params = true;
         match byte {
@@ -713,6 +714,7 @@ impl Parser {
     }
 
     /// Writes the parameter being read into the current group slot.
+    #[inline(always)]
     fn store_param(&mut self) {
         let group = self.seq.params.count as usize;
         if group >= MAX_PARAMS {
@@ -731,6 +733,7 @@ impl Parser {
     }
 
     /// Ends the current group after a `;`.
+    #[inline(always)]
     fn close_group(&mut self) {
         if (self.seq.params.count as usize) < MAX_PARAMS {
             self.seq.params.count += 1;

@@ -11,6 +11,9 @@ pub mod look;
 pub mod overlay;
 pub mod paint;
 pub mod quick;
+mod show;
+mod showtrace;
+mod warm;
 pub mod window;
 
 use std::collections::HashMap;
@@ -48,10 +51,43 @@ static PHASES: std::sync::Mutex<Vec<(&'static str, f64)>> = std::sync::Mutex::ne
 /// Records that a startup phase ended.
 pub fn phase(name: &'static str) {
     if std::env::var("TERMINUS_TRACE_STARTUP").is_ok() {
-        eprintln!("{:8.2} {name}", STARTED.get().map(|s| s.elapsed().as_secs_f64() * 1000.0).unwrap_or(0.0));
+        eprintln!("{:8.2} {name}", since_start());
     }
     if let (Some(s), Ok(mut p)) = (STARTED.get(), PHASES.lock()) {
         p.push((name, s.elapsed().as_secs_f64() * 1000.0));
+    }
+}
+
+/// Milliseconds since the process started.
+pub(crate) fn since_start() -> f64 {
+    STARTED.get().map(|s| s.elapsed().as_secs_f64() * 1000.0).unwrap_or(0.0)
+}
+
+/// Waits until the compositor has put the frames presented so far on the screen (`DwmFlush` on
+/// Windows). Elsewhere it returns at once and the present is the end point.
+fn wait_composited() {
+    #[cfg(windows)]
+    // SAFETY: DwmFlush takes no arguments and only blocks until the next composition.
+    unsafe {
+        let _ = windows::Win32::Graphics::Dwm::DwmFlush();
+    }
+}
+
+/// The name of a window event, for the startup phases.
+fn event_name(ev: &WindowEvent) -> &'static str {
+    match ev {
+        WindowEvent::Resized(_) => "ev_resized",
+        WindowEvent::Moved(_) => "ev_moved",
+        WindowEvent::Focused(_) => "ev_focused",
+        WindowEvent::RedrawRequested => "ev_redraw",
+        WindowEvent::ModifiersChanged(_) => "ev_modifiers",
+        WindowEvent::Ime(_) => "ev_ime",
+        WindowEvent::ThemeChanged(_) => "ev_theme",
+        WindowEvent::ScaleFactorChanged { .. } => "ev_scale",
+        WindowEvent::Occluded(_) => "ev_occluded",
+        WindowEvent::CursorEntered { .. } => "ev_cursor_entered",
+        WindowEvent::CursorMoved { .. } => "ev_cursor_moved",
+        _ => "ev_other",
     }
 }
 
@@ -80,6 +116,8 @@ pub struct Gui {
     os_dark: bool,
     _watcher: Option<Watcher>,
     probe_done: bool,
+    /// When the first frame with the shell's output was painted, for the probe.
+    painted_ms: Option<f64>,
     /// The latency benchmark, when running one.
     pub bench: Option<bench::LatencyBench>,
     /// The quick terminal's window, once created.
@@ -109,6 +147,7 @@ pub fn run(
 ) -> Result<(), String> {
     let event_loop = EventLoop::<UserEvent>::with_user_event().build().map_err(|e| format!("no event loop: {e}"))?;
     phase("event_loop");
+    warm::start(&config);
     match Gui::new(&event_loop, config, config_path, socket, cwd, command)? {
         Some(mut gui) => {
             gui.bench = bench;
@@ -154,6 +193,7 @@ impl Gui {
             os_dark: true,
             _watcher: watcher,
             probe_done: false,
+            painted_ms: None,
             bench: None,
             quick: None,
             pending_quick: None,
@@ -317,6 +357,9 @@ impl Gui {
                     eprintln!("terminus: draw failed: {e}");
                 }
                 self.startup_probe(el, id);
+                if let Some(ws) = self.windows.get_mut(&id) {
+                    ws.finish_show();
+                }
             }
             Err(e) => {
                 eprintln!("terminus: {e}");
@@ -509,8 +552,9 @@ impl Gui {
         self.bench.as_ref().and_then(|b| b.next_at())
     }
 
-    /// Writes the startup probe (P4) after the first frame that shows the shell's output, when
-    /// `TERMINUS_STARTUP_PROBE` names a file.
+    /// Writes the startup probe (P4) when `TERMINUS_STARTUP_PROBE` names a file. `painted_ms` is
+    /// the first frame with the shell's output; `visible_ms`, the gate, is when the compositor has
+    /// shown the first frame with that output presented after the window became visible.
     fn startup_probe(&mut self, el: &ActiveEventLoop, id: WinId) {
         if self.probe_done {
             return;
@@ -520,23 +564,38 @@ impl Gui {
             return;
         };
         let Some(ws) = self.windows.get(&id) else { return };
-        let shown = ws
+        let output = ws
             .views
             .values()
             .any(|v| v.state.lines.iter().any(|l| l.cells.iter().any(|c| c.text.first().is_some_and(|ch| ch != ' '))));
-        if !shown {
+        if !output {
+            return;
+        }
+        let painted = *self.painted_ms.get_or_insert_with(since_start);
+        if !ws.presented_shown {
             return;
         }
         self.probe_done = true;
-        let ms = STARTED.get().map(|s| s.elapsed().as_secs_f64() * 1000.0).unwrap_or(0.0);
+        let renderer = ws.painter.name();
+        wait_composited();
+        let visible = since_start();
+        phase("visible");
+        // Activation is timed too, so the work moved after the visible frame stays in view.
+        if let Some(ws) = self.windows.get_mut(&id) {
+            showtrace::begin();
+            ws.finish_show();
+            showtrace::end();
+        }
+        let active = since_start();
         let phases: Vec<String> =
-            PHASES.lock().map(|p| p.iter().map(|(n, t)| format!("\"{n}\":{t:.2}")).collect()).unwrap_or_default();
+            PHASES.lock().map(|p| p.iter().map(|(n, t)| format!("[\"{n}\",{t:.2}]")).collect()).unwrap_or_default();
         let _ = std::fs::write(
             &path,
             format!(
-                "{{\"first_frame_ms\":{ms:.2},\"renderer\":\"{}\",\"phases\":{{{}}}}}\n",
-                ws.painter.name(),
-                phases.join(",")
+                "{{\"visible_ms\":{visible:.2},\"painted_ms\":{painted:.2},\"active_ms\":{active:.2},\"renderer\":\"{}\",\"phases\":[{}],\"show_messages\":{}}}\n",
+                renderer,
+                phases.join(","),
+                showtrace::json()
             ),
         );
         if std::env::var("TERMINUS_STARTUP_PROBE_EXIT").is_ok_and(|v| v == "1") {
@@ -616,6 +675,9 @@ impl ApplicationHandler<UserEvent> for Gui {
     /// Window events: input, resize, redraw, close.
     fn window_event(&mut self, el: &ActiveEventLoop, wid: WindowId, ev: WindowEvent) {
         let Some(&id) = self.by_winit.get(&wid) else { return };
+        if !self.probe_done {
+            phase(event_name(&ev));
+        }
         let Some(ws) = self.windows.get_mut(&id) else { return };
         let app = &mut self.app;
         match ev {
@@ -649,6 +711,9 @@ impl ApplicationHandler<UserEvent> for Gui {
                     bench_after_paint(b, ws, app);
                 }
                 self.startup_probe(el, id);
+                if let Some(ws) = self.windows.get_mut(&id) {
+                    ws.finish_show();
+                }
             }
             WindowEvent::ModifiersChanged(m) => ws.mods = m.state(),
             WindowEvent::KeyboardInput { event, is_synthetic: false, .. } => {

@@ -114,6 +114,12 @@ pub struct WinState {
     pub colors: Colors,
     /// The window has been shown (after its first frame).
     pub shown: bool,
+    /// A frame has been presented since the window was shown: the first frame a person can see.
+    pub presented_shown: bool,
+    /// The window was shown without being activated and is activated by `finish_show`.
+    pub pending_activation: bool,
+    /// IME has been allowed for the window.
+    pub ime_allowed: bool,
     /// When to draw again for synchronized output or a timer.
     pub wake_at: Option<Instant>,
     /// When the blinking cursor last changed between shown and hidden, and whether it shows.
@@ -147,23 +153,25 @@ impl WinState {
             .with_theme(Some(window_theme(&look::colors(config, os_dark))));
         let attrs = with_app_icon(attrs);
         let attrs = if quick.is_some() { crate::gui::quick::attributes(attrs) } else { attrs };
+        crate::gui::phase("window_attributes");
         let window = Arc::new(el.create_window(attrs).map_err(|e| format!("could not create a window: {e}"))?);
         crate::gui::phase("window_created");
         let scale = window.scale_factor();
         let points = config.font.size as f32;
-        let grid = look::font_grid(config, points, scale)?;
+        let (grid, warm_cpu) = match crate::gui::warm::take(scale) {
+            Some((grid, cpu)) => (grid, Some(cpu)),
+            None => (look::font_grid(config, points, scale)?, None),
+        };
         crate::gui::phase("fonts_loaded");
         let opts = look::build_options(config, scale);
-        let m = *grid.metrics();
-        let w = config.window.columns * m.width + 2 * opts.padding.0;
-        let h = config.window.rows * m.height + 2 * opts.padding.1;
+        let (w, h) = look::window_size(config, grid.metrics(), &opts);
         match quick {
             Some(edge) => crate::gui::quick::place(&window, edge),
             None => {
                 let _ = window.request_inner_size(PhysicalSize::new(w, h));
             }
         }
-        let (painter, upgrade) = Painter::new(&window, config.window.renderer)?;
+        let (painter, upgrade) = Painter::new(&window, config.window.renderer, warm_cpu)?;
         crate::gui::phase("renderer_ready");
         let colors = look::colors(config, os_dark);
         Ok(WinState {
@@ -189,6 +197,9 @@ impl WinState {
             opts,
             colors,
             shown: false,
+            presented_shown: false,
+            pending_activation: false,
+            ime_allowed: false,
             wake_at: None,
             upgrade,
             overlay: None,
@@ -339,21 +350,44 @@ impl WinState {
                 layers.push(Layer { x, y, frame: f });
             }
         }
-        self.painter.paint(Rgba::rgb(bg.r, bg.g, bg.b), &layers, &self.grid)?;
         if !self.shown {
+            crate::gui::phase("frame_built");
+        }
+        self.painter.paint(Rgba::rgb(bg.r, bg.g, bg.b), &layers, &self.grid)?;
+        if self.shown {
+            self.presented_shown = true;
+        } else {
             crate::gui::phase("first_paint");
         }
         self.place_ime(focus);
         if !self.shown {
-            self.window.set_visible(true);
+            crate::gui::showtrace::begin();
+            self.pending_activation = crate::gui::show::first(&self.window);
+            crate::gui::showtrace::end();
             self.shown = true;
             crate::gui::phase("shown");
-            // Allowing IME starts the text services on this thread, which costs tens of
-            // milliseconds; it is done after the first frame is on screen.
+        }
+        Ok(())
+    }
+
+    /// Finishes showing the window once a frame has been presented to it while visible: activates
+    /// it when the show left that for later, then allows IME. Both start the text services on this
+    /// thread, which costs tens of milliseconds, so neither runs before that frame. Calling it
+    /// again does nothing.
+    pub fn finish_show(&mut self) {
+        if !self.shown || (self.pending_activation && !self.presented_shown) {
+            return;
+        }
+        if self.pending_activation {
+            self.pending_activation = false;
+            crate::gui::show::activate(&self.window);
+            crate::gui::phase("activated");
+        }
+        if !self.ime_allowed {
+            self.ime_allowed = true;
             self.window.set_ime_allowed(true);
             crate::gui::phase("ime_allowed");
         }
-        Ok(())
     }
 
     /// Switches to the GPU renderer once the background thread has built it. A failure keeps the

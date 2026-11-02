@@ -90,8 +90,8 @@ Every later window shares the same device, so only the first pays for it. Before
 **Gate: under 100 ms warm on Windows does not pass as written.** Terminus paints a frame that shows the prompt at about
 84 ms; Windows then takes about 60 ms to show the window, and that time is spent inside `ShowWindow`. Creating the window
 visible moves the same cost into window creation. Turning off the compositor's open animation made no measurable
-difference and was not kept. Allowing IME is moved after the window is shown. Whether the P4 interval ends at the first
-presented frame or when the window is visible is a question the TDD does not answer; it is filed as task-2462 (Fable).
+difference and was not kept. Allowing IME is moved after the window is shown. P4 ends at the first frame presented to a
+visible window, and the work that brought it under 100 ms is in `docs/decisions/startup.md`.
 
 ## Text
 

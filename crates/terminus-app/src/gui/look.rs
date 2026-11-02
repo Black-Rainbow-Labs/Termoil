@@ -79,6 +79,14 @@ pub fn build_options(config: &Config, scale: f64) -> BuildOptions {
     }
 }
 
+/// The inner size in physical pixels of a new window: the configured columns and rows of cells
+/// plus the padding on both sides.
+pub fn window_size(config: &Config, m: &terminus_font::CellMetrics, opts: &BuildOptions) -> (u32, u32) {
+    let w = config.window.columns * m.width + 2 * opts.padding.0;
+    let h = config.window.rows * m.height + 2 * opts.padding.1;
+    (w, h)
+}
+
 /// A colour between `a` and `b`: `t` of the way from `a`.
 pub fn mix(a: Rgb, b: Rgb, t: f32) -> Rgb {
     let m = |x: u8, y: u8| (x as f32 + (y as f32 - x as f32) * t).round() as u8;

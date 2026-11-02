@@ -86,6 +86,7 @@ fn unpack(packed: u16) -> CharProps {
 }
 
 /// Looks up the packed value of a code point through the three stage table.
+#[inline]
 fn lookup_packed(c: char) -> u16 {
     let cp = c as usize;
     if cp < 0x80 {
@@ -94,6 +95,16 @@ fn lookup_packed(c: char) -> u16 {
     let block = tables::STAGE1[cp >> tables::BLOCK_SHIFT] as usize;
     let index = tables::STAGE2[(block << tables::BLOCK_SHIFT) | (cp & ((1 << tables::BLOCK_SHIFT) - 1))];
     tables::VALUES[index as usize]
+}
+
+/// The packed property word of a code point (width in bits 0 and 1, then the grapheme break, the
+/// conjunct break and the emoji flags). A word with nothing above bit 1 set is a plain character:
+/// it has no grapheme break class other than Other, so it never joins the cluster before it
+/// (unless that ended in a Prepend character) and always leaves the breaker in
+/// [`GraphemeBreaker::PLAIN`].
+#[inline]
+pub fn packed_props(c: char) -> u16 {
+    lookup_packed(c)
 }
 
 /// Returns all properties of a code point with a constant number of table reads.
@@ -136,6 +147,15 @@ pub struct GraphemeBreaker {
 }
 
 impl GraphemeBreaker {
+    /// The state after a plain character (see [`packed_props`]): the previous class is Other and
+    /// no emoji, conjunct or regional indicator sequence is open.
+    pub const PLAIN: GraphemeBreaker = GraphemeBreaker {
+        prev: GraphemeBreak::Other,
+        regional_odd: false,
+        emoji: EmojiState::None,
+        conjunct: ConjunctState::None,
+    };
+
     /// Starts a cluster whose first code point is `first`.
     pub fn new(first: char) -> Self {
         let mut breaker = GraphemeBreaker {
@@ -145,6 +165,18 @@ impl GraphemeBreaker {
             conjunct: ConjunctState::None,
         };
         breaker.advance(props(first), true);
+        breaker
+    }
+
+    /// Starts a cluster from properties the caller already looked up.
+    pub fn from_props(first: CharProps) -> Self {
+        let mut breaker = GraphemeBreaker {
+            prev: GraphemeBreak::Control,
+            regional_odd: false,
+            emoji: EmojiState::None,
+            conjunct: ConjunctState::None,
+        };
+        breaker.advance(first, true);
         breaker
     }
 
@@ -160,6 +192,14 @@ impl GraphemeBreaker {
         let p = props(next);
         let split = self.boundary_before(&p);
         self.advance(p, split);
+        split
+    }
+
+    /// [`GraphemeBreaker::should_break`] for a code point whose properties the caller already
+    /// looked up, so a code point that is also measured is looked up once.
+    pub fn should_break_props(&mut self, p: &CharProps) -> bool {
+        let split = self.boundary_before(p);
+        self.advance(*p, split);
         split
     }
 
@@ -233,11 +273,16 @@ fn is_keycap_base(c: char) -> bool {
 /// Width in cells (1 or 2) of a whole grapheme cluster under mode 2027, following UTS 51. A zero width first
 /// code point still takes one cell. An empty cluster has width 0.
 pub fn cluster_width(cluster: &[char]) -> u8 {
-    let Some(&first) = cluster.first() else {
-        return 0;
-    };
+    match cluster.split_first() {
+        Some((&first, rest)) => cluster_width_parts(first, rest),
+        None => 0,
+    }
+}
+
+/// [`cluster_width`] for a cluster given as its first code point and the code points after it, so
+/// a caller that keeps the tail apart from the first code point does not have to join them.
+pub fn cluster_width_parts(first: char, rest: &[char]) -> u8 {
     let p = props(first);
-    let rest = &cluster[1..];
     if rest.is_empty() {
         return p.width.max(1);
     }

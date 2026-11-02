@@ -67,7 +67,7 @@ pub mod attr {
 }
 
 /// Everything about how a cell's text is drawn, apart from the character itself.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
+#[derive(Clone, Copy, Eq, Debug, Default)]
 pub struct Style {
     /// Foreground colour.
     pub fg: Color,
@@ -99,6 +99,63 @@ impl Style {
     #[inline]
     pub fn erase_style(&self) -> Style {
         Style { bg: self.bg, ..Style::default() }
+    }
+}
+
+impl Color {
+    /// The colour packed into 32 bits: a kind in the low byte, then the palette index or the
+    /// red, green and blue components. Two colours are equal exactly when their packed values are.
+    #[inline(always)]
+    fn pack(self) -> u32 {
+        match self {
+            Color::Default => 0,
+            Color::Palette(n) => 1 | (n as u32) << 8,
+            Color::Rgb(r, g, b) => 2 | (r as u32) << 8 | (g as u32) << 16 | (b as u32) << 24,
+        }
+    }
+}
+
+impl Style {
+    /// The whole style as two 64 bit words, so comparing and hashing it take two operations
+    /// instead of one per field. Two styles are equal exactly when their keys are.
+    #[inline(always)]
+    pub(crate) fn key(&self) -> (u64, u64) {
+        let colors = self.fg.pack() as u64 | (self.bg.pack() as u64) << 32;
+        let rest = self.underline_color.pack() as u64 | (self.attrs as u64) << 32 | (self.underline as u64) << 48;
+        (colors, rest)
+    }
+}
+
+/// Mixes a packed style key into one hash. The two words are combined and multiplied, and the
+/// high half of the product is folded into the low half, because a map picks its bucket from the
+/// low bits and a plain multiply leaves the bits above 32 (the background colour) out of them.
+#[inline(always)]
+pub(crate) fn mix_key(key: (u64, u64)) -> u64 {
+    let x = (key.0 ^ key.1.rotate_left(29)).wrapping_mul(0x9E37_79B9_7F4A_7C15);
+    x ^ (x >> 32)
+}
+
+impl Style {
+    /// The hash of the style's packed key.
+    #[inline]
+    pub(crate) fn hash_key(&self) -> u64 {
+        mix_key(self.key())
+    }
+}
+
+impl PartialEq for Style {
+    /// Compares the packed keys.
+    #[inline(always)]
+    fn eq(&self, other: &Style) -> bool {
+        self.key() == other.key()
+    }
+}
+
+impl core::hash::Hash for Style {
+    /// Hashes the mixed key as one word.
+    #[inline]
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        state.write_u64(self.hash_key());
     }
 }
 

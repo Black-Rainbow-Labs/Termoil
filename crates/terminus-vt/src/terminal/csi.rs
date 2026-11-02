@@ -9,6 +9,11 @@ use crate::screen::Screen;
 impl Terminal {
     /// Dispatches a CSI sequence.
     pub(super) fn csi_dispatch(&mut self, seq: &CsiSeq) {
+        // SGR is the most frequent sequence in colored output, so it is answered before the match.
+        if seq.final_byte == b'm' && seq.private == 0 && seq.intermediate_len == 0 {
+            self.sgr(&seq.params);
+            return;
+        }
         let p = &seq.params;
         let n = p.get_or(0, 1);
         match (seq.private, seq.intermediates(), seq.final_byte) {

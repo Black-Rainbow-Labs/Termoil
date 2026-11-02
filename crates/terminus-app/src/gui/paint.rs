@@ -30,10 +30,12 @@ impl Painter {
     /// configuration asks for the CPU only, the window starts on the CPU renderer (ready in
     /// milliseconds) and the GPU renderer is built on a background thread; the receiver delivers it
     /// and the window switches on its next frame (P4, `docs/decisions/renderer.md`).
-    pub fn new(window: &Arc<Window>, choice: Choice) -> Result<(Painter, Option<GpuUpgrade>), String> {
+    pub fn new(
+        window: &Arc<Window>, choice: Choice, warm: Option<Box<VelloCpuRenderer>>,
+    ) -> Result<(Painter, Option<GpuUpgrade>), String> {
         let size = window.inner_size();
         let upgrade = (choice != Choice::Cpu).then(|| start_gpu(window.clone()));
-        match cpu_painter(window, size.width, size.height) {
+        match cpu_painter(window, size.width, size.height, warm) {
             Ok(p) => Ok((p, upgrade)),
             Err(e) => match upgrade.map(|rx| rx.recv()) {
                 Some(Ok(Ok(g))) => Ok((Painter::Gpu(Box::new(g)), None)),
@@ -67,6 +69,11 @@ impl Painter {
             Painter::Gpu(r) => r.render_layers(background, layers, grid).map_err(|e| e.to_string()),
             Painter::Cpu { renderer, surface } => {
                 let stats = renderer.render_layers(background, layers, grid).map_err(|e| e.to_string())?;
+                // The first CPU frame's render and present are separate startup phases (P4).
+                let first = !FIRST_CPU_FRAME.swap(true, std::sync::atomic::Ordering::Relaxed);
+                if first {
+                    crate::gui::phase("cpu_rendered");
+                }
                 present_pixmap(renderer, surface)?;
                 Ok(stats)
             }
@@ -82,12 +89,23 @@ impl Painter {
     }
 }
 
-/// The CPU renderer presented through softbuffer.
-fn cpu_painter(window: &Arc<Window>, width: u32, height: u32) -> Result<Painter, String> {
+/// Set once the first CPU frame has been rendered in this process.
+static FIRST_CPU_FRAME: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// How many threads the CPU renderer uses.
+pub fn cpu_threads() -> u16 {
+    std::thread::available_parallelism().map(|n| n.get().min(4) as u16).unwrap_or(0)
+}
+
+/// The CPU renderer presented through softbuffer: `warm` when the start up thread made one,
+/// otherwise a new one.
+fn cpu_painter(
+    window: &Arc<Window>, width: u32, height: u32, warm: Option<Box<VelloCpuRenderer>>,
+) -> Result<Painter, String> {
     let context = softbuffer::Context::new(window.clone()).map_err(|e| format!("softbuffer: {e}"))?;
     let surface = softbuffer::Surface::new(&context, window.clone()).map_err(|e| format!("softbuffer: {e}"))?;
-    let threads = std::thread::available_parallelism().map(|n| n.get().min(4) as u16).unwrap_or(0);
-    let mut p = Painter::Cpu { renderer: Box::new(VelloCpuRenderer::new(width, height, threads, true)), surface };
+    let renderer = warm.unwrap_or_else(|| Box::new(VelloCpuRenderer::new(width, height, cpu_threads(), true)));
+    let mut p = Painter::Cpu { renderer, surface };
     p.resize(width, height);
     Ok(p)
 }
