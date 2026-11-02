@@ -53,6 +53,7 @@ pub struct Config {
     pub cursor: Cursor,
     pub window: Window,
     pub scrollback: Scrollback,
+    pub session: SessionRestore,
     pub shell: Shell,
     pub clipboard: Clipboard,
     pub notify: Notify,
@@ -256,6 +257,21 @@ impl Default for Scrollback {
     /// Fifty million bytes of history and no line limit.
     fn default() -> Self {
         Scrollback { limit_bytes: 50_000_000, limit_lines: None }
+    }
+}
+
+/// `[session]`: saving windows, tabs, splits and history on exit and reopening them on start.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SessionRestore {
+    pub restore: bool,
+    pub scrollback_lines: u64,
+}
+
+impl Default for SessionRestore {
+    /// Restore off, and 2000 lines of history saved per pane when it is on.
+    fn default() -> Self {
+        SessionRestore { restore: false, scrollback_lines: 2000 }
     }
 }
 

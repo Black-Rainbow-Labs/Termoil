@@ -56,16 +56,112 @@ pub fn screen_text(term: &Terminal, scroll: usize) -> Vec<String> {
     (0..term.rows() as usize).map(|r| pages.row_text(top + r).trim_end().to_string()).collect()
 }
 
+/// The first row and one past the last row of the last `lines` rows of history and screen in `screen`.
+/// The rows end at the cursor's row or the last row with text, whichever is lower, so the empty
+/// rows below the prompt are not counted.
+fn scrollback_span(screen: &terminus_vt::screen::Screen, lines: usize) -> (usize, usize) {
+    let pages = &screen.pages;
+    let total = pages.total_rows();
+    let cursor_y = pages.active_y(screen.cursor.row).min(total.saturating_sub(1));
+    let last_text = (cursor_y..total).rev().find(|&y| !pages.row_text(y).trim_end().is_empty()).unwrap_or(cursor_y);
+    let end = last_text.max(cursor_y) + 1;
+    (end.saturating_sub(lines), end)
+}
+
 /// The last `lines` rows of history and screen as text, oldest first. The rows end at the cursor's
 /// row or the last row with text, whichever is lower, so the empty rows below the prompt are not
 /// counted.
 pub fn scrollback_text(term: &Terminal, lines: usize) -> Vec<String> {
-    let pages = &term.screen().pages;
-    let total = pages.total_rows();
-    let cursor_y = pages.active_y(term.screen().cursor.row).min(total.saturating_sub(1));
-    let last_text = (cursor_y..total).rev().find(|&y| !pages.row_text(y).trim_end().is_empty()).unwrap_or(cursor_y);
-    let end = last_text.max(cursor_y) + 1;
-    (end.saturating_sub(lines)..end).map(|y| pages.row_text(y).trim_end().to_string()).collect()
+    let screen = term.screen();
+    let (start, end) = scrollback_span(screen, lines);
+    (start..end).map(|y| screen.pages.row_text(y).trim_end().to_string()).collect()
+}
+
+/// The last `lines` rows of the primary screen's history and screen as text with SGR sequences that
+/// reproduce each cell's colours and attributes, rows joined by CR LF. Used to save a pane for
+/// session restore. The alternate screen is not included.
+pub fn scrollback_ansi(term: &Terminal, lines: usize) -> String {
+    let screen = term.primary();
+    let (start, end) = scrollback_span(screen, lines);
+    let mut out = String::new();
+    screen.pages.for_rows(start..end, |y, page, r| {
+        if y > start {
+            out.push_str("\r\n");
+        }
+        row_ansi(page, r, &mut out);
+    });
+    out
+}
+
+/// Appends one row as text with SGR sequences, dropping trailing blanks that have the default
+/// background, and ends with a reset when any style was written.
+fn row_ansi(page: &terminus_vt::page::Page, i: usize, out: &mut String) {
+    let cells = page.cells(i);
+    let mut items: Vec<(Style, String)> = Vec::with_capacity(cells.len());
+    for (col, cell) in cells.iter().enumerate() {
+        if matches!(cell.wide(), Wide::SpacerTail | Wide::SpacerHead) {
+            continue;
+        }
+        let mut text = String::new();
+        match cell.char() {
+            Some(ch) => {
+                text.push(ch);
+                text.extend(page.grapheme(page.cell_index(i, col)));
+            }
+            None => text.push(' '),
+        }
+        items.push((page.style(cell.style_id()), text));
+    }
+    while items.last().is_some_and(|(s, t)| s.bg == terminus_vt::style::Color::Default && t.trim().is_empty()) {
+        items.pop();
+    }
+    let mut current = Style::default();
+    for (style, text) in &items {
+        if *style != current {
+            out.push_str(&sgr_for(style));
+            current = *style;
+        }
+        out.push_str(text);
+    }
+    if !current.is_default() {
+        out.push_str("\x1b[0m");
+    }
+}
+
+/// The SGR sequence that sets exactly `s`, starting from the default style.
+fn sgr_for(s: &Style) -> String {
+    use terminus_vt::style::Color;
+    let mut p: Vec<String> = vec!["0".into()];
+    for (bit, code) in [
+        (attr::BOLD, "1"),
+        (attr::FAINT, "2"),
+        (attr::ITALIC, "3"),
+        (attr::BLINK, "5"),
+        (attr::INVERSE, "7"),
+        (attr::INVISIBLE, "8"),
+        (attr::STRIKE, "9"),
+        (attr::OVERLINE, "53"),
+    ] {
+        if s.has(bit) {
+            p.push(code.into());
+        }
+    }
+    match s.underline {
+        Underline::None => {}
+        Underline::Single => p.push("4".into()),
+        Underline::Double => p.push("4:2".into()),
+        Underline::Curly => p.push("4:3".into()),
+        Underline::Dotted => p.push("4:4".into()),
+        Underline::Dashed => p.push("4:5".into()),
+    }
+    for (color, base) in [(s.fg, 38), (s.bg, 48), (s.underline_color, 58)] {
+        match color {
+            Color::Default => {}
+            Color::Palette(n) => p.push(format!("{base};5;{n}")),
+            Color::Rgb(r, g, b) => p.push(format!("{base};2;{r};{g};{b}")),
+        }
+    }
+    format!("\x1b[{}m", p.join(";"))
 }
 
 /// The visible screen as JSON: size, cursor, title and, per row, runs of text sharing one style.
@@ -162,5 +258,19 @@ mod tests {
         assert_eq!(scrollback_text(&t, 100), vec!["one", "two", "three", ">"]);
         t.advance(b"\x1b[8;1Hlow\x1b[2;1H");
         assert_eq!(scrollback_text(&t, 1), vec!["low"]);
+    }
+
+    /// Saved text with colours feeds back into a terminal as the same colours and text.
+    #[test]
+    fn ansi_text_round_trips_styles() {
+        let mut t = Terminal::new(30, 5, TerminalConfig::default());
+        t.advance(b"\x1b[1;31mred bold\x1b[0m plain\r\n\x1b[38;2;1;2;3;48;5;200mtrue\x1b[0m\r\n\x1b[4:3mcurly\x1b[0m");
+        let saved = scrollback_ansi(&t, 100);
+        let mut u = Terminal::new(30, 5, TerminalConfig::default());
+        u.advance(saved.as_bytes());
+        assert_eq!(scrollback_ansi(&u, 100), saved);
+        assert_eq!(scrollback_text(&u, 100), vec!["red bold plain", "true", "curly"]);
+        assert!(saved.contains("38;2;1;2;3"), "{saved:?}");
+        assert!(saved.contains("1;38;5;1"), "{saved:?}");
     }
 }

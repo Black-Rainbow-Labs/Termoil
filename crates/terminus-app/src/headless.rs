@@ -56,8 +56,12 @@ pub fn run(
     if let Some((cwd, command)) = first_window {
         crate::actions::new_window(&mut app, cwd, command.as_deref()).map_err(|e| e.to_string())?;
         let _ = app.take_effects();
+    } else if !crate::app::instance_mode().separate {
+        crate::restore::restore_on_start(&mut app);
+        let _ = app.take_effects();
     }
     serve(&mut app, &rx);
+    crate::restore::save_on_quit(&app, None);
     for id in app.panes.keys().copied().collect::<Vec<_>>() {
         app.close_pane(id);
     }

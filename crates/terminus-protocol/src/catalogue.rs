@@ -320,6 +320,14 @@ pub const CATALOGUE: &[ActionDef] = &[
     a("command-palette", "Opens the command palette, which lists every action with its binding.", &[], W, false, false),
     a("quick-terminal", "Shows or hides the quick terminal that slides in from a screen edge.", &[], G, true, true),
     a("reset-terminal", "Resets the pane's terminal state (RIS), keeping the shell running.", &[PANE], P, false, true),
+    a(
+        "save-session",
+        "Writes the open windows, tabs, splits, working directories and recent output to the session file now.",
+        &[p("path", Path, false, "File to write; the session file in the data folder when omitted.")],
+        G,
+        true,
+        true,
+    ),
     a("quit", "Closes every window and exits.", &[], G, false, true),
 ];
 

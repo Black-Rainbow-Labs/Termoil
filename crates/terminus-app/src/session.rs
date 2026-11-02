@@ -43,6 +43,8 @@ pub struct SessionOptions {
     pub idle_compress: Duration,
     /// Pages next to the screen kept uncompressed.
     pub keep_live_pages: usize,
+    /// Text fed to the terminal before the program's output, for session restore.
+    pub history: Vec<u8>,
 }
 
 impl SessionOptions {
@@ -59,6 +61,7 @@ impl SessionOptions {
             record_input: false,
             idle_compress: Duration::from_secs(2),
             keep_live_pages: 4,
+            history: Vec::new(),
         }
     }
 }
@@ -118,7 +121,10 @@ impl Session {
         let reader = pty.take_reader().ok_or_else(|| std::io::Error::other("pty reader taken"))?;
         let writer = pty.take_writer().ok_or_else(|| std::io::Error::other("pty writer taken"))?;
         let size = opts.spawn.size;
-        let term = Arc::new(Mutex::new(Terminal::new(size.cols, size.rows, opts.terminal.clone())));
+        let mut terminal = Terminal::new(size.cols, size.rows, opts.terminal.clone());
+        // The parser thread has not started, so this text is in the terminal before any output.
+        terminal.advance(&opts.history);
+        let term = Arc::new(Mutex::new(terminal));
         let shared = Arc::new(Shared {
             events: Mutex::new(Vec::new()),
             prompt: Mutex::new(PromptState::default()),
