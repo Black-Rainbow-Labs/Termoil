@@ -622,13 +622,18 @@ impl Drop for ShmObject {
 fn create_shm(tag: &str, data: &[u8]) -> ShmObject {
     let name = format!("/tsm{}{}", std::process::id(), tag);
     let c = std::ffi::CString::new(name.clone()).unwrap();
-    // SAFETY: `c` is a valid string; the descriptor is checked, written through `write` with a valid
-    // buffer and closed once.
+    // SAFETY: `c` is a valid string; the descriptor is checked, sized, mapped for `data.len()` bytes
+    // (macOS refuses `write` on a shared memory object), copied into within that length, unmapped
+    // and closed once.
     unsafe {
         let fd = libc::shm_open(c.as_ptr(), libc::O_CREAT | libc::O_RDWR, 0o600);
         assert!(fd >= 0, "shm_open failed");
         assert_eq!(libc::ftruncate(fd, data.len() as libc::off_t), 0);
-        assert_eq!(libc::write(fd, data.as_ptr() as *const libc::c_void, data.len()), data.len() as isize);
+        let p =
+            libc::mmap(std::ptr::null_mut(), data.len(), libc::PROT_READ | libc::PROT_WRITE, libc::MAP_SHARED, fd, 0);
+        assert_ne!(p, libc::MAP_FAILED, "mmap failed");
+        std::ptr::copy_nonoverlapping(data.as_ptr(), p as *mut u8, data.len());
+        libc::munmap(p, data.len());
         libc::close(fd);
     }
     ShmObject { name }
