@@ -146,6 +146,8 @@ pub struct WinState {
     pub hint_strips: Vec<Strip>,
     /// The GPU renderer being built, until the window switches to it.
     pub upgrade: Option<crate::gui::paint::GpuUpgrade>,
+    /// Screen reader access, when `accessibility.enabled` was on as the window opened.
+    pub access: Option<crate::gui::access::AccessState>,
 }
 
 impl WinState {
@@ -154,6 +156,7 @@ impl WinState {
     /// `quick` names the screen edge when the window is the quick terminal.
     pub fn create(
         el: &ActiveEventLoop, app: &App, id: WinId, os_dark: bool, quick: Option<crate::config::Edge>,
+        proxy: &winit::event_loop::EventLoopProxy<crate::gui::UserEvent>,
     ) -> Result<WinState, String> {
         let config = &app.config;
         let translucent =
@@ -168,6 +171,11 @@ impl WinState {
         crate::gui::phase("window_attributes");
         let window = Arc::new(el.create_window(attrs).map_err(|e| format!("could not create a window: {e}"))?);
         crate::gui::phase("window_created");
+        let access = config.accessibility.enabled.then(|| {
+            let adapter = accesskit_winit::Adapter::with_event_loop_proxy(el, &window, proxy.clone());
+            crate::gui::access::AccessState::new(adapter)
+        });
+        crate::gui::phase("accessibility");
         let scale = window.scale_factor();
         let points = config.font.size as f32;
         let (grid, warm_cpu) = match crate::gui::warm::take(scale) {
@@ -229,6 +237,7 @@ impl WinState {
             unpaced: std::env::var("TERMINUS_PRESENT").is_ok_and(|v| v == "immediate"),
             wake_at: None,
             upgrade,
+            access,
             overlay: None,
             hint_strips: Vec::new(),
             bell_until: None,
@@ -396,6 +405,7 @@ impl WinState {
             crate::gui::phase("first_paint");
         }
         self.place_ime(focus);
+        self.push_access(app, false);
         if !self.shown {
             crate::gui::showtrace::begin();
             self.pending_activation = crate::gui::show::first(&self.window);
@@ -404,6 +414,25 @@ impl WinState {
             crate::gui::phase("shown");
         }
         Ok(())
+    }
+
+    /// Sends the window's accessibility tree to the screen reader when it changed, at most once per
+    /// `accessibility.update_interval_ms` for a change of text. `force` sends it in any case.
+    /// A held back update wakes the window to try again.
+    pub fn push_access(&mut self, app: &App, force: bool) {
+        let Some(access) = self.access.as_mut() else { return };
+        let Some((info, text)) = crate::gui::access::snapshot(
+            app,
+            self.id,
+            &self.layout,
+            (self.grid.metrics().width, self.grid.metrics().height),
+        ) else {
+            return;
+        };
+        let interval = Duration::from_millis(app.config.accessibility.update_interval_ms);
+        if let Some(due) = access.push(info, text, interval, force, Instant::now()) {
+            self.wake_at = Some(self.wake_at.map_or(due, |w| w.min(due)));
+        }
     }
 
     /// When a paint now would come sooner than one display refresh after the last one: the time

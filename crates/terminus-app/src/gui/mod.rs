@@ -3,6 +3,7 @@
 //! action, from a key, the mouse, IPC or the CLI, goes through `App::run_action`, and the effects
 //! it queues are applied here.
 
+pub mod access;
 mod backdrop;
 pub mod bench;
 pub mod chrome;
@@ -104,6 +105,15 @@ pub enum UserEvent {
     Config(Box<LoadResult>),
     /// The quick terminal's global hotkey was pressed.
     QuickTerminal,
+    /// A screen reader asked for the accessibility tree or for an action on a node.
+    Access(accesskit_winit::Event),
+}
+
+impl From<accesskit_winit::Event> for UserEvent {
+    /// Wraps an AccessKit event so the adapters can send it through the event loop proxy.
+    fn from(ev: accesskit_winit::Event) -> UserEvent {
+        UserEvent::Access(ev)
+    }
 }
 
 /// The front end's state.
@@ -127,6 +137,8 @@ pub struct Gui {
     pub quick: Option<WinId>,
     /// A window being opened as the quick terminal.
     pending_quick: Option<WinId>,
+    /// Sends events to the loop, for the accessibility adapters.
+    proxy: EventLoopProxy<UserEvent>,
 }
 
 /// Wakers that send one user event per burst of output.
@@ -186,7 +198,8 @@ impl Gui {
         {
             eprintln!("terminus: no quick terminal hotkey: {e}");
         }
-        let app = App::new(config, config_path, Box::new(crate::platform::SystemClipboard), proxy_wakers(proxy));
+        let app =
+            App::new(config, config_path, Box::new(crate::platform::SystemClipboard), proxy_wakers(proxy.clone()));
         Ok(Some(Gui {
             app,
             windows: HashMap::new(),
@@ -200,6 +213,7 @@ impl Gui {
             bench: None,
             quick: None,
             pending_quick: None,
+            proxy,
         }))
     }
 
@@ -353,7 +367,7 @@ impl Gui {
             self.pending_quick = None;
             self.quick = Some(id);
         }
-        match WinState::create(el, &self.app, id, self.os_dark, edge) {
+        match WinState::create(el, &self.app, id, self.os_dark, edge, &self.proxy) {
             Ok(ws) => {
                 self.os_dark = ws.window.theme().is_none_or(|t| t == winit::window::Theme::Dark);
                 self.by_winit.insert(ws.window.id(), id);
@@ -494,6 +508,24 @@ impl Gui {
                 Notice::CommandFinished { pane, code, seconds } => self.command_finished(pane, code, seconds),
                 Notice::Progress(pane) => self.progress_changed(pane),
             }
+        }
+    }
+
+    /// Answers a screen reader: sends the whole tree when it first asks for it, and moves the focus
+    /// to a pane when it asks to focus that pane's node.
+    fn access_event(&mut self, ev: accesskit_winit::Event) {
+        let Some(&id) = self.by_winit.get(&ev.window_id) else { return };
+        match ev.window_event {
+            accesskit_winit::WindowEvent::InitialTreeRequested => {
+                self.with_window(id, |ws, app| ws.push_access(app, true))
+            }
+            accesskit_winit::WindowEvent::ActionRequested(req) if req.action == accesskit::Action::Focus => {
+                let pane = access::pane_of(req.target_node);
+                if crate::actions::focus_pane(&mut self.app, pane).is_ok() {
+                    self.with_window(id, |ws, _| ws.window.request_redraw());
+                }
+            }
+            _ => {}
         }
     }
 
@@ -695,6 +727,7 @@ impl ApplicationHandler<UserEvent> for Gui {
             }
             UserEvent::Config(r) => self.config_loaded(*r),
             UserEvent::QuickTerminal => self.toggle_quick(el),
+            UserEvent::Access(ev) => self.access_event(ev),
         }
         self.apply_effects(el);
     }
@@ -706,6 +739,9 @@ impl ApplicationHandler<UserEvent> for Gui {
             phase(event_name(&ev));
         }
         let Some(ws) = self.windows.get_mut(&id) else { return };
+        if let Some(access) = ws.access.as_mut() {
+            access.process_event(&ws.window, &ev);
+        }
         let app = &mut self.app;
         match ev {
             WindowEvent::CloseRequested => {

@@ -56,6 +56,7 @@ pub struct Config {
     pub shell: Shell,
     pub clipboard: Clipboard,
     pub notify: Notify,
+    pub accessibility: Accessibility,
     pub mouse: Mouse,
     pub openers: Openers,
     pub keybindings: Keybindings,
@@ -318,6 +319,21 @@ impl Default for Notify {
     /// Notify for commands longer than ten seconds, with a visual bell.
     fn default() -> Self {
         Notify { after_seconds: 10, on_bell: BellMode::Visual, command_finished: true }
+    }
+}
+
+/// `[accessibility]`: screen reader access through UI Automation, NSAccessibility and AT-SPI.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Accessibility {
+    pub enabled: bool,
+    pub update_interval_ms: u64,
+}
+
+impl Default for Accessibility {
+    /// On, with the accessibility tree updated at most four times a second.
+    fn default() -> Self {
+        Accessibility { enabled: true, update_interval_ms: 250 }
     }
 }
 
