@@ -5,10 +5,13 @@
 //!   `show-config` and `install-shell-integration` also work with no instance running.
 //! - `terminus +mcp` is an MCP server on stdin and stdout whose tools are the catalogue's command
 //!   line actions (the generated `docs/mcp-tools.json`), each forwarded to the running instance.
+//! - `terminus ssh [ssh arguments]` copies the terminfo entry to the remote host, then runs ssh with
+//!   `TERM=xterm-terminus` (see `ssh.rs`).
 //! - `terminus` with no `+` starts the windowed app, `terminus-gui`, with the same arguments.
 
 mod args;
 mod mcp;
+mod ssh;
 
 use std::process::ExitCode;
 use std::time::Duration;
@@ -26,6 +29,7 @@ fn main() -> ExitCode {
     }
     match argv.first().map(String::as_str) {
         Some("+mcp") => mcp::serve(),
+        Some("ssh") => ssh::run(&argv[1..]),
         // The P2 latency benchmark's child: a console program, which terminus-gui is not.
         Some("--echo-child") => {
             if terminus_app::gui::bench::echo_child().is_ok() {

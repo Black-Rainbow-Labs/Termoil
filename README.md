@@ -29,7 +29,7 @@ terminus/
     terminus-font       discovery, fallback, shaping, raster, sprites
     terminus-render     Renderer trait, frame builder, vello_gpu, vello_cpu, atlas
     terminus-app        windows, tabs, splits, config, IPC server
-    terminus-cli        terminus +command, MCP tool list
+    terminus-cli        terminus +command, terminus ssh, MCP tool list
   shell-integration/    per shell scripts, terminfo source
   corpus/               vendored test corpora with licences, conformance cases, accepted images
   tools/                unicode-tables, release.ps1, bench runners, latency harness
