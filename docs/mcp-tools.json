@@ -364,7 +364,7 @@
       "inputSchema": {
         "properties": {
           "name": {
-            "description": "The theme's name, as `choose-theme` lists it.",
+            "description": "The theme's name, as `list-themes` prints it.",
             "type": "string"
           }
         },
@@ -374,6 +374,15 @@
         "type": "object"
       },
       "name": "terminus_set_theme"
+    },
+    {
+      "description": "Prints every bundled theme name, the themes Unluminous ships first, and the theme in effect.",
+      "inputSchema": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "terminus_list_themes"
     },
     {
       "description": "Makes a key table active: keys are looked up in its bindings first until it is deactivated.",

@@ -323,11 +323,7 @@ impl Gui {
             Effect::ShowThemes(id) => {
                 let original = self.app.config.theme.name.clone();
                 self.with_window(id, |ws, _| {
-                    ws.overlay = Some(overlay::Overlay::Themes(overlay::ThemesUi {
-                        query: String::new(),
-                        selected: 0,
-                        original,
-                    }));
+                    ws.overlay = Some(overlay::Overlay::Themes(overlay::ThemesUi::new(original)));
                     ws.window.request_redraw();
                 });
             }

@@ -69,15 +69,22 @@ fn parse_chrome_line(line: &str) -> Option<(String, Chrome)> {
     Some((f[0].to_lowercase(), chrome))
 }
 
+/// Every line of `chrome.txt`, parsed once: the lowercased theme name and its chrome, in file order.
+fn listed() -> &'static [(String, Chrome)] {
+    static LISTED: OnceLock<Vec<(String, Chrome)>> = OnceLock::new();
+    LISTED.get_or_init(|| CHROME_DATA.lines().filter_map(parse_chrome_line).collect())
+}
+
 /// The chrome listed for a theme by name, ignoring case.
 fn listed_chrome(name: &str) -> Option<Chrome> {
-    static LISTED: OnceLock<Vec<(String, Chrome)>> = OnceLock::new();
     let wanted = name.trim().to_lowercase();
-    LISTED
-        .get_or_init(|| CHROME_DATA.lines().filter_map(parse_chrome_line).collect())
-        .iter()
-        .find(|(n, _)| *n == wanted)
-        .map(|(_, c)| *c)
+    listed().iter().find(|(n, _)| *n == wanted).map(|(_, c)| *c)
+}
+
+/// The themes Unluminous ships, in the order the theme switcher lists them first: every bundled theme
+/// `chrome.txt` names.
+pub fn featured_themes() -> Vec<&'static str> {
+    listed().iter().filter_map(|(n, _)| theme(n)).map(|t| t.name.as_str()).collect()
 }
 
 /// A colour `t` of the way from `a` to `b`.

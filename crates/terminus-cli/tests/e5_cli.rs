@@ -188,6 +188,7 @@ fn run_action_args(name: &str, pane: u64) -> Value {
         | "open-config"
         | "version"
         | "list"
+        | "list-themes"
         | "quick-terminal"
         | "quit"
         | "deactivate-key-table"
@@ -276,6 +277,10 @@ fn more_commands(inst: &Instance, p2: &str, covered: &mut BTreeSet<String>) {
     seen("reload-config");
     assert!(inst.ok(&["+show-config"]).contains("7654321"), "reload-config did not apply the new file");
     seen("show-config");
+    let listed = inst.json(&["+list-themes"]);
+    seen("list-themes");
+    assert_eq!(listed["featured"][0], "Unluminous Dark", "{listed}");
+    assert!(listed["themes"].as_array().is_some_and(|t| t.len() > 800 && t.iter().any(|n| n == "Terminus Light")));
     inst.ok(&["+set-theme", "Terminus Light"]);
     assert!(std::fs::read_to_string(&inst.config).unwrap().contains("theme = \"Terminus Light\""));
     assert!(inst.ok(&["+show-config"]).contains("Terminus Light"));

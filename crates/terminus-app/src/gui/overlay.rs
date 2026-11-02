@@ -43,14 +43,21 @@ pub struct ThemesUi {
 }
 
 impl ThemesUi {
-    /// The bundled theme names matching the query.
-    fn matches(&self) -> Vec<&'static str> {
+    /// A switcher opened while `original` is in effect, with that theme highlighted.
+    pub fn new(original: String) -> ThemesUi {
+        let mut ui = ThemesUi { query: String::new(), selected: 0, original };
+        ui.selected = ui.matches().iter().position(|n| n.eq_ignore_ascii_case(&ui.original)).unwrap_or(0);
+        ui
+    }
+
+    /// The bundled theme names matching the query: the themes Unluminous ships first, in their own
+    /// order, then the rest by name.
+    pub fn matches(&self) -> Vec<&'static str> {
         let q = self.query.to_lowercase();
-        crate::config::themes()
-            .iter()
-            .map(|t| t.name.as_str())
-            .filter(|n| q.is_empty() || n.to_lowercase().contains(&q))
-            .collect()
+        let hit = |n: &str| q.is_empty() || n.to_lowercase().contains(&q);
+        let featured = crate::config::featured_themes();
+        let rest = crate::config::themes().iter().map(|t| t.name.as_str()).filter(|n| !featured.contains(n));
+        featured.iter().copied().chain(rest).filter(|n| hit(n)).collect()
     }
 }
 
@@ -172,11 +179,23 @@ pub fn themes_content(t: &ThemesUi, cols: u16, colors: &Colors) -> (Vec<u8>, u16
         clip(&format!(" Theme: {}\u{2588}   {} of {}", t.query, matches.len(), crate::config::themes().len()), cols)
     );
     let first = t.selected.saturating_sub(PALETTE_ROWS - 1);
+    let featured = crate::config::featured_themes();
+    let dim = mix(colors.foreground, panel, 0.45);
     let mut rows = 1u16;
     for (i, name) in matches.iter().enumerate().skip(first).take(PALETTE_ROWS) {
         let (fg, bg) =
             if i == t.selected { (colors.background, colors.foreground) } else { (colors.foreground, panel) };
-        out.push_str(&format!("\r\n{}  {}\x1b[K", sgr_colors(fg, bg), clip(name, cols.saturating_sub(2))));
+        let label = clip(name, cols.saturating_sub(2));
+        let tag = if featured.contains(name) { "  from Unluminous" } else { "" };
+        let room = cols.saturating_sub(2 + label.chars().count() as u16);
+        let tag_fg = if i == t.selected { mix(colors.background, colors.foreground, 0.35) } else { dim };
+        out.push_str(&format!(
+            "\r\n{}  {}{}{}\x1b[K",
+            sgr_colors(fg, bg),
+            label,
+            sgr_colors(tag_fg, bg),
+            clip(tag, room)
+        ));
         rows += 1;
     }
     (out.into_bytes(), rows)

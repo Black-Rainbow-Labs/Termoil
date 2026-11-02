@@ -36,6 +36,7 @@ or the IPC socket asked for it.
 | [`show-config`](#show-config) | yes | no | nothing | Prints the effective configuration, or the documented default file. |
 | [`reload-config`](#reload-config) | yes | yes | nothing | Reads the configuration file again and applies it. |
 | [`set-theme`](#set-theme) | yes | yes | nothing | Switches to a bundled colour theme and writes it to the configuration file. |
+| [`list-themes`](#list-themes) | yes | no | nothing | Prints every bundled theme name, the themes Unluminous ships first, and the theme in effect. |
 | [`choose-theme`](#choose-theme) | no | yes | a window | Lists the bundled themes, previewing each as it is highlighted; Enter keeps one. |
 | [`open-settings`](#open-settings) | no | yes | a window | Opens the settings view: every setting with its help text and value, edited in place and written to the configuration file. |
 | [`open-config`](#open-config) | no | yes | nothing | Opens the configuration file in the configured editor. |
@@ -425,7 +426,19 @@ Over IPC: `{"id":1,"action":"set-theme","args":{...}}`. MCP tool: `terminus_set_
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
-| `name` | text | yes | The theme's name, as `choose-theme` lists it. |
+| `name` | text | yes | The theme's name, as `list-themes` prints it. |
+
+## list-themes
+
+Prints every bundled theme name, the themes Unluminous ships first, and the theme in effect.
+
+```
+terminus +list-themes
+```
+
+Over IPC: `{"id":1,"action":"list-themes","args":{...}}`. MCP tool: `terminus_list_themes`.
+
+No parameters.
 
 ## choose-theme
 

@@ -44,6 +44,7 @@ pub fn dispatch(app: &mut App, name: &str, args: &Map<String, Value>) -> Outcome
                 .map(String::from)
                 .and_then(|n| crate::themes::set(app, &n).map(|_| json!({ "theme": n })).map_err(ActionError::Failed)),
         ),
+        "list-themes" => done(Ok(list_themes(app))),
         "choose-theme" => done(match app.model.focused_index() {
             Some(wi) => {
                 app.effects.push(Effect::ShowThemes(app.model.windows[wi].id));
@@ -277,6 +278,16 @@ fn close_tab(app: &mut App, pane: PaneId) -> Result<Value, ActionError> {
         app.close_pane(*p);
     }
     Ok(json!({ "closed": panes }))
+}
+
+/// Every bundled theme name for `list-themes`: the themes Unluminous ships first, then the rest by
+/// name, with which ones are featured and which one is in effect, so an agent can pick a name for
+/// `set-theme` without guessing.
+fn list_themes(app: &App) -> Value {
+    let featured = crate::config::featured_themes();
+    let rest = crate::config::themes().iter().map(|t| t.name.as_str()).filter(|n| !featured.contains(n));
+    let all: Vec<&str> = featured.iter().copied().chain(rest).collect();
+    json!({ "current": app.config.theme.name, "featured": featured, "themes": all })
 }
 
 /// Focuses a pane: its window, its tab, and the pane in the tab.

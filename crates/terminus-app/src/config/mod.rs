@@ -21,7 +21,8 @@ pub use keys::{
 pub use model::*;
 pub use schema::{Entry, SECTIONS, Section};
 pub use theme::{
-    Chrome, DEFAULT_THEME, Theme, chrome_for, contrast_ratio, derived_chrome, relative_luminance, theme, themes,
+    Chrome, DEFAULT_THEME, Theme, chrome_for, contrast_ratio, derived_chrome, featured_themes, relative_luminance,
+    theme, themes,
 };
 pub use watch::{DEFAULT_DEBOUNCE, LoadResult, Watcher};
 

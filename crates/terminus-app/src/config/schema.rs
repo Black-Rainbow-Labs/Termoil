@@ -47,7 +47,7 @@ pub static SECTIONS: &[Section] = &[
         path: "theme",
         doc: "Colour scheme. `theme = \"Name\"` is the same as `name`. dark and light follow the OS when both are set.",
         keys: &[
-            e("name", "Theme name; see `terminus +list-themes`."),
+            e("name", "Theme name, as `terminus +list-themes` prints it."),
             opt("dark", "Theme used when the OS is in dark mode.", "\"Unluminous Dark\""),
             opt("light", "Theme used when the OS is in light mode.", "\"Unluminous Light\""),
         ],

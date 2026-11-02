@@ -241,10 +241,18 @@ pub const CATALOGUE: &[ActionDef] = &[
     a(
         "set-theme",
         "Switches to a bundled colour theme and writes it to the configuration file.",
-        &[p("name", Text, true, "The theme's name, as `choose-theme` lists it.")],
+        &[p("name", Text, true, "The theme's name, as `list-themes` prints it.")],
         G,
         true,
         true,
+    ),
+    a(
+        "list-themes",
+        "Prints every bundled theme name, the themes Unluminous ships first, and the theme in effect.",
+        &[],
+        G,
+        true,
+        false,
     ),
     a(
         "choose-theme",
