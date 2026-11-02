@@ -22,6 +22,8 @@ pub(super) struct PrintModes {
     pub cluster: bool,
     pub right: u16,
     pub max_cluster: usize,
+    /// The text is known to be printable ASCII only, so runs need no scan.
+    pub plain_ascii: bool,
 }
 
 /// The cell text was last written into, while the segment runs.
@@ -144,7 +146,8 @@ fn ascii_run(
     // Without autowrap the last column is written through the general path, which overwrites it.
     let room = if m.autowrap { room } else { room - 1 };
     // Only as far as the row has room is scanned; a long run is written one row at a time.
-    let n = crate::scan::first_non_printable(&bytes[..bytes.len().min(room)]).max(1);
+    let window = &bytes[..bytes.len().min(room)];
+    let n = if m.plain_ascii { window.len() } else { crate::scan::first_non_printable(window) }.max(1);
     let x = seg.x as usize;
     if side {
         // Cells at or past the written mark are blank and hold nothing to release.

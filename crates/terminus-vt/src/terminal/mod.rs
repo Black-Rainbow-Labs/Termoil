@@ -574,7 +574,8 @@ impl Handler for Terminal {
     /// Applies one parsed action.
     fn handle(&mut self, action: Action<'_>) {
         match action {
-            Action::Print(text) => self.print(text),
+            Action::Print(text) => self.print(text, false),
+            Action::PrintAscii(text) => self.print(text, true),
             Action::Execute(byte) => self.execute(byte),
             Action::Esc { intermediates, final_byte } => self.esc_dispatch(intermediates, final_byte),
             Action::Csi(seq) => self.csi_dispatch(seq),

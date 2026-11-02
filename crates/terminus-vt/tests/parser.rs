@@ -9,7 +9,7 @@ use terminus_vt::parser::{Action, Parser, ParserLimits, Terminator};
 /// Renders one action as the short string the tables use.
 fn render(action: Action<'_>) -> String {
     match action {
-        Action::Print(s) => format!("P({s})"),
+        Action::Print(s) | Action::PrintAscii(s) => format!("P({s})"),
         Action::Execute(b) => format!("X({b:02x})"),
         Action::Esc { intermediates, final_byte } => {
             format!("E({}{})", String::from_utf8_lossy(intermediates), final_byte as char)
@@ -299,7 +299,7 @@ fn split_utf8_across_reads() {
     let mut out = String::new();
     for chunk in [&b"\xf0"[..], b"\x9f", b"\x98", b"\x80!"] {
         p.advance(chunk, &mut |a: Action<'_>| {
-            if let Action::Print(s) = a {
+            if let Action::Print(s) | Action::PrintAscii(s) = a {
                 out.push_str(s)
             }
         });

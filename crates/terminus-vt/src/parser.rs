@@ -189,6 +189,9 @@ pub enum Terminator {
 pub enum Action<'a> {
     /// A run of printable text with no control characters in it.
     Print(&'a str),
+    /// A run of printable ASCII (0x20 to 0x7e) only, already scanned by the parser, so the
+    /// handler need not scan it again.
+    PrintAscii(&'a str),
     /// A C0 control, or a C1 control that is not one of the sequence introducers.
     Execute(u8),
     /// An escape sequence: intermediates and the final byte.
@@ -349,7 +352,7 @@ impl Parser {
         if (0x20..0x7f).contains(&first) {
             let n = if self.simd { scan::first_non_printable(bytes) } else { scan::first_non_printable_scalar(bytes) };
             let text = scan::ascii_str(&bytes[..n]);
-            handler.handle(Action::Print(text));
+            handler.handle(Action::PrintAscii(text));
             return n;
         }
         match first {

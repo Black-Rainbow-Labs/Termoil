@@ -19,8 +19,9 @@ const KITTY_PLACEHOLDER: char = '\u{10EEEE}';
 impl Terminal {
     /// Prints a run of text with no control characters in it. Insert mode and translated
     /// character sets go character by character; everything else goes through the segment
-    /// writer one row at a time.
-    pub(super) fn print(&mut self, text: &str) {
+    /// writer one row at a time. `plain_ascii` says the parser already checked that the text is
+    /// printable ASCII only, so the segment writer skips its own scan.
+    pub(super) fn print(&mut self, text: &str, plain_ascii: bool) {
         if self.modes.get(Mode::Insert) || !self.screen().charsets.is_plain() {
             for c in text.chars() {
                 self.print_char(c);
@@ -34,7 +35,7 @@ impl Terminal {
         let mut rest = text;
         while !rest.is_empty() {
             let right = effective_right(self.screen(), lrmm);
-            let m = PrintModes { autowrap, cluster, right, max_cluster };
+            let m = PrintModes { autowrap, cluster, right, max_cluster, plain_ascii };
             let n = write_segment(self.screen_mut(), rest, m);
             rest = &rest[n..];
             if rest.is_empty() {
