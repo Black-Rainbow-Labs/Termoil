@@ -12,6 +12,7 @@ pub mod look;
 pub mod overlay;
 pub mod paint;
 pub mod quick;
+pub mod settings_view;
 mod show;
 mod showtrace;
 mod taskbar;
@@ -310,6 +311,13 @@ impl Gui {
                         selected: 0,
                         original,
                     }));
+                    ws.window.request_redraw();
+                });
+            }
+            Effect::ShowSettings(id) => {
+                let ui = overlay::Overlay::Settings(settings_view::SettingsUi::new(&self.app.config));
+                self.with_window(id, |ws, _| {
+                    ws.overlay = Some(ui);
                     ws.window.request_redraw();
                 });
             }

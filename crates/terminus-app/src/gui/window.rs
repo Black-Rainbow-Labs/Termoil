@@ -605,6 +605,15 @@ impl WinState {
                 let x = (size.width as f32 - (width as u32 * cw + 2 * opts.padding.0) as f32) / 2.0;
                 Some((x.max(0.0), self.tab_bar_h + ch as f32 / 2.0))
             }
+            Overlay::Settings(s) => {
+                let width = cols.saturating_sub(4).clamp(10, crate::gui::settings_view::SETTINGS_COLS);
+                let room = (size.height as f32 - self.tab_bar_h) / ch as f32;
+                let max_rows = (room as u16).saturating_sub(2).max(8);
+                let (bytes, rows) = crate::gui::settings_view::settings_content(s, width, max_rows, &self.colors);
+                self.overlay_strip.frame(width, rows, &bytes, &self.colors, &mut self.grid, &opts);
+                let x = (size.width as f32 - (width as u32 * cw + 2 * opts.padding.0) as f32) / 2.0;
+                Some((x.max(0.0), self.tab_bar_h + ch as f32 / 2.0))
+            }
             Overlay::Search(s) => {
                 let bytes = search_content(s, cols, &self.colors);
                 self.overlay_strip.frame(cols.saturating_sub(1).max(1), 1, &bytes, &self.colors, &mut self.grid, &opts);

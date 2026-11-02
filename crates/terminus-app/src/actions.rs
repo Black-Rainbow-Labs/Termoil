@@ -49,6 +49,13 @@ pub fn dispatch(app: &mut App, name: &str, args: &Map<String, Value>) -> Outcome
             }
             None => Err(ActionError::NotFound("no window".into())),
         }),
+        "open-settings" => done(match app.model.focused_index() {
+            Some(wi) => {
+                app.effects.push(Effect::ShowSettings(app.model.windows[wi].id));
+                Ok(Value::Null)
+            }
+            None => Err(ActionError::NotFound("no window".into())),
+        }),
         "show-hints" => done(app.arg_pane(args).and_then(|p| {
             let win = app.window_of(p).ok_or_else(|| ActionError::NotFound(format!("pane {p} has no window")))?;
             app.effects.push(Effect::ShowHints(win, p));

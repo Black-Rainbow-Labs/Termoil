@@ -62,6 +62,8 @@ pub enum Effect {
     ShowSearch(WinId),
     /// Open the theme switcher.
     ShowThemes(WinId),
+    /// Open the settings view.
+    ShowSettings(WinId),
     /// Label the links of a pane for the keyboard.
     ShowHints(WinId, PaneId),
     /// Show or hide the quick terminal.

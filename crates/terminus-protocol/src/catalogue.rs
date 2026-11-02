@@ -246,6 +246,14 @@ pub const CATALOGUE: &[ActionDef] = &[
         false,
         true,
     ),
+    a(
+        "open-settings",
+        "Opens the settings view: every setting with its help text and value, edited in place and written to the configuration file.",
+        &[],
+        W,
+        false,
+        true,
+    ),
     a("open-config", "Opens the configuration file in the configured editor.", &[], G, false, true),
     a(
         "activate-key-table",

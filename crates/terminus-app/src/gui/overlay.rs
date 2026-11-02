@@ -28,6 +28,8 @@ pub enum Overlay {
     Hints(HintsUi),
     /// The theme switcher.
     Themes(ThemesUi),
+    /// The settings view.
+    Settings(crate::gui::settings_view::SettingsUi),
 }
 
 /// The theme switcher's state.
@@ -109,7 +111,7 @@ impl PaletteUi {
 }
 
 /// The text a key types, when it types any and no control or alt is held.
-fn typed(ev: &KeyEvent) -> Option<&str> {
+pub(crate) fn typed(ev: &KeyEvent) -> Option<&str> {
     if ev.mods.contains(Modifiers::CTRL) || ev.mods.contains(Modifiers::ALT) {
         return None;
     }
@@ -123,6 +125,7 @@ pub fn key(ov: &mut Overlay, app: &mut App, ev: &KeyEvent) -> After {
         Overlay::Search(s) => search_key(s, app, ev),
         Overlay::Hints(h) => hints_key(h, app, ev),
         Overlay::Themes(t) => themes_key(t, app, ev),
+        Overlay::Settings(s) => crate::gui::settings_view::key(s, app, ev),
     }
 }
 
@@ -350,6 +353,6 @@ pub fn search_content(s: &SearchUi, cols: u16, colors: &Colors) -> Vec<u8> {
 }
 
 /// Cuts text to `cols` characters.
-fn clip(s: &str, cols: u16) -> String {
+pub(crate) fn clip(s: &str, cols: u16) -> String {
     s.chars().take(cols as usize).collect()
 }

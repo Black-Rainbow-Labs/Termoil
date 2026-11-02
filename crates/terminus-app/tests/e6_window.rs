@@ -301,6 +301,7 @@ fn steps() -> Vec<(&'static str, Step)> {
         ("the split resizes from its keys and by dragging", Box::new(resize_step)),
         ("hints label the links on screen", Box::new(hints_step)),
         ("the theme switcher previews and keeps a theme", Box::new(theme_step)),
+        ("the settings view edits font.size and saves it", Box::new(settings_step)),
         ("the command palette runs an action", Box::new(palette_step)),
         ("the search bar finds text as it is typed", Box::new(search_step)),
         ("the quick terminal opens", Box::new(quick_open_step)),
@@ -498,6 +499,53 @@ fn theme_step(g: &mut Gui, el: &ActiveEventLoop) -> Result<bool, String> {
     let bg = g.windows[&win].colors.background;
     if bg.r < 128 {
         return Err("the window kept the dark background".into());
+    }
+    Ok(true)
+}
+
+/// Opens the settings view through its action, tries an out of range value (refused, file untouched),
+/// edits `font.size` to a new value, and checks the file and the live configuration both changed.
+fn settings_step(g: &mut Gui, el: &ActiveEventLoop) -> Result<bool, String> {
+    let enter = || RawKey::new(Key::Named(NamedKey::Enter), Modifiers::NONE);
+    g.app.run_named("open-settings").map_err(|e| e.to_string())?;
+    g.flush(el);
+    let (win, _) = focus(g).ok_or("window")?;
+    if g.windows[&win].overlay.is_none() {
+        return Err("open-settings did not open the view".into());
+    }
+    let Gui { app, windows, .. } = g;
+    windows.get_mut(&win).ok_or("window")?.draw(app)?;
+    type_text(g, "window.opacity");
+    press(g, enter());
+    type_text(g, "9");
+    press(g, enter());
+    g.flush(el);
+    let text = std::fs::read_to_string(&g.app.config_path).map_err(|e| e.to_string())?;
+    if text.contains("opacity") || g.app.config.window.opacity != 1.0 {
+        return Err(format!("an opacity above 1 was written: {text}"));
+    }
+    press(g, RawKey::new(Key::Named(NamedKey::Escape), Modifiers::NONE));
+    for _ in 0..14 {
+        press(g, RawKey::new(Key::Named(NamedKey::Backspace), Modifiers::NONE));
+    }
+    type_text(g, "font.size");
+    press(g, enter());
+    for _ in 0..8 {
+        press(g, RawKey::new(Key::Named(NamedKey::Backspace), Modifiers::NONE));
+    }
+    type_text(g, "18");
+    press(g, enter());
+    g.flush(el);
+    let text = std::fs::read_to_string(&g.app.config_path).map_err(|e| e.to_string())?;
+    if !text.contains("size = 18.0") || !text.contains("theme = \"Terminus Light\"") {
+        return Err(format!("font.size was not written beside the rest of the file: {text}"));
+    }
+    if g.app.config.font.size != 18.0 {
+        return Err(format!("the live font size is {}", g.app.config.font.size));
+    }
+    press(g, RawKey::new(Key::Named(NamedKey::Escape), Modifiers::NONE));
+    if g.windows[&win].overlay.is_some() {
+        return Err("Escape did not close the settings view".into());
     }
     Ok(true)
 }

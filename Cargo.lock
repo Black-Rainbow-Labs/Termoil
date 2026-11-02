@@ -3035,6 +3035,7 @@ dependencies = [
  "terminus-render",
  "terminus-vt",
  "toml",
+ "toml_edit",
  "wayland-client",
  "wayland-protocols",
  "wgpu",
@@ -3268,6 +3269,7 @@ dependencies = [
  "indexmap",
  "toml_datetime",
  "toml_parser",
+ "toml_writer",
  "winnow",
 ]
 

@@ -285,6 +285,7 @@ fn default_keybindings_are_the_prd_list() {
         ("ctrl+shift+n", "new-window"),
         ("ctrl+shift+k", "clear-scrollback"),
         ("ctrl+shift+h", "show-hints"),
+        ("ctrl+,", "open-settings"),
         ("ctrl+shift+alt+left", "resize-split"),
         ("ctrl+shift+alt+right", "resize-split"),
         ("ctrl+shift+alt+up", "resize-split"),
