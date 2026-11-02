@@ -101,10 +101,24 @@ impl Terminal {
                 for r in 0..rows {
                     self.erase_row(r, selective);
                 }
+                if !selective {
+                    self.erase_screen_images();
+                }
             }
         }
         self.screen_mut().cursor.pending_wrap = false;
         self.screen_mut().last_print = None;
+    }
+
+    /// ED 2 removes the images drawn on the screen, as kitty and Ghostty do, so a program that clears the screen
+    /// and draws a new page does not find the last page's pictures over it. Images in the scrollback stay.
+    fn erase_screen_images(&mut self) {
+        let (top, bottom) = {
+            let s = self.screen();
+            let pages = &s.pages;
+            (pages.serial_of(pages.active_y(0)), pages.serial_of(pages.active_y(s.rows().saturating_sub(1))))
+        };
+        self.graphics.erase_rows(top, bottom);
     }
 
     /// Clears a whole active row, including its wrap and line size flags.

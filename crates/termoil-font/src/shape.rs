@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use harfrust::{Feature, ShaperData, Tag, UnicodeBuffer};
+use harfrust::{Feature, ShaperData, ShaperInstance, Tag, UnicodeBuffer};
 
 use crate::face::Face;
 
@@ -34,19 +34,33 @@ pub struct ShapedRun {
     pub glyphs: Vec<ShapedGlyph>,
 }
 
+/// A face's identity (`Face::key`): the file, the face in it and its variation coordinates.
+type FaceKey = (usize, u32, u64);
+
+/// A cached run: the face, ligatures on or off, the size in pixels as bits, and the text.
+type RunKey = (FaceKey, bool, u32, String);
+
 /// The run cache.
 pub struct RunCache {
-    entries: HashMap<(usize, u32, bool, u32, String), Arc<ShapedRun>>,
+    entries: HashMap<RunKey, Arc<ShapedRun>>,
     limit: usize,
     hits: u64,
     misses: u64,
     data: HashMap<(usize, u32), Arc<ShaperData>>,
+    instances: HashMap<FaceKey, Arc<ShaperInstance>>,
 }
 
 impl RunCache {
     /// An empty cache holding up to `limit` runs.
     pub fn new(limit: usize) -> RunCache {
-        RunCache { entries: HashMap::new(), limit: limit.max(16), hits: 0, misses: 0, data: HashMap::new() }
+        RunCache {
+            entries: HashMap::new(),
+            limit: limit.max(16),
+            hits: 0,
+            misses: 0,
+            data: HashMap::new(),
+            instances: HashMap::new(),
+        }
     }
 
     /// Hits and misses so far.
@@ -56,7 +70,7 @@ impl RunCache {
 
     /// The shaped glyphs of `text` in `face`, from the cache when possible.
     pub fn shape(&mut self, face: &Face, text: &str, ligatures: bool, size_px: f32) -> Arc<ShapedRun> {
-        let key = (face.blob.as_ref().as_ptr() as usize, face.index, ligatures, size_px.to_bits(), text.to_string());
+        let key = (face.key(), ligatures, size_px.to_bits(), text.to_string());
         if let Some(run) = self.entries.get(&key) {
             self.hits += 1;
             return run.clone();
@@ -76,7 +90,14 @@ impl RunCache {
         let Some(font) = face.font_ref() else { return ShapedRun::default() };
         let data_key = (face.blob.as_ref().as_ptr() as usize, face.index);
         let data = self.data.entry(data_key).or_insert_with(|| Arc::new(ShaperData::new(&font))).clone();
-        let shaper = data.shaper(&font).build();
+        let instance = (!face.coords.is_empty()).then(|| {
+            let coords = face.coords.iter().copied();
+            self.instances
+                .entry(face.key())
+                .or_insert_with(|| Arc::new(ShaperInstance::from_coords(&font, coords)))
+                .clone()
+        });
+        let shaper = data.shaper(&font).instance(instance.as_deref()).build();
         let mut buffer = UnicodeBuffer::new();
         buffer.push_str(text);
         buffer.guess_segment_properties();

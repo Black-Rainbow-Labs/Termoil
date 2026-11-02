@@ -19,7 +19,8 @@ pub trait Canvas {
     /// Fills a path with the non zero rule.
     fn path(&mut self, p: &BezPath);
     /// Draws glyphs of one font at one size in the current colour.
-    fn glyphs(&mut self, font: &FontData, run: &GlyphRun);
+    /// `coords` are the face's variation coordinates as raw F2Dot14 bits (empty for the default instance).
+    fn glyphs(&mut self, font: &FontData, coords: &[i16], run: &GlyphRun);
     /// Sets the transform applied to everything drawn after it.
     fn transform(&mut self, t: Affine);
     /// Draws `rec.src` of the image stretched over `rec.dest`. A renderer keeps the decoded image
@@ -153,7 +154,7 @@ fn draw_run<C: Canvas>(c: &mut C, run: &GlyphRun, grid: &FontGrid) {
     let face = grid.face(run.face);
     let font = FontData::new(face.blob.clone(), face.index);
     c.paint(run.color);
-    c.glyphs(&font, run);
+    c.glyphs(&font, &face.raw_coords, run);
 }
 
 /// Draws a sprite character from its geometry.

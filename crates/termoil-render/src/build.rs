@@ -431,19 +431,54 @@ fn build_cursor(
 }
 
 /// The face a cell's text is shaped with: the face for its first character, unless the text is a
-/// cluster with a mark that face lacks (such as `a` and U+0310), in which case the face that has the
-/// mark is used when it also has the first character, so the mark is not drawn as a missing glyph box.
+/// cluster with marks that face lacks (such as `a` and U+0310). Then each face that has one of the
+/// missing characters is tried, and the first that has every character of the cluster is used; failing
+/// that, the one missing the fewest. A cluster is shaped in one face, so a face that lacks a mark draws
+/// it as a missing glyph box (task-2472: Z with five marks went to a face that had only the first).
 fn cluster_face(grid: &mut FontGrid, text: &CellText, first: char, style: FontStyle) -> FaceId {
     let presentation = presentation(text);
     let face = grid.face_for(first, style, presentation);
     let CellText::Cluster(s) = text else { return face };
     if presentation == Presentation::Emoji {
-        return face;
+        return flag_face(grid, s, face);
     }
     let format = |c: char| matches!(c, '\u{200d}' | '\u{fe00}'..='\u{fe0f}');
-    let Some(missing) = s.chars().skip(1).find(|&c| !format(c) && grid.glyph(face, c).is_none()) else { return face };
-    let other = grid.face_for(missing, style, Presentation::Text);
-    if grid.glyph(other, first).is_some() { other } else { face }
+    let chars: Vec<char> = s.chars().filter(|&c| !format(c)).collect();
+    let lacking = |grid: &FontGrid, f: FaceId| chars.iter().filter(|&&c| grid.glyph(f, c).is_none()).count();
+    let mut best = (lacking(grid, face), face);
+    for &c in chars.iter().skip(1) {
+        if best.0 == 0 {
+            break;
+        }
+        if grid.glyph(best.1, c).is_some() {
+            continue;
+        }
+        let other = grid.face_for(c, style, Presentation::Text);
+        let n = lacking(grid, other);
+        if n < best.0 && grid.glyph(other, first).is_some() {
+            best = (n, other);
+        }
+    }
+    best.1
+}
+
+/// The face for an emoji cluster: the embedded flags face when the cluster is a flag (two regional indicators, or
+/// U+1F3F4 and tag characters) that `face` shapes into more than one glyph, as Segoe UI Emoji does; otherwise
+/// `face` (task-2472: flags drew as the letters J and P on Windows).
+fn flag_face(grid: &mut FontGrid, s: &str, face: FaceId) -> FaceId {
+    let ri = |c: char| ('\u{1f1e6}'..='\u{1f1ff}').contains(&c);
+    let tag = |c: char| ('\u{e0020}'..='\u{e007f}').contains(&c);
+    let mut chars = s.chars();
+    let flag = match chars.next() {
+        Some(c) if ri(c) => s.chars().count() == 2 && s.chars().all(ri),
+        Some('\u{1f3f4}') => chars.all(tag),
+        _ => false,
+    };
+    let Some(flags) = grid.flags_face().filter(|_| flag) else { return face };
+    if grid.shape(face, s).glyphs.len() == 1 {
+        return face;
+    }
+    if grid.shape(flags, s).glyphs.len() == 1 { flags } else { face }
 }
 
 /// Whether a cell's text asks for a colour emoji: a VS16 selector in the cluster, or a first character

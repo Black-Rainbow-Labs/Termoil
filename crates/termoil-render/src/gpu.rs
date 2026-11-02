@@ -550,7 +550,7 @@ impl Canvas for GpuCanvas<'_> {
     }
 
     /// Draws glyphs through glifo.
-    fn glyphs(&mut self, font: &FontData, run: &GlyphRun) {
+    fn glyphs(&mut self, font: &FontData, coords: &[i16], run: &GlyphRun) {
         let glyphs = run.glyphs.iter().map(|g| glifo::Glyph { id: g.id, x: g.x, y: g.y });
         let mut b = self
             .scene
@@ -558,6 +558,7 @@ impl Canvas for GpuCanvas<'_> {
             .font_size(run.size)
             .hint(self.hint)
             .atlas_cache(self.atlas)
+            .normalized_coords(coords)
             .glyph_transform(skew_transform(run));
         if run.embolden {
             b = b.font_embolden(glifo::FontEmbolden::new(vello_common::kurbo::Diagonal2 {

@@ -7,6 +7,7 @@ use fontique::{
     Attributes, Blob, Collection, CollectionOptions, FallbackKey, FontStyle as FqStyle, FontWeight, FontWidth,
     QueryStatus, Script, SourceCache,
 };
+use skrifa::instance::NormalizedCoord;
 use skrifa::{FontRef, MetadataProvider};
 use unicode_script::UnicodeScript;
 
@@ -75,12 +76,23 @@ pub struct Face {
     pub synthetic_italic: bool,
     /// The face has colour glyphs (COLR, CBDT or sbix), so its glyphs are drawn in their own colours.
     pub color: bool,
+    /// Normalized axis coordinates for a variable font, in axis order; empty for the default instance. Bold in
+    /// a variable family such as Cascadia Code is the same file at `wght` 700, so the weight lives here, and
+    /// shaping and drawing both use it (task-2472: bold was drawn at the regular weight before).
+    pub coords: Vec<NormalizedCoord>,
+    /// The same coordinates as raw F2Dot14 bits, the form the glyph renderer takes.
+    pub raw_coords: Vec<i16>,
 }
 
 impl Face {
     /// The parsed font.
     pub fn font_ref(&self) -> Option<FontRef<'_>> {
         FontRef::from_index(self.blob.as_ref(), self.index).ok()
+    }
+
+    /// A key that tells faces apart: the file, the face in it and the variation coordinates.
+    pub fn key(&self) -> (usize, u32, u64) {
+        (self.blob.as_ref().as_ptr() as usize, self.index, coords_hash(&self.coords))
     }
 
     /// The glyph id for `c`, or None when the face lacks it.
@@ -97,9 +109,13 @@ pub struct FaceSet {
     faces: Vec<Face>,
     primary: [FaceId; 4],
     emoji: Option<FaceId>,
+    flags: Option<FaceId>,
     fallback: HashMap<(char, FontStyle, Presentation), FaceId>,
-    by_blob: HashMap<(usize, u32), FaceId>,
+    by_blob: HashMap<(usize, u32, u64), FaceId>,
 }
+
+/// A subset of Noto Color Emoji holding only the flags (`fonts/README.md`, SIL Open Font License).
+const FLAGS_FONT: &[u8] = include_bytes!("../fonts/TermoilFlags.ttf");
 
 /// Emoji families tried, in order, for emoji presentation characters.
 const EMOJI_FAMILIES: &[&str] =
@@ -137,6 +153,7 @@ impl FaceSet {
             faces: Vec::new(),
             primary: [FaceId(0); 4],
             emoji: None,
+            flags: None,
             fallback: HashMap::new(),
             by_blob: HashMap::new(),
         };
@@ -152,7 +169,15 @@ impl FaceSet {
         if let Some(e) = set.emoji {
             set.faces[e.0 as usize].color = true;
         }
+        let flags = set.intern(Blob::from(FLAGS_FONT.to_vec()), 0, "Termoil Flags", (false, false), Vec::new());
+        set.faces[flags.0 as usize].color = true;
+        set.flags = Some(flags);
         Ok(set)
+    }
+
+    /// The embedded flags face (`fonts/README.md`), for flag sequences the emoji face cannot join into one glyph.
+    pub fn flags(&self) -> Option<FaceId> {
+        self.flags
     }
 
     /// Number of faces loaded.
@@ -189,14 +214,16 @@ impl FaceSet {
         };
         let synth_bold = font.synthesis.embolden();
         let synth_italic = font.synthesis.skew().is_some();
-        Some(self.intern(font.blob, font.index, family, synth_bold, synth_italic))
+        let coords = variation_coords(&font.blob, font.index, font.synthesis.variation_settings());
+        Some(self.intern(font.blob, font.index, family, (synth_bold, synth_italic), coords))
     }
 
     /// Adds a face once, returning the existing id for a face already loaded.
     fn intern(
-        &mut self, blob: Blob<u8>, index: u32, family: &str, synthetic_bold: bool, synthetic_italic: bool,
+        &mut self, blob: Blob<u8>, index: u32, family: &str, synthetic: (bool, bool), coords: Vec<NormalizedCoord>,
     ) -> FaceId {
-        let key = (blob.as_ref().as_ptr() as usize, index);
+        let (synthetic_bold, synthetic_italic) = synthetic;
+        let key = (blob.as_ref().as_ptr() as usize, index, coords_hash(&coords));
         if let Some(&id) = self.by_blob.get(&key) {
             return id;
         }
@@ -208,6 +235,8 @@ impl FaceSet {
             synthetic_bold,
             synthetic_italic,
             color: false,
+            raw_coords: coords.iter().map(|c| c.to_bits()).collect(),
+            coords,
         });
         self.by_blob.insert(key, id);
         id
@@ -270,8 +299,27 @@ impl FaceSet {
         }
         let (blob, index, family) = hit?;
         let name = self.collection.family_name(family).unwrap_or("fallback").to_string();
-        Some(self.intern(blob, index, &name, false, false))
+        Some(self.intern(blob, index, &name, (false, false), Vec::new()))
     }
+}
+
+/// The normalized coordinates for fontique's variation settings (user space values such as `wght` 700) in the
+/// face's axis order. Empty when there are no settings or the face has no axes, which is the default instance.
+fn variation_coords(blob: &Blob<u8>, index: u32, settings: &[(skrifa::Tag, f32)]) -> Vec<NormalizedCoord> {
+    let Ok(font) = FontRef::from_index(blob.as_ref(), index) else { return Vec::new() };
+    let axes = font.axes();
+    if settings.is_empty() || axes.is_empty() {
+        return Vec::new();
+    }
+    let settings = settings.iter().map(|(tag, value)| (*tag, *value));
+    let location = axes.location(settings);
+    let coords = location.coords();
+    if coords.iter().all(|c| *c == NormalizedCoord::ZERO) { Vec::new() } else { coords.to_vec() }
+}
+
+/// A hash of variation coordinates, 0 for the default instance.
+pub fn coords_hash(coords: &[NormalizedCoord]) -> u64 {
+    coords.iter().fold(0u64, |h, c| h.wrapping_mul(0x100_0000_01b3).wrapping_add(c.to_bits() as u16 as u64 + 1))
 }
 
 /// The fontique script of a character, by its Unicode script property. Characters common to

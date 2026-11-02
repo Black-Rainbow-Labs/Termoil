@@ -144,6 +144,12 @@ impl FontGrid {
         self.faces.face_for(c, style, presentation, &self.config.fallback_families)
     }
 
+    /// The embedded flags face, for a flag sequence the emoji face draws as separate letters (Segoe UI Emoji has
+    /// no flags).
+    pub fn flags_face(&self) -> Option<FaceId> {
+        self.faces.flags()
+    }
+
     /// Shapes `text` with face `face`, returning glyphs with their cluster offsets. Runs are cached
     /// by face and text, so a line that repeats costs one lookup.
     pub fn shape(&mut self, face: FaceId, text: &str) -> Arc<ShapedRun> {

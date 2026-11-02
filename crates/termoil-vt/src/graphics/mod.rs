@@ -316,10 +316,23 @@ impl GraphicsStore {
     /// Images transmitted with `a=t` stay, as the protocol keeps data that was sent for later placement.
     pub fn prune_before(&mut self, first_serial: u64) {
         let gone = |p: &Placement| !p.virtual_placement && p.serial < first_serial;
-        let touched = self.remove_placements(&gone);
-        if touched.is_empty() {
-            return;
-        }
+        self.drop_placements(&gone);
+    }
+
+    /// Drops the placements that cover any row with serial in the inclusive range, for an erase of the whole
+    /// screen (ED 2), as kitty and Ghostty do. Images sent only for display are freed once nothing shows them.
+    pub fn erase_rows(&mut self, first_serial: u64, last_serial: u64) {
+        let covered = |p: &Placement| {
+            let last = p.serial + (p.rows as u64).max(1) - 1;
+            !p.virtual_placement && p.serial <= last_serial && last >= first_serial
+        };
+        self.drop_placements(&covered);
+    }
+
+    /// Removes the placements the predicate selects, then frees the images that were only transmitted for display
+    /// (`a=T`, sixel, iTerm2) and are no longer referenced.
+    fn drop_placements(&mut self, pred: &dyn Fn(&Placement) -> bool) {
+        let touched = self.remove_placements(pred);
         for id in touched {
             let unreferenced = !self.placements.iter().any(|p| p.image_id == id);
             let transient_data = self.image(id).is_some_and(|i| !i.persistent);

@@ -149,3 +149,34 @@ fn claude_code_symbols_are_drawn_as_text() {
         assert!(g.face(emoji).color, "an emoji presentation is drawn by the colour emoji face");
     }
 }
+
+/// Bold in a variable family is the same file at a heavier `wght` (task-2472). Cascadia Code, Termoil's default
+/// font, ships on Windows as one variable file; before the fix the bold face was the regular face, so bold text
+/// was drawn at the regular weight. Skipped where Cascadia Code is not installed.
+#[test]
+fn variable_font_bold_is_a_heavier_instance() {
+    let config = FontConfig { families: vec!["Cascadia Code".into()], size_px: 20.0, ..FontConfig::default() };
+    let Ok(mut grid) = FontGrid::new(config) else { return };
+    let (regular, bold) = (grid.primary(FontStyle::Regular), grid.primary(FontStyle::Bold));
+    if grid.face(regular).family != "Cascadia Code" {
+        println!("Cascadia Code is not installed; skipped");
+        return;
+    }
+    assert_ne!(regular, bold, "bold is its own face");
+    let face = grid.face(bold);
+    assert!(!face.coords.is_empty(), "a variable bold has variation coordinates");
+    assert!(!face.synthetic_bold, "the wght axis is used, not emboldening");
+    let stem = |coords: &[skrifa::instance::NormalizedCoord]| {
+        use skrifa::MetadataProvider;
+        let font = face.font_ref().unwrap();
+        let gid = font.charmap().map('|').unwrap();
+        let metrics =
+            font.glyph_metrics(skrifa::instance::Size::new(1000.0), skrifa::instance::LocationRef::new(coords));
+        let b = metrics.bounds(gid).unwrap();
+        b.x_max - b.x_min
+    };
+    // `|` is a single stem, so its width is the stem weight: 98 units regular, 129 at wght 700.
+    assert!(stem(&face.coords) > stem(&[]) * 1.2, "the bold stem is heavier than the regular stem");
+    let run = grid.shape(bold, "bold");
+    assert_eq!(run.glyphs.len(), 4);
+}
