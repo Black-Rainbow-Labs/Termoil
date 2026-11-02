@@ -2626,7 +2626,7 @@ dependencies = [
 
 [[package]]
 name = "terminus-app"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "crossbeam-channel",
  "embed-resource",
@@ -2647,7 +2647,7 @@ dependencies = [
 
 [[package]]
 name = "terminus-bench"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "pollster",
  "serde_json",
@@ -2660,7 +2660,7 @@ dependencies = [
 
 [[package]]
 name = "terminus-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "embed-resource",
  "serde_json",
@@ -2670,7 +2670,7 @@ dependencies = [
 
 [[package]]
 name = "terminus-font"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "fontique",
  "harfrust",
@@ -2681,7 +2681,7 @@ dependencies = [
 
 [[package]]
 name = "terminus-headless"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "terminus-pty",
  "terminus-vt",
@@ -2689,11 +2689,11 @@ dependencies = [
 
 [[package]]
 name = "terminus-input"
-version = "0.1.0"
+version = "0.1.1"
 
 [[package]]
 name = "terminus-protocol"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -2701,7 +2701,7 @@ dependencies = [
 
 [[package]]
 name = "terminus-pty"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "rustix 1.1.6",
  "rustix-openpty",
@@ -2710,7 +2710,7 @@ dependencies = [
 
 [[package]]
 name = "terminus-render"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "glifo",
  "png 0.17.16",
@@ -2729,7 +2729,7 @@ version = "0.1.0"
 
 [[package]]
 name = "terminus-vt"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "base64",
  "flate2",
@@ -2934,7 +2934,7 @@ checksum = "c6f5d3c3b1bf09027a88a6bc961fc00497d651009560b5463668dc81b0fa87a8"
 
 [[package]]
 name = "unicode-tables"
-version = "0.1.0"
+version = "0.1.1"
 
 [[package]]
 name = "unicode-width"
