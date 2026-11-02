@@ -175,6 +175,22 @@ fn steps() -> Vec<(&'static str, Step)> {
             }),
         ),
         (
+            "the window switches to the GPU renderer when the machine has a GPU",
+            Box::new(|g: &mut Gui, _: &ActiveEventLoop| {
+                // The surface must be made on the window's own thread; made on the start thread it
+                // always failed and every window stayed on the CPU renderer (0.1.1).
+                static HAS_GPU: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+                if !*HAS_GPU.get_or_init(|| terminus_render::GpuContext::new().is_ok()) {
+                    return Ok(true);
+                }
+                let (win, _) = focus(g).ok_or("window")?;
+                let Gui { app, windows, .. } = g;
+                let ws = windows.get_mut(&win).ok_or("window")?;
+                ws.draw(app)?;
+                Ok(ws.painter.is_gpu())
+            }),
+        ),
+        (
             "a preedit is drawn and not sent",
             Box::new(|g: &mut Gui, el: &ActiveEventLoop| {
                 let before = sent(g);

@@ -7,6 +7,7 @@ use std::sync::{Arc, OnceLock};
 
 use terminus_font::FontGrid;
 use terminus_render::{FrameStats, GpuContext, Layer, Renderer, Rgba, VelloCpuRenderer, VelloGpuRenderer};
+use winit::event_loop::OwnedDisplayHandle;
 use winit::window::Window;
 
 use crate::config::Renderer as Choice;
@@ -31,14 +32,17 @@ impl Painter {
     /// milliseconds) and the GPU renderer is built on a background thread; the receiver delivers it
     /// and the window switches on its next frame (P4, `docs/decisions/renderer.md`).
     pub fn new(
-        window: &Arc<Window>, choice: Choice, warm: Option<Box<VelloCpuRenderer>>,
+        window: &Arc<Window>, choice: Choice, warm: Option<Box<VelloCpuRenderer>>, display: OwnedDisplayHandle,
     ) -> Result<(Painter, Option<GpuUpgrade>), String> {
         let size = window.inner_size();
-        let upgrade = (choice != Choice::Cpu).then(|| start_gpu(window.clone()));
+        let upgrade = (choice != Choice::Cpu).then(|| start_gpu(window.clone(), display));
         match cpu_painter(window, size.width, size.height, warm) {
             Ok(p) => Ok((p, upgrade)),
             Err(e) => match upgrade.map(|rx| rx.recv()) {
-                Some(Ok(Ok(g))) => Ok((Painter::Gpu(Box::new(g)), None)),
+                Some(Ok(Ok(mut g))) => {
+                    attach(&mut g, window).map_err(|g| format!("{e}; and the GPU renderer: {g}"))?;
+                    Ok((Painter::Gpu(Box::new(g)), None))
+                }
                 Some(Ok(Err(g))) => Err(format!("{e}; and the GPU renderer: {g}")),
                 _ => Err(e),
             },
@@ -111,22 +115,30 @@ fn cpu_painter(
 }
 
 /// Builds the GPU renderer for a window on a background thread, on the shared device, and asks
-/// the window to redraw when it is ready.
-fn start_gpu(window: Arc<Window>) -> GpuUpgrade {
+/// the window to redraw when it is ready. The renderer comes back without a surface: winit gives
+/// out a window's handle only on the thread that owns the window, so `attach` makes the surface
+/// there. `display` is the event loop's display, which the OpenGL backend needs.
+fn start_gpu(window: Arc<Window>, display: OwnedDisplayHandle) -> GpuUpgrade {
     let (tx, rx) = std::sync::mpsc::channel();
-    let unpaced = std::env::var("TERMINUS_PRESENT").is_ok_and(|v| v == "immediate");
     let _ = std::thread::Builder::new().name("terminus gpu start".into()).spawn(move || {
-        let ctx = SHARED_GPU.get_or_init(|| GpuContext::new().map_err(|e| e.to_string()));
+        let ctx = SHARED_GPU.get_or_init(|| GpuContext::for_display(display).map_err(|e| e.to_string()));
         let size = window.inner_size();
         let r = match ctx {
-            Ok(ctx) => VelloGpuRenderer::new_for_window_in(ctx, window.clone(), size.width, size.height, true, unpaced)
-                .map_err(|e| e.to_string()),
+            Ok(ctx) => Ok(VelloGpuRenderer::new_detached_in(ctx, size.width, size.height, true)),
             Err(e) => Err(e.clone()),
         };
         let _ = tx.send(r);
         window.request_redraw();
     });
     rx
+}
+
+/// Gives a renderer from `start_gpu` its window surface. Runs on the thread that owns `window`.
+/// `TERMINUS_PRESENT=immediate` presents without waiting for the display (the latency benchmark).
+pub fn attach(gpu: &mut VelloGpuRenderer, window: &Arc<Window>) -> Result<(), String> {
+    let Some(Ok(ctx)) = SHARED_GPU.get() else { return Err("the GPU device did not start".into()) };
+    let unpaced = std::env::var("TERMINUS_PRESENT").is_ok_and(|v| v == "immediate");
+    gpu.attach_window(ctx, window.clone(), unpaced).map_err(|e| e.to_string())
 }
 
 /// Copies the CPU renderer's premultiplied RGBA pixels into the softbuffer as 0RGB words.

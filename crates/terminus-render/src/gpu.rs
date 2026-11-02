@@ -24,7 +24,13 @@ enum Target {
     Offscreen(wgpu::Texture),
     /// A window surface, presented after each frame.
     Surface { surface: wgpu::Surface<'static>, config: wgpu::SurfaceConfiguration },
+    /// Not attached to a window yet (see `VelloGpuRenderer::new_detached_in`).
+    Detached,
 }
+
+/// The format a detached renderer is built for: the first one `surface_config` picks when the
+/// surface offers it, which DX12, Metal and most Vulkan drivers do.
+const DETACHED_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
 /// The GPU renderer.
 pub struct VelloGpuRenderer {
@@ -39,6 +45,7 @@ pub struct VelloGpuRenderer {
     size: (u16, u16),
     atlas: bool,
     images: GpuImages,
+    format: wgpu::TextureFormat,
 }
 
 /// Images uploaded as textures of their own, keyed by image id and generation. vello samples them
@@ -123,15 +130,44 @@ pub struct GpuContext {
 
 impl GpuContext {
     /// Starts a device on the high performance adapter of the primary backends (Vulkan, DX12,
-    /// Metal; not GL, whose start up alone costs about 170 ms here and which vello does not need).
+    /// Metal), for drawing offscreen. See `for_display` for windows.
     pub fn new() -> Result<GpuContext, RenderError> {
-        let desc = wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::PRIMARY,
-            ..wgpu::InstanceDescriptor::new_without_display_handle()
+        Self::with_backends(wgpu::Backends::PRIMARY)
+    }
+
+    /// Starts a device for windows on `display` (a winit window or its event loop): the primary
+    /// backends, and OpenGL when none of them has a usable adapter (a virtual machine or an old
+    /// driver). OpenGL is not tried first because its start up alone costs about 170 ms here, and
+    /// it needs the display to make window surfaces. `TERMINUS_GPU_BACKEND=gl` uses OpenGL only,
+    /// to measure and test it.
+    pub fn for_display<D>(display: D) -> Result<GpuContext, RenderError>
+    where
+        D: wgpu::rwh::HasDisplayHandle + std::fmt::Debug + Send + Sync + Clone + 'static,
+    {
+        let gl = || {
+            let desc = wgpu::InstanceDescriptor::new_with_display_handle(Box::new(display.clone()));
+            Self::with_descriptor(wgpu::InstanceDescriptor { backends: wgpu::Backends::GL, ..desc })
         };
+        if std::env::var("TERMINUS_GPU_BACKEND").is_ok_and(|v| v.eq_ignore_ascii_case("gl")) {
+            return gl();
+        }
+        Self::with_backends(wgpu::Backends::PRIMARY).or_else(|_| gl())
+    }
+
+    /// Starts a device on the high performance adapter of the given backends, with no display.
+    pub fn with_backends(backends: wgpu::Backends) -> Result<GpuContext, RenderError> {
+        Self::with_descriptor(wgpu::InstanceDescriptor {
+            backends,
+            ..wgpu::InstanceDescriptor::new_without_display_handle()
+        })
+    }
+
+    /// Starts a device on the high performance adapter an instance made from `desc` offers.
+    fn with_descriptor(desc: wgpu::InstanceDescriptor) -> Result<GpuContext, RenderError> {
+        let backends = desc.backends;
         let instance = wgpu::Instance::new(desc);
-        let (adapter, device, queue, info) =
-            request_device_for(&instance, None, false).ok_or_else(|| RenderError::Gpu("no GPU adapter".into()))?;
+        let (adapter, device, queue, info) = request_device_for(&instance, None, false)
+            .ok_or_else(|| RenderError::Gpu(format!("no GPU adapter on {backends:?}")))?;
         Ok(GpuContext { instance, adapter, device, queue, info })
     }
 
@@ -256,26 +292,45 @@ impl VelloGpuRenderer {
         ctx: &GpuContext, window: impl Into<wgpu::SurfaceTarget<'static>>, width: u32, height: u32, atlas: bool,
         unpaced: bool,
     ) -> Result<VelloGpuRenderer, RenderError> {
+        let mut r = Self::new_detached_in(ctx, width, height, atlas);
+        r.attach_window(ctx, window, unpaced)?;
+        Ok(r)
+    }
+
+    /// A renderer on `ctx` with no window yet. Building vello's pipelines is the slow part of
+    /// starting the GPU renderer (tens to hundreds of milliseconds), and it needs no window, so it
+    /// can run on any thread; `attach_window` then runs on the thread that owns the window, which
+    /// winit requires on Windows and macOS.
+    pub fn new_detached_in(ctx: &GpuContext, width: u32, height: u32, atlas: bool) -> VelloGpuRenderer {
+        let (w, h) = (clamp_dim(width), clamp_dim(height));
+        let (device, queue, info) = (ctx.device.clone(), ctx.queue.clone(), ctx.info.clone());
+        Self::assemble(device, queue, info, Target::Detached, DETACHED_FORMAT, (w, h), atlas)
+    }
+
+    /// Makes `window` this renderer's target: creates and configures its surface on `ctx` (the
+    /// context the renderer was built on), and rebuilds the pipelines only when the surface uses
+    /// another format than the one they were built for. `unpaced` presents immediately instead of
+    /// at the display rate (the latency benchmark).
+    pub fn attach_window(
+        &mut self, ctx: &GpuContext, window: impl Into<wgpu::SurfaceTarget<'static>>, unpaced: bool,
+    ) -> Result<(), RenderError> {
         let surface =
             ctx.instance.create_surface(window).map_err(|e| RenderError::Gpu(format!("create surface: {e}")))?;
         if !ctx.adapter.is_surface_supported(&surface) {
             return Err(RenderError::Gpu(format!("{} cannot draw to this window", ctx.info.name)));
         }
         let caps = surface.get_capabilities(&ctx.adapter);
-        let (w, h) = (clamp_dim(width), clamp_dim(height));
-        let config = surface_config(&caps, w, h, unpaced)
+        let config = surface_config(&caps, self.size.0, self.size.1, unpaced)
             .ok_or_else(|| RenderError::Gpu("the surface offers no 8 bit RGBA or BGRA format".into()))?;
-        surface.configure(&ctx.device, &config);
-        let format = config.format;
-        Ok(Self::assemble(
-            ctx.device.clone(),
-            ctx.queue.clone(),
-            ctx.info.clone(),
-            Target::Surface { surface, config },
-            format,
-            (w, h),
-            atlas,
-        ))
+        surface.configure(&self.device, &config);
+        if config.format != self.format {
+            let rc = RenderTargetConfig { format: config.format, width: self.size.0, height: self.size.1 };
+            (self.renderer, self.resources) = vello_gpu::Renderer::new(&self.device, &rc);
+            self.images = GpuImages::default();
+            self.format = config.format;
+        }
+        self.target = Target::Surface { surface, config };
+        Ok(())
     }
 
     /// Builds the renderer around a device and a target.
@@ -298,6 +353,7 @@ impl VelloGpuRenderer {
             size: (w, h),
             atlas,
             images: GpuImages::default(),
+            format,
         }
     }
 
@@ -454,6 +510,7 @@ impl Renderer for VelloGpuRenderer {
                 config.height = h.into();
                 surface.configure(&self.device, config);
             }
+            Target::Detached => {}
         }
         self.depth = vello_gpu::Renderer::create_depth_texture_view(&self.device, &RenderSize { width: w, height: h });
         self.scene = Scene::new(w, h);
@@ -496,7 +553,9 @@ impl Renderer for VelloGpuRenderer {
     fn read_pixels(&mut self) -> Result<Image, RenderError> {
         match &self.target {
             Target::Offscreen(t) => crate::readback::read_texture(&self.device, &self.queue, t),
-            Target::Surface { .. } => Err(RenderError::Gpu("a window surface cannot be read back".into())),
+            Target::Surface { .. } | Target::Detached => {
+                Err(RenderError::Gpu("only an offscreen target can be read back".into()))
+            }
         }
     }
 

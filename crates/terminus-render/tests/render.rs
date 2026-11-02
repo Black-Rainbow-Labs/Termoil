@@ -344,3 +344,13 @@ fn r1_search_hits_are_highlighted() {
     assert!(spans.iter().any(|s| s.color == y && s.x0 == f.padding.0 as f32), "{spans:?}");
     assert_eq!(spans.iter().filter(|s| s.color == y).count(), 1, "the selected match is drawn as the selection");
 }
+
+/// The OpenGL backend starts a device where the machine has OpenGL (PRD 5.2: wgpu on Vulkan,
+/// Metal, DX12 and OpenGL as the platform allows). A machine without it skips.
+#[test]
+fn opengl_backend_starts_a_device() {
+    match terminus_render::GpuContext::with_backends(wgpu::Backends::GL) {
+        Ok(ctx) => assert_eq!(ctx.info().backend, wgpu::Backend::Gl, "{:?}", ctx.info()),
+        Err(e) => println!("no OpenGL adapter here; skipping: {e}"),
+    }
+}

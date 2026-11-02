@@ -171,7 +171,7 @@ impl WinState {
                 let _ = window.request_inner_size(PhysicalSize::new(w, h));
             }
         }
-        let (painter, upgrade) = Painter::new(&window, config.window.renderer, warm_cpu)?;
+        let (painter, upgrade) = Painter::new(&window, config.window.renderer, warm_cpu, el.owned_display_handle())?;
         crate::gui::phase("renderer_ready");
         let colors = look::colors(config, os_dark);
         Ok(WinState {
@@ -396,10 +396,13 @@ impl WinState {
         let Some(rx) = &self.upgrade else { return };
         match rx.try_recv() {
             Ok(Ok(mut gpu)) => {
+                self.upgrade = None;
                 let size = self.window.inner_size();
                 terminus_render::Renderer::resize(&mut gpu, size.width, size.height);
-                self.painter = Painter::Gpu(Box::new(gpu));
-                self.upgrade = None;
+                match crate::gui::paint::attach(&mut gpu, &self.window) {
+                    Ok(()) => self.painter = Painter::Gpu(Box::new(gpu)),
+                    Err(e) => eprintln!("terminus: GPU renderer unavailable, staying on the CPU renderer: {e}"),
+                }
             }
             Ok(Err(e)) => {
                 eprintln!("terminus: GPU renderer unavailable, staying on the CPU renderer: {e}");

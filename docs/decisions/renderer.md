@@ -58,6 +58,25 @@ paint whose frame shows the echoed character. Presents are unpaced (immediate mo
 **Gate: p50 under 8 ms and p99 under 16 ms passes.** The camera check against Windows Terminal and Alacritty that TEST-SUITE
 asks for once per release is not done by an agent; it is listed in `docs/performance.md` as open.
 
+**Re-measured on 2026-11-01 after a defect was found.** From the change that moved the GPU start to a background thread until
+this date, a window never switched to `vello_gpu`: the thread also created the window surface, and winit on Windows gives out
+a window's handle only on the thread that owns the window, so surface creation failed with "the underlying handle is not
+available" and every window, including the 0.1.1 release, drew with `vello_cpu`. The thread now starts the device and builds
+vello's pipelines (the slow part), and the UI thread creates the surface and attaches it
+(`VelloGpuRenderer::new_detached_in`, `attach_window`). The E6 window test now waits for the switch on a machine with a GPU.
+P2 with the GPU renderer in use, the renderer named in each JSON row:
+
+| Run | Renderer | Keys | p50 | p90 | p99 | max |
+|---|---|---|---|---|---|---|
+| 1 | `vello_gpu` on the RTX 5090 (Vulkan) | 800 | 1.77 ms | 2.51 ms | 6.39 ms | 118.48 ms |
+| 2 | `vello_gpu` on the RTX 5090 (Vulkan) | 800 | 1.91 ms | 2.73 ms | 7.55 ms | 13.64 ms |
+| 3 | `vello_gpu` on the RTX 5090 (Vulkan) | 800 | 1.93 ms | 2.71 ms | 7.54 ms | 52.53 ms |
+| GL | `vello_gpu` on the RTX 5090 (OpenGL, `TERMINUS_GPU_BACKEND=gl`) | 200 | 3.83 ms | 6.22 ms | 31.71 ms | 576.35 ms |
+
+The gate still passes on the primary backend. OpenGL is the fallback when no primary backend has an adapter
+(`GpuContext::for_display`), and its p99 is over the gate on this machine; it is there so a machine without Vulkan, DX12 or
+Metal still gets a GPU renderer, not for speed.
+
 ## P4: start up
 
 `TERMINUS_STARTUP_PROBE=<file>` makes `terminus-gui` write the time from the start of `main` to the first frame that shows
