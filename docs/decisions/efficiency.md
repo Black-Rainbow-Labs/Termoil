@@ -177,8 +177,11 @@ zoom sent as 800 by 520 kitty graphics frames at 30 a second (about 15 MB/s of b
 in Ghostty over the same seconds, and Termoil's process used 1.7 s of CPU in 6 s, so it was waiting, not working.
 
 `ConptyConfig.output_pipe_bytes` (default 1 MiB) is now the pipe's buffer. With it both terminals show all 205 frames.
-`crates/termoil-pty/tests/w4_output_pipe.rs` streams 4 MB through `type` with a reader that pauses 1 ms after each read:
-the largest read was 9,975 bytes with the old pipe and the run took 5.2 s, against more than 16 KiB and 3.1 s now.
+Streaming 4 MB through `type` with a reader that pauses 1 ms after each read gave a largest read of 9,975 bytes and
+5.2 s with the old pipe, against more than 16 KiB and 3.1 s with the new one. That run depends on how fast OpenConsole
+produces output, which varies with load, so the test that keeps the pipe size is
+`output_pipe_has_the_requested_buffer` in `crates/termoil-pty/src/windows.rs`: it asks Windows for the buffer size of a
+new pipe with `GetNamedPipeInfo`.
 
 The `apps` stream run is unchanged by it, because `type` writes small chunks: three runs each in the same session gave
 16.6 and 17.4 s of CPU per 100 MB for this build and 17.4 for 1.3.0 (the 15.5 in the table above was a quieter machine),

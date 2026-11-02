@@ -425,6 +425,25 @@ fn build_environment_block(extra: &[(String, String)]) -> Vec<u16> {
 mod tests {
     use super::*;
     use std::os::windows::ffi::OsStringExt;
+    use windows::Win32::System::Pipes::GetNamedPipeInfo;
+
+    /// The buffer size Windows reports for a pipe end.
+    fn pipe_buffer(end: &OwnedHandle) -> u32 {
+        let (mut out_size, mut in_size) = (0u32, 0u32);
+        // SAFETY: `end` is an open pipe handle and both out pointers are valid.
+        unsafe { GetNamedPipeInfo(handle_of(end), None, Some(&mut out_size), Some(&mut in_size), None) }
+            .expect("GetNamedPipeInfo");
+        in_size.max(out_size)
+    }
+
+    /// The output pipe gets the buffer it is asked for, where the system default is a few KiB (task-2485).
+    #[test]
+    fn output_pipe_has_the_requested_buffer() {
+        let (read, _write) = make_pipe(crate::DEFAULT_OUTPUT_PIPE_BYTES).expect("pipe");
+        assert!(pipe_buffer(&read) >= crate::DEFAULT_OUTPUT_PIPE_BYTES, "buffer {}", pipe_buffer(&read));
+        let (small, _small_write) = make_pipe(0).expect("pipe");
+        assert!(pipe_buffer(&small) < 64 * 1024, "the system default was {} bytes", pipe_buffer(&small));
+    }
 
     /// A later entry replaces an inherited variable regardless of case.
     #[test]
