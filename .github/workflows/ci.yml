@@ -50,7 +50,7 @@ jobs:
         if: runner.os == 'Windows'
         run: pwsh -NoProfile -File tools/fetch-conpty.ps1
       - name: Headless crates and tools
-        run: cargo test --workspace
+        run: cargo test --workspace --no-fail-fast
 
   wasm:
     runs-on: ubuntu-latest

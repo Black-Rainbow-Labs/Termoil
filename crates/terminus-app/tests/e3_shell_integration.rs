@@ -39,9 +39,12 @@ struct Session {
 
 impl Session {
     /// Starts `program` with the arguments and environment `injection` gives for the folder.
-    fn start(program: &str, shell: Shell, dir: &Path, user_args: &[&str], cwd: &Path, wsl: bool) -> Session {
+    fn start(
+        program: &str, shell: Shell, dir: &Path, user_args: &[&str], cwd: &Path, wsl: bool, extra_env: &[(&str, &str)],
+    ) -> Session {
         let user: Vec<String> = user_args.iter().map(|s| s.to_string()).collect();
         let mut inj = injection(shell, dir, &user).expect("injection");
+        inj.env.extend(extra_env.iter().map(|(k, v)| (k.to_string(), v.to_string())));
         if wsl {
             // wsl.exe runs bash and passes only the variables named in WSLENV through.
             let names: Vec<String> = inj.env.iter().map(|(k, _)| k.clone()).collect();
@@ -163,6 +166,8 @@ struct Spec {
     commands_marked: bool,
     /// Start bash inside WSL (Ubuntu) instead of on Windows.
     wsl: bool,
+    /// More environment variables for the shell.
+    env: Vec<(&'static str, &'static str)>,
 }
 
 /// A new empty folder under the temp directory, with a name no other folder has.
@@ -180,7 +185,7 @@ fn run_spec(spec: Spec) {
     let dir = scripts_dir().canonicalize().expect("shell-integration folder");
     let dir = PathBuf::from(dir.to_string_lossy().trim_start_matches(r"\\?\"));
     let dir = if spec.wsl { wsl_path(&dir) } else { dir };
-    let mut s = Session::start(&spec.program, spec.shell, &dir, &spec.args, &start, spec.wsl);
+    let mut s = Session::start(&spec.program, spec.shell, &dir, &spec.args, &start, spec.wsl, &spec.env);
     s.wait_prompt();
     let early_finish = s.events.iter().any(|e| matches!(e, Event::Prompt(PromptEvent::CommandFinished(_))));
     assert!(!early_finish, "{}: OSC 133;D was sent before the first command", spec.name);
@@ -222,6 +227,7 @@ fn powershell_spec(name: &'static str, program: &str) -> Spec {
         ok: "Get-Date | Out-Null",
         commands_marked: true,
         wsl: false,
+        env: Vec::new(),
     }
 }
 
@@ -258,6 +264,7 @@ fn bash() {
         ok: "true",
         commands_marked: true,
         wsl: false,
+        env: Vec::new(),
     });
 }
 
@@ -277,6 +284,7 @@ fn cmd() {
         ok: "",
         commands_marked: false,
         wsl: false,
+        env: Vec::new(),
     });
 }
 
@@ -296,6 +304,7 @@ fn zsh() {
         ok: "true",
         commands_marked: true,
         wsl: false,
+        env: Vec::new(),
     });
 }
 
@@ -315,6 +324,7 @@ fn fish() {
         ok: "true",
         commands_marked: true,
         wsl: false,
+        env: Vec::new(),
     });
 }
 
@@ -334,6 +344,7 @@ fn nushell() {
         ok: "echo ok",
         commands_marked: true,
         wsl: false,
+        env: Vec::new(),
     });
 }
 
@@ -526,6 +537,28 @@ fn wsl_path(path: &Path) -> PathBuf {
     }
 }
 
+/// bash with the path used before bash 4.4 (no PS0: the DEBUG trap and the history number), as
+/// macOS's bash 3.2 runs it. A subshell such as `(exit 7)` must still report its exit code.
+#[test]
+fn bash_without_ps0() {
+    let program = if cfg!(windows) { "C:/Program Files/Git/bin/bash.exe".to_string() } else { "bash".to_string() };
+    if !available(&program, &["-c", "exit 0"]) {
+        return println!("bash is not installed; skipping");
+    }
+    run_spec(Spec {
+        name: "bash-no-ps0",
+        program,
+        shell: Shell::Bash,
+        args: vec!["-i"],
+        cd: |p| format!("cd '{}'", p.to_string_lossy().replace('\\', "/")),
+        fail: "(exit 7)",
+        ok: "true",
+        commands_marked: true,
+        wsl: false,
+        env: vec![("TERMINUS_BASH_NO_PS0", "1")],
+    });
+}
+
 /// bash inside WSL (Ubuntu), a bonus run that exercises the Linux path of the bash script.
 #[test]
 fn bash_in_wsl() {
@@ -543,5 +576,6 @@ fn bash_in_wsl() {
         ok: "true",
         commands_marked: true,
         wsl: true,
+        env: Vec::new(),
     });
 }

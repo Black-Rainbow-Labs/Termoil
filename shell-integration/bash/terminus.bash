@@ -22,6 +22,8 @@ __terminus_cmd_started=1
 # OSC 133;D is only sent after a real command. It is unset while no command has run.
 unset __terminus_ran
 __terminus_last_pwd=
+# The history number at the last prompt (bash older than 4.4 only).
+__terminus_last_hist=
 
 # Percent encodes the string in $1 into $REPLY. Letters, digits and / . _ ~ : - stay as they are.
 __terminus_urlencode() {
@@ -48,10 +50,32 @@ __terminus_report_cwd() {
     printf '\e]7;file://%s%s\a' "${HOSTNAME:-localhost}" "$REPLY"
 }
 
+# The number of the newest history entry, in $REPLY (empty when history is off).
+__terminus_history_number() {
+    local h
+    h=$(builtin history 1)
+    h=${h#"${h%%[![:space:]]*}"}
+    REPLY=${h%%[!0-9]*}
+}
+
+# Before bash 4.4 the DEBUG trap does not run for a line that is only a subshell, such as
+# (exit 7). A new history entry since the last prompt means a line ran; when the trap did not
+# announce it, OSC 133;C is sent now so the OSC 133;D that follows has a C before it.
+__terminus_note_line() {
+    __terminus_has_ps0 && return 0
+    __terminus_history_number
+    if [ -n "$__terminus_last_hist" ] && [ "$REPLY" != "$__terminus_last_hist" ] && [ -z "${__terminus_ran+x}" ]; then
+        printf '\e]133;C\a'
+        __terminus_ran=
+    fi
+    __terminus_last_hist=$REPLY
+}
+
 # First entry of PROMPT_COMMAND: reports how the last command ended, then the directory.
 __terminus_prompt_begin() {
     local ec=$?
     __terminus_cmd_started=1
+    __terminus_note_line
     if [ -n "${__terminus_ran+x}" ]; then printf '\e]133;D;%s\a' "$ec"; fi
     unset __terminus_ran
     __terminus_report_cwd
@@ -81,8 +105,10 @@ __terminus_install_ps0() {
     PS0='\e]133;C\a${__terminus_ran=}'"${PS0:-}"
 }
 
-# True for bash 4.4 or newer.
+# True for bash 4.4 or newer. TERMINUS_BASH_NO_PS0=1 takes the older path on any bash; the tests
+# use it to run what macOS's bash 3.2 runs.
 __terminus_has_ps0() {
+    [ "${TERMINUS_BASH_NO_PS0:-}" = "1" ] && return 1
     [ "${BASH_VERSINFO[0]}" -gt 4 ] || { [ "${BASH_VERSINFO[0]}" -eq 4 ] && [ "${BASH_VERSINFO[1]}" -ge 4 ]; }
 }
 
