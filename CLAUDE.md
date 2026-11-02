@@ -32,4 +32,4 @@ Each milestone ends with `pwsh tools/release.ps1`, which bumps, builds, installs
 
 ## Design questions
 
-If the TDD does not answer a design question, file a ticket on the Tasks board titled `Fable: <question>` with model `claude-fable-5-1[1m]`, assignee `claude`, and agentProjectId `terminus` (the Tasks board project id and the main checkout folder kept the old name). Then continue with the parts of your ticket that do not depend on the answer. Measured decisions (the renderer at M2, ConPTY passthrough at M1) are written to `docs/decisions/<topic>.md` with the numbers, and the TDD is updated to match.
+If the TDD does not answer a design question, file a ticket on the Tasks board titled `Fable: <question>` with model `claude-fable-5-1[1m]`, assignee `claude`, and agentProjectId `termoil`. Then continue with the parts of your ticket that do not depend on the answer. Measured decisions (the renderer at M2, ConPTY passthrough at M1) are written to `docs/decisions/<topic>.md` with the numbers, and the TDD is updated to match.

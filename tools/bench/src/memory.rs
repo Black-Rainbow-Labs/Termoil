@@ -23,7 +23,7 @@ fn gate(lines: usize) -> f64 {
 /// One line of 200 columns: words, or with `dense` an SGR change on every word.
 fn line(i: usize, dense: bool) -> Vec<u8> {
     let words =
-        ["compile", "terminus", "warning:", "src/main.rs", "ok", "finished", "error[E0382]", "->", "release", "target"];
+        ["compile", "termoil", "warning:", "src/main.rs", "ok", "finished", "error[E0382]", "->", "release", "target"];
     let mut out = Vec::with_capacity(320);
     let mut col = 0;
     let mut k = i.wrapping_mul(2_654_435_761);

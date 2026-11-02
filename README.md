@@ -2,7 +2,6 @@
 
 Termoil is a terminal emulator written from scratch in Rust for Windows, macOS and Linux. Its core is a headless library with no window, GPU or font dependency, so the same core serves the Termoil window, an IDE's terminal tile and an agent's scripted terminal. Rendering goes through vello behind one renderer trait. The target is parity with Ghostty, Alacritty, WezTerm, Kitty and Windows Terminal on features and performance.
 
-Termoil was called Terminus up to version 1.1.0. Installing Termoil removes a Terminus install, and the first start copies the old `terminus` settings folder to `termoil` and leaves the old one in place.
 
 ## Documents
 

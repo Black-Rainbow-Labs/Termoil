@@ -22,8 +22,6 @@
 #define CliExe "termoil.exe"
 
 [Setup]
-; Termoil was called Terminus up to 1.1.0. It has its own AppId, and PrepareToInstall removes a
-; Terminus install it finds (LegacyUninstallKey in [Code]), so a machine never has both.
 AppId={{7D7EA3DF-6A1C-4346-ADDC-4512927709B9}
 AppName={#AppName}
 AppVersion={#AppVersion}
@@ -96,7 +94,6 @@ Filename: "{app}\{#GuiExe}"; Description: "Start {#AppName}"; Flags: nowait post
 
 [Code]
 const
-  LegacyUninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{9B3E6D52-4C1A-4F0E-8A57-2D6C1E7B94A3}_is1';
   EnvironmentKeyUser = 'Environment';
   EnvironmentKeyMachine = 'SYSTEM\CurrentControlSet\Control\Session Manager\Environment';
 
@@ -164,31 +161,9 @@ begin
   Exec('powershell.exe', Command, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 end;
 
-{ Returns the uninstaller of a Terminus install (the name before 1.2.0), or '' when there is none. }
-function LegacyUninstaller: String;
-var
-  Value: String;
-begin
-  Result := '';
-  if RegQueryStringValue(HKEY_CURRENT_USER, LegacyUninstallKey, 'UninstallString', Value) then Result := RemoveQuotes(Value)
-  else if RegQueryStringValue(HKEY_LOCAL_MACHINE, LegacyUninstallKey, 'UninstallString', Value) then Result := RemoveQuotes(Value);
-end;
-
-{ Removes a Terminus install silently. Its uninstaller leaves the settings folder, which Termoil copies on first start. }
-procedure RemoveLegacyTerminus;
-var
-  Uninstaller: String;
-  ResultCode: Integer;
-begin
-  Uninstaller := LegacyUninstaller;
-  if (Uninstaller = '') or not FileExists(Uninstaller) then exit;
-  Exec(Uninstaller, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-end;
-
-{ Runs before files are copied: removes a Terminus install and stops a running Termoil so its files can be replaced. }
+{ Runs before files are copied: stops a running Termoil so its files can be replaced. }
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
-  RemoveLegacyTerminus;
   StopRunningTermoil;
   Result := '';
 end;

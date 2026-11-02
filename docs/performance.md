@@ -45,10 +45,14 @@ Other rows from the same runs, for comparison and not gated:
 bytes. Measured on 2026-11-02 in one session, termoil-vt at commit `f2ff2a4` (the last commit to touch
 `crates/termoil-vt`, inside the 1.0.0 release `855b681`), Rust 1.95.0, release profile.
 
-The gate stream is `streams::mixed(64 << 20)` repeated sixteen times: 1,073,743,136 bytes. The block is 67,108,946 bytes
-with FNV-1a 64 `0xbcf285359a5a6081`, 94.8 bytes per line, 29.2 escape sequences per KB, 13.3 UTF-8 multibyte sequences per
+The gate stream is `streams::mixed(64 << 20)` repeated sixteen times: 1,073,742,688 bytes. The block is 67,108,918 bytes
+with FNV-1a 64 `0x1de2e5fc16fff266`, 94.4 bytes per line, 29.3 escape sequences per KB, 13.3 UTF-8 multibyte sequences per
 KB and 16.4 % of bytes inside escape sequences. The test `mixed_gate_stream_is_pinned` in `tools/bench/src/streams.rs`
 fails if any of these change.
+
+On 2026-11-02 (task-2472) one word of the stream's word list changed, which made the block 28 bytes shorter and the
+average line 0.4 bytes shorter. The measurements on this page were taken on the block before that change. The change is
+under one part in two million of the bytes, well inside the run to run spread above, so they were not repeated.
 
 How each column was measured:
 

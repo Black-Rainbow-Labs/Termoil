@@ -26,7 +26,7 @@ The `mixed` stream is a build log: words, an SGR colour on about one word in eig
 
 | Property | Value |
 |---|---|
-| Average line length | 94.8 bytes |
+| Average line length | 94.8 bytes (94.4 since the word list change on 2026-11-02, see `docs/performance.md`) |
 | Escape sequences per KB | 29.2 |
 | UTF-8 multibyte sequences per KB | 13.3 |
 | Bytes inside escape sequences | 16.4 % |

@@ -38,7 +38,7 @@ fn line(n: usize) -> Vec<u8> {
     let words = [
         "cargo",
         "build",
-        "terminus",
+        "termoil",
         "warning:",
         "src/page.rs:42",
         "Finished",

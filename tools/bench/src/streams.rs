@@ -23,12 +23,11 @@ impl Rng {
     }
 }
 
-/// The words the generated streams are made of. "terminus" is the project's name before it became Termoil, and it
-/// stays: the gate stream is pinned by length and checksum and every published throughput number was measured on it.
+/// The words the generated streams are made of.
 const WORDS: &[&str] = &[
     "the",
     "compiling",
-    "terminus",
+    "termoil",
     "warning:",
     "error",
     "src/main.rs",
@@ -235,7 +234,7 @@ pub fn scenarios() -> Vec<(&'static str, Vec<u8>)> {
         ),
         (
             "micro_words_lf",
-            b"the compiling terminus warning: error src/main.rs Finished x
+            b"the compiling termoil warning: error src/main.rs Finished x
 "
             .repeat(256 << 10),
         ),
@@ -326,12 +325,12 @@ mod tests {
     use super::*;
 
     /// The length of the P1 gate block, `mixed(64 << 20)`. The 1 GiB gate file is this block sixteen times.
-    const MIXED_LEN: usize = 67_108_946;
+    const MIXED_LEN: usize = 67_108_918;
     /// FNV-1a 64 of the P1 gate block.
-    const MIXED_FNV1A: u64 = 0xbcf2_8535_9a5a_6081;
+    const MIXED_FNV1A: u64 = 0x1de2_e5fc_16ff_f266;
 
     /// The P1 gate stream cannot change without this test failing. The composition is the one in
-    /// `docs/decisions/throughput.md`: 94.8 bytes per line, 29.2 escape sequences per KB, 13.3 UTF-8
+    /// `docs/performance.md`: 94.4 bytes per line, 29.3 escape sequences per KB, 13.3 UTF-8
     /// multibyte sequences per KB, 16.4 percent of bytes inside escape sequences. A change to the
     /// stream is a change to the P1 gate and needs a decision record, not a new pin.
     #[test]
@@ -340,8 +339,8 @@ mod tests {
         assert_eq!(d.len(), MIXED_LEN);
         assert_eq!(fnv1a(&d), MIXED_FNV1A, "fnv1a {:#018x}", fnv1a(&d));
         let c = composition(&d);
-        assert_eq!(format!("{:.1}", c.bytes_per_line), "94.8");
-        assert_eq!(format!("{:.1}", c.escapes_per_kb), "29.2");
+        assert_eq!(format!("{:.1}", c.bytes_per_line), "94.4");
+        assert_eq!(format!("{:.1}", c.escapes_per_kb), "29.3");
         assert_eq!(format!("{:.1}", c.utf8_multibyte_per_kb), "13.3");
         assert_eq!(format!("{:.1}", c.fraction_in_escape * 100.0), "16.4");
     }
