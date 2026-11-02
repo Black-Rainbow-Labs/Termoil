@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
+PackageIdentifier: Terminus.Terminus
+PackageVersion: 0.2.0
+InstallerType: inno
+Scope: user
+InstallModes:
+- interactive
+- silent
+- silentWithProgress
+UpgradeBehavior: install
+Commands:
+- terminus
+ReleaseDate: 2026-11-02
+Installers:
+- Architecture: x64
+  InstallerUrl: https://github.com/jasonmcaffee/terminus/releases/download/v0.2.0/TerminusSetup-0.2.0-x64.exe
+  InstallerSha256: 5FEAD4062D3D8288138395DB5B62BB2D54153E177DCF2AB59DEEA2AC3D5B199B
+  ProductCode: '{9B3E6D52-4C1A-4F0E-8A57-2D6C1E7B94A3}_is1'
+ManifestType: installer
+ManifestVersion: 1.10.0

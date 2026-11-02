@@ -51,6 +51,15 @@ jobs:
         run: pwsh -NoProfile -File tools/fetch-conpty.ps1
       - name: Headless crates and tools
         run: cargo test --workspace --no-fail-fast
+      - name: Render golden candidates
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: render-goldens-${{ matrix.os }}
+          path: |
+            corpus/render/**/*.new.png
+            corpus/render/**/*.diff.png
+          if-no-files-found: ignore
 
   wasm:
     runs-on: ubuntu-latest
