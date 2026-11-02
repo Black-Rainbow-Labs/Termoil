@@ -146,6 +146,8 @@ pub struct WinState {
     pub hint_strips: Vec<Strip>,
     /// The GPU renderer being built, until the window switches to it.
     pub upgrade: Option<crate::gui::paint::GpuUpgrade>,
+    /// The custom shader (`window.shader`) and its error.
+    pub shader: crate::gui::shader::ShaderState,
 }
 
 impl WinState {
@@ -193,6 +195,8 @@ impl WinState {
         };
         crate::gui::backdrop::apply(&window, translucent, config.window.blur);
         painter.set_hinting(config.font.hinting);
+        let mut shader = crate::gui::shader::ShaderState::new(config, &app.config_path);
+        shader.apply(&mut painter, true);
         crate::gui::phase("renderer_ready");
         let colors = look::colors(config, os_dark);
         let interval = frame_interval(&window);
@@ -229,6 +233,7 @@ impl WinState {
             unpaced: std::env::var("TERMINUS_PRESENT").is_ok_and(|v| v == "immediate"),
             wake_at: None,
             upgrade,
+            shader,
             overlay: None,
             hint_strips: Vec::new(),
             bell_until: None,
@@ -271,7 +276,7 @@ impl WinState {
         let (cw, ch) = self.cell();
         let tabs = app.model.windows[wi].tabs.len();
         self.tab_bar_h = if tabs > 1 && app.config.window.show_tab_bar { ch as f32 + 6.0 } else { 0.0 };
-        let banner_h = if app.config_error.is_some() { ch as f32 + 4.0 } else { 0.0 };
+        let banner_h = if self.banner_text(app).is_some() { ch as f32 + 4.0 } else { 0.0 };
         let top = self.tab_bar_h + banner_h;
         let area = Rect { x: 0.0, y: top, w: size.width as f32, h: (size.height as f32 - top).max(0.0) };
         let tab = app.model.windows[wi].tab();
@@ -342,7 +347,11 @@ impl WinState {
 
     /// Draws the window: each visible pane, the tab bar, the banner and the preedit.
     pub fn draw(&mut self, app: &mut App) -> Result<(), String> {
+        let had_shader_error = self.shader.error.is_some();
         self.take_gpu();
+        if had_shader_error != self.shader.error.is_some() {
+            self.relayout(app);
+        }
         let Some(wi) = app.model.window_index(self.id) else { return Ok(()) };
         let focus = app.model.windows[wi].tab().focus;
         self.wake_at = None;
@@ -361,6 +370,8 @@ impl WinState {
             }
         }
         let bg = look::mix(self.colors.background, self.colors.foreground, 0.2);
+        let (cw, ch) = self.cell();
+        let shader_cursor = self.cursor_px(focus).map(|(x, y)| (x + cw as f32 / 2.0, y + ch as f32 / 2.0));
         let chrome = self.build_chrome(app, wi, focus);
         let mut layers: Vec<Layer<'_>> = Vec::new();
         for (pane, rect) in &layout {
@@ -388,8 +399,10 @@ impl WinState {
             crate::gui::phase("frame_built");
         }
         let window_colour = Rgba { a: self.opts.background_alpha, ..Rgba::rgb(bg.r, bg.g, bg.b) };
+        self.painter.set_shader_cursor(shader_cursor);
         self.painter.paint(window_colour, &layers, &self.grid)?;
         self.last_paint = Some(Instant::now());
+        self.keep_animating();
         if self.shown {
             self.presented_shown = true;
         } else {
@@ -421,6 +434,43 @@ impl WinState {
     /// Moves a redraw that came too soon to `due`, so it happens once at the display rate.
     pub fn defer_paint(&mut self, due: Instant) {
         self.wake_at = Some(self.wake_at.map_or(due, |w| w.min(due)));
+    }
+
+    /// The banner bytes: the configuration error when there is one, otherwise the shader's error.
+    fn banner_text(&self, app: &App) -> Option<Vec<u8>> {
+        match (&app.config_error, self.shader.banner()) {
+            (Some(msg), _) => Some(chrome::banner(msg)),
+            (None, Some(msg)) => Some(chrome::shader_banner(msg)),
+            (None, None) => None,
+        }
+    }
+
+    /// Applies `window.shader` after the configuration changed: the file is read and compiled again
+    /// when its text changed. A new banner changes the layout.
+    pub fn config_shader(&mut self, app: &mut App) {
+        self.shader.configure(&app.config, &app.config_path);
+        if self.shader.apply(&mut self.painter, false) {
+            self.relayout(app);
+        }
+        self.window.request_redraw();
+    }
+
+    /// Reloads the shader file when its modified time changed (checked at most once every
+    /// `window.shader_poll_ms`). Returns when to look again, for the event loop's wake up.
+    pub fn shader_tick(&mut self, app: &mut App, now: Instant) -> Option<Instant> {
+        let (changed, next) = self.shader.poll(&mut self.painter, now);
+        if changed {
+            self.relayout(app);
+            self.window.request_redraw();
+        }
+        next
+    }
+
+    /// While a shader that reads the time runs, schedules the next frame at the display rate.
+    fn keep_animating(&mut self) {
+        if self.painter.shader_animates() {
+            self.defer_paint(Instant::now() + self.frame_interval);
+        }
     }
 
     /// Reads the display's refresh rate again (the window moved to another monitor).
@@ -459,7 +509,11 @@ impl WinState {
                 terminus_render::Renderer::resize(&mut gpu, size.width, size.height);
                 terminus_render::Renderer::set_hinting(&mut gpu, self.hinting);
                 match crate::gui::paint::attach(&mut gpu, &self.window) {
-                    Ok(()) => self.painter = Painter::Gpu(Box::new(gpu)),
+                    Ok(()) => {
+                        self.painter = Painter::Gpu(Box::new(gpu));
+                        // A new renderer has no shader yet; a shader error reaches the banner on this frame.
+                        self.shader.apply(&mut self.painter, true);
+                    }
                     Err(e) => eprintln!("terminus: GPU renderer unavailable, staying on the CPU renderer: {e}"),
                 }
             }
@@ -554,11 +608,11 @@ impl WinState {
             self.tab_spans = spans;
             at.tab = Some((0.0, 0.0));
         }
-        if let Some(msg) = &app.config_error {
+        if let Some(text) = self.banner_text(app) {
             self.banner_strip.frame(
                 cols,
                 1,
-                &chrome::banner(msg),
+                &text,
                 &self.colors,
                 &mut self.grid,
                 &BuildOptions { padding: (0, 2), ..opts.clone() },

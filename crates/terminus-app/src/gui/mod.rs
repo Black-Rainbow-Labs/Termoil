@@ -12,6 +12,7 @@ pub mod look;
 pub mod overlay;
 pub mod paint;
 pub mod quick;
+pub mod shader;
 mod show;
 mod showtrace;
 mod taskbar;
@@ -456,6 +457,7 @@ impl Gui {
                     v.state.needs_full = true;
                 }
                 ws.refont(app);
+                ws.config_shader(app);
             });
             self.relayout(id);
         }
@@ -772,6 +774,9 @@ impl ApplicationHandler<UserEvent> for Gui {
         let now = Instant::now();
         let mut next: Option<Instant> = self.bench_step(el, now);
         for ws in self.windows.values_mut() {
+            if let Some(t) = ws.shader_tick(&mut self.app, now) {
+                next = Some(next.map_or(t, |n| n.min(t)));
+            }
             if let Some(t) = ws.wake_at {
                 if t <= now {
                     ws.wake_at = None;

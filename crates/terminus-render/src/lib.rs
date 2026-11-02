@@ -16,6 +16,7 @@ mod gpu;
 mod images;
 mod placeholder;
 mod readback;
+mod shader;
 mod state;
 
 use std::time::Duration;
@@ -30,6 +31,7 @@ pub use frame::{
 pub use gpu::{GpuContext, VelloGpuRenderer, request_device};
 pub use images::{ImageData, ImagePlacement, PxRect, Z_BELOW_BACKGROUND, drawn_size};
 pub use placeholder::{PLACEHOLDER, diacritic_for, diacritic_number};
+pub use shader::{ENTRY_NAME as SHADER_ENTRY_NAME, reads_time as shader_reads_time};
 pub use state::{CellState, CellText, CellWidth, Colors, CursorState, RenderState, RowState};
 
 /// An RGBA8 image (straight alpha), what [`Renderer::read_pixels`] returns.

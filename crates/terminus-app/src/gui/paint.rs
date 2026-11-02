@@ -92,6 +92,28 @@ impl Painter {
         }
     }
 
+    /// Sets the custom shader (`window.shader`) the GPU renderer runs over each frame, or removes it
+    /// with None. The CPU renderer ignores shaders and always succeeds. An error means the shader
+    /// did not compile and frames are drawn without it.
+    pub fn set_shader(&mut self, source: Option<&str>) -> Result<(), String> {
+        match self {
+            Painter::Gpu(r) => r.set_shader(source).map_err(|e| e.to_string()),
+            Painter::Cpu { .. } => Ok(()),
+        }
+    }
+
+    /// Tells the shader where the cursor is, in pixels (None when it is not shown).
+    pub fn set_shader_cursor(&mut self, px: Option<(f32, f32)>) {
+        if let Painter::Gpu(r) = self {
+            r.set_shader_cursor(px);
+        }
+    }
+
+    /// True when a shader that reads the time is running, so the window must keep redrawing.
+    pub fn shader_animates(&self) -> bool {
+        matches!(self, Painter::Gpu(r) if r.shader_animates())
+    }
+
     /// The renderer's name, for the log and `list`.
     pub fn name(&self) -> String {
         match self {

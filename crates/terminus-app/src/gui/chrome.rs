@@ -117,6 +117,14 @@ pub fn banner(message: &str) -> Vec<u8> {
     .into_bytes()
 }
 
+/// The banner for a shader that did not compile or could not be read: the window draws without it.
+pub fn shader_banner(message: &str) -> Vec<u8> {
+    let fg = Rgb::new(0xff, 0xff, 0xff);
+    let bg = Rgb::new(0x9b, 0x1c, 0x1c);
+    format!("{}\x1b[K Shader error, drawing without it: {}", sgr_colors(fg, bg), message.replace(['\r', '\n'], " "))
+        .into_bytes()
+}
+
 /// The IME preedit: the composing text, underlined, in the pane colours.
 pub fn preedit(text: &str, colors: &Colors) -> Vec<u8> {
     format!("{}\x1b[4m{}", sgr_colors(colors.foreground, colors.background), text).into_bytes()

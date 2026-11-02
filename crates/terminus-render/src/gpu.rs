@@ -16,6 +16,7 @@ use vello_gpu::{
 use crate::draw::{Canvas, Layer, draw_layers, hint_enabled, image_paint_transform, image_rect, skew_transform};
 use crate::frame::{GlyphRun, ImageRecord, Rgba};
 use crate::images::ImageData;
+use crate::shader::{ShaderInputs, ShaderPass, frame_texture};
 use crate::{FrameStats, Image, RenderError, Renderer};
 
 /// Where frames go: an offscreen texture (tests, measurements) or a window's surface.
@@ -47,6 +48,14 @@ pub struct VelloGpuRenderer {
     hint: bool,
     images: GpuImages,
     format: wgpu::TextureFormat,
+    shader: Option<ShaderSlot>,
+    cursor: Option<(f32, f32)>,
+}
+
+/// A compiled custom shader and the texture vello draws into before it runs.
+struct ShaderSlot {
+    pass: ShaderPass,
+    frame: wgpu::TextureView,
 }
 
 /// Images uploaded as textures of their own, keyed by image id and generation. vello samples them
@@ -355,6 +364,8 @@ impl VelloGpuRenderer {
             (self.renderer, self.resources) = vello_gpu::Renderer::new(&self.device, &rc);
             self.images = GpuImages::default();
             self.format = config.format;
+            // The shader pipeline was built for the old format; the app sets the shader again.
+            self.shader = None;
         }
         self.target = Target::Surface { surface, config };
         Ok(())
@@ -382,6 +393,8 @@ impl VelloGpuRenderer {
             hint: hint_enabled(),
             images: GpuImages::default(),
             format,
+            shader: None,
+            cursor: None,
         }
     }
 
@@ -400,12 +413,41 @@ impl VelloGpuRenderer {
         let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
     }
 
-    /// Encodes the scene into `view` and submits it.
-    fn submit(&mut self, view: &wgpu::TextureView) -> Result<(), RenderError> {
+    /// Compiles `source` (WGSL, see `docs/shaders.md`) as a pass over every frame, or removes the
+    /// pass when `source` is None. A shader that does not compile leaves the renderer drawing
+    /// without a pass and returns the error text.
+    pub fn set_shader(&mut self, source: Option<&str>) -> Result<(), RenderError> {
+        self.shader = None;
+        let Some(source) = source else { return Ok(()) };
+        let pass = ShaderPass::compile(&self.device, self.format, source)?;
+        let frame = frame_texture(&self.device, self.format, self.size.0, self.size.1);
+        self.shader = Some(ShaderSlot { pass, frame: frame.create_view(&wgpu::TextureViewDescriptor::default()) });
+        Ok(())
+    }
+
+    /// True when a shader pass is active.
+    pub fn has_shader(&self) -> bool {
+        self.shader.is_some()
+    }
+
+    /// True when the active shader reads the time, so the window must redraw at the display rate.
+    pub fn shader_animates(&self) -> bool {
+        self.shader.as_ref().is_some_and(|s| s.pass.animated())
+    }
+
+    /// Sets the cursor position in pixels the shader reads, or None when no cursor is shown.
+    pub fn set_shader_cursor(&mut self, px: Option<(f32, f32)>) {
+        self.cursor = px;
+    }
+
+    /// Encodes the scene into `out` and submits it. With a shader pass, vello draws into the pass's
+    /// frame texture and the pass draws that into `out`.
+    fn submit(&mut self, out: &wgpu::TextureView) -> Result<(), RenderError> {
         let size = RenderSize { width: self.size.0, height: self.size.1 };
         let mut encoder =
             self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("terminus frame") });
         let init = vello_gpu::TargetInit::Clear(vello_gpu::ClearSettings::default());
+        let view = self.shader.as_ref().map_or(out, |s| &s.frame);
         self.renderer
             .render(
                 &self.scene,
@@ -420,6 +462,11 @@ impl VelloGpuRenderer {
                 init,
             )
             .map_err(|e| RenderError::Gpu(format!("{e:?}")))?;
+        if let Some(slot) = &self.shader {
+            let (w, h) = (f32::from(self.size.0), f32::from(self.size.1));
+            let inputs = ShaderInputs { size: (w, h), cursor: self.cursor.unwrap_or((-1.0, -1.0)) };
+            slot.pass.run(&self.device, &self.queue, &mut encoder, &slot.frame, out, inputs);
+        }
         self.queue.submit([encoder.finish()]);
         Ok(())
     }
@@ -543,6 +590,10 @@ impl Renderer for VelloGpuRenderer {
         }
         self.depth = vello_gpu::Renderer::create_depth_texture_view(&self.device, &RenderSize { width: w, height: h });
         self.scene = Scene::new(w, h);
+        if let Some(slot) = &mut self.shader {
+            let frame = frame_texture(&self.device, self.format, w, h);
+            slot.frame = frame.create_view(&wgpu::TextureViewDescriptor::default());
+        }
     }
 
     /// Encodes the layers and submits them. Offscreen, it waits for the GPU so the time measured
