@@ -214,8 +214,8 @@ fn cell_colors(state: &RenderState, cell: &CellState, r: u16, col: u16, opts: &B
     }
     // Hidden text is drawn in the background colour and is not lifted by the minimum contrast,
     // which would make it readable again (task-2468). Block, box drawing, braille and powerline
-    // characters are pictures, not text: a half block's two halves are the text and background colours,
-    // and lifting one of them striped every picture drawn with half blocks (task-2487).
+    // characters draw pictures. A half block's two halves are the text and background colours, and
+    // lifting one of them striped every picture drawn with half blocks (task-2487).
     if s.has(attr::INVISIBLE) {
         fg = bg;
     } else if !cell.text.first().is_some_and(sprite::is_sprite) {
