@@ -187,6 +187,23 @@ impl GraphicsStore {
         }
         changed
     }
+
+    /// When `advance_animations` next has work: the earliest time (in the same milliseconds) a
+    /// running animation changes frame, 0 when one has not been scheduled yet, or None when
+    /// nothing is animating. A host waits until then instead of polling.
+    pub fn next_animation_due(&self) -> Option<u64> {
+        self.images
+            .iter()
+            .filter(|i| i.frames.len() >= 2)
+            .filter(|i| match i.animation.state {
+                AnimationState::Stopped => false,
+                // Waiting on the last frame for more frames to arrive: nothing to do until then.
+                AnimationState::Loading => i.current_frame + 1 < i.frames.len(),
+                _ => true,
+            })
+            .map(|i| i.animation.next_change_ms.unwrap_or(0))
+            .min()
+    }
 }
 
 /// Whether two rectangles share any pixel.

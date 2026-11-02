@@ -110,10 +110,27 @@ fn imp_notify(title: &str, body: &str) -> Result<(), String> {
     notifier.Show(&toast).map_err(|e| e.to_string())
 }
 
-/// Desktop notifications on macOS and Linux arrive with those apps.
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+mod notify_linux;
+#[cfg(target_os = "macos")]
+mod notify_macos;
+
+/// Shows a notification through the freedesktop notification service on the session bus.
+#[cfg(target_os = "linux")]
+fn imp_notify(title: &str, body: &str) -> Result<(), String> {
+    notify_linux::show(title, body)
+}
+
+/// Shows a notification through UNUserNotificationCenter.
+#[cfg(target_os = "macos")]
+fn imp_notify(title: &str, body: &str) -> Result<(), String> {
+    notify_macos::show(title, body)
+}
+
+/// Other platforms have no notification support.
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
 fn imp_notify(_title: &str, _body: &str) -> Result<(), String> {
-    Err("notifications on this platform arrive with the macOS and Linux apps".into())
+    Err("notifications are not supported on this platform".into())
 }
 
 /// The audible bell: the system's default sound.
@@ -123,12 +140,16 @@ pub fn beep() {
     let _ = unsafe {
         windows::Win32::System::Diagnostics::Debug::MessageBeep(windows::Win32::UI::WindowsAndMessaging::MB_OK)
     };
-    #[cfg(not(windows))]
-    {
-        use std::io::Write;
-        let _ = std::io::stderr().write_all(b"\x07");
-    }
+    #[cfg(target_os = "linux")]
+    bell_linux::ring();
+    #[cfg(target_os = "macos")]
+    bell_macos::ring();
 }
+
+#[cfg(target_os = "linux")]
+mod bell_linux;
+#[cfg(target_os = "macos")]
+mod bell_macos;
 
 /// True when a program of this name is on PATH (with `.exe` or `.cmd` on Windows).
 pub fn on_path(name: &str) -> bool {

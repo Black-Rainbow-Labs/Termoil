@@ -120,15 +120,60 @@ mod imp {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+mod wayland;
+#[cfg(target_os = "linux")]
+mod x11;
+#[cfg(target_os = "macos")]
+mod macos;
+mod keymap;
+
+/// On Linux the hotkey is an X11 key grab, or the Wayland shortcuts portal, chosen the way winit
+/// chooses its backend: `WAYLAND_DISPLAY` set means Wayland, otherwise `DISPLAY` means X11.
+#[cfg(target_os = "linux")]
 mod imp {
     use winit::event_loop::EventLoopProxy;
 
     use crate::config::KeyChord;
     use crate::gui::UserEvent;
 
-    /// Global hotkeys on macOS and Linux arrive with those apps.
+    /// Registers the hotkey with whichever display server this session runs on.
+    pub fn listen(chord: &KeyChord, proxy: EventLoopProxy<UserEvent>) -> Result<(), String> {
+        let set = |name: &str| std::env::var_os(name).is_some_and(|v| !v.is_empty());
+        if set("WAYLAND_DISPLAY") {
+            super::wayland::listen(chord, proxy)
+        } else if set("DISPLAY") {
+            super::x11::listen(chord, proxy)
+        } else {
+            Err("neither WAYLAND_DISPLAY nor DISPLAY is set, so there is no display server to register a hotkey with".into())
+        }
+    }
+}
+
+/// On macOS the hotkey is a Carbon hotkey on the main thread.
+#[cfg(target_os = "macos")]
+mod imp {
+    use winit::event_loop::EventLoopProxy;
+
+    use crate::config::KeyChord;
+    use crate::gui::UserEvent;
+
+    /// Registers the hotkey with Carbon.
+    pub fn listen(chord: &KeyChord, proxy: EventLoopProxy<UserEvent>) -> Result<(), String> {
+        super::macos::listen(chord, proxy)
+    }
+}
+
+/// Other platforms have no global hotkey support.
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+mod imp {
+    use winit::event_loop::EventLoopProxy;
+
+    use crate::config::KeyChord;
+    use crate::gui::UserEvent;
+
+    /// There is no global hotkey on this platform.
     pub fn listen(_chord: &KeyChord, _proxy: EventLoopProxy<UserEvent>) -> Result<(), String> {
-        Err("the global hotkey on this platform arrives with the macOS and Linux apps".into())
+        Err("this platform has no global hotkey support".into())
     }
 }

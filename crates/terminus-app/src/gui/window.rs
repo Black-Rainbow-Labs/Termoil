@@ -442,6 +442,7 @@ impl WinState {
                 t.sync_timeout();
             }
             view.sync_since = None;
+            step_animations(&mut t, &mut self.wake_at);
             let sel = selection_rows(p, &t, separators);
             let hover = hover_rows(self.hover.as_ref(), pane, &t, p.scroll);
             let hits = search_rows(p, &t);
@@ -643,6 +644,27 @@ impl Strip {
     /// The frame built last, if any.
     pub fn last_frame(&self) -> Option<&Frame> {
         self.frame_ref()
+    }
+}
+
+/// The clock kitty graphics animations run on: milliseconds since the first call.
+fn animation_clock() -> (Instant, u64) {
+    static START: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
+    let start = *START.get_or_init(Instant::now);
+    (start, start.elapsed().as_millis() as u64)
+}
+
+/// Moves the pane's running kitty graphics animations to now, so the frame being built shows
+/// their current frames, and adds the next frame change to `wake_at`.
+fn step_animations(t: &mut terminus_vt::Terminal, wake_at: &mut Option<Instant>) {
+    let Some(due) = t.graphics().next_animation_due() else { return };
+    let (start, now) = animation_clock();
+    if due <= now {
+        t.graphics_mut().advance_animations(now);
+    }
+    if let Some(next) = t.graphics().next_animation_due() {
+        let at = start + std::time::Duration::from_millis(next.max(now + 1));
+        *wake_at = Some(wake_at.map_or(at, |w| w.min(at)));
     }
 }
 

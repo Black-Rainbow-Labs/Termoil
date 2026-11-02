@@ -1292,6 +1292,21 @@ fn animation_runs_loops_and_stops() {
 }
 
 #[test]
+fn next_animation_due_says_when_to_step() {
+    let mut s = animated();
+    assert_eq!(s.next_animation_due(), None, "nothing runs before s=3");
+    cmd(&mut s, "a=a,i=1,r=1,z=5");
+    cmd(&mut s, "a=a,i=1,s=3,v=2");
+    assert_eq!(s.next_animation_due(), Some(0), "running but not scheduled: step now");
+    s.advance_animations(1000);
+    assert_eq!(s.next_animation_due(), Some(1005));
+    s.advance_animations(1005);
+    assert_eq!(s.next_animation_due(), Some(1015));
+    s.advance_animations(10_000);
+    assert_eq!(s.next_animation_due(), None, "one loop played and stopped");
+}
+
+#[test]
 fn animation_two_loops() {
     let mut s = animated();
     cmd(&mut s, "a=a,i=1,r=1,z=5");
