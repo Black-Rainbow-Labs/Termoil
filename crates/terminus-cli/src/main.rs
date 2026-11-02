@@ -21,6 +21,14 @@ fn main() -> ExitCode {
     let argv: Vec<String> = std::env::args().skip(1).collect();
     match argv.first().map(String::as_str) {
         Some("+mcp") => mcp::serve(),
+        // The P2 latency benchmark's child: a console program, which terminus-gui is not.
+        Some("--echo-child") => {
+            if terminus_app::gui::bench::echo_child().is_ok() {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::FAILURE
+            }
+        }
         Some("+help") | Some("--help") | Some("-h") => {
             print!("{}", args::usage());
             ExitCode::SUCCESS

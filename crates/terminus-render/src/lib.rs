@@ -24,7 +24,7 @@ pub use draw::Layer;
 pub use frame::{
     BgSpan, CursorFrame, CursorStyle, Decoration, DecorationKind, Frame, GlyphPos, GlyphRun, Rgba, RowFrame, SpriteCell,
 };
-pub use gpu::{VelloGpuRenderer, request_device};
+pub use gpu::{GpuContext, VelloGpuRenderer, request_device};
 pub use state::{CellState, CellText, CellWidth, Colors, CursorState, RenderState, RowState};
 
 /// An RGBA8 image (straight alpha), what [`Renderer::read_pixels`] returns.

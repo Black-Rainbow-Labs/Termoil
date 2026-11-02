@@ -3,6 +3,7 @@
 //! action, from a key, the mouse, IPC or the CLI, goes through `App::run_action`, and the effects
 //! it queues are applied here.
 
+pub mod bench;
 pub mod chrome;
 pub mod handle;
 pub mod input;
@@ -39,6 +40,19 @@ pub fn mark_start() {
     let _ = STARTED.set(Instant::now());
 }
 
+/// Startup phases and when each ended, in milliseconds since the start, for the probe.
+static PHASES: std::sync::Mutex<Vec<(&'static str, f64)>> = std::sync::Mutex::new(Vec::new());
+
+/// Records that a startup phase ended.
+pub fn phase(name: &'static str) {
+    if std::env::var("TERMINUS_TRACE_STARTUP").is_ok() {
+        eprintln!("{:8.2} {name}", STARTED.get().map(|s| s.elapsed().as_secs_f64() * 1000.0).unwrap_or(0.0));
+    }
+    if let (Some(s), Ok(mut p)) = (STARTED.get(), PHASES.lock()) {
+        p.push((name, s.elapsed().as_secs_f64() * 1000.0));
+    }
+}
+
 /// Events from other threads.
 pub enum UserEvent {
     /// A pane has output or events; the flag is cleared when handled.
@@ -62,6 +76,8 @@ pub struct Gui {
     os_dark: bool,
     _watcher: Option<Watcher>,
     probe_done: bool,
+    /// The latency benchmark, when running one.
+    pub bench: Option<bench::LatencyBench>,
 }
 
 /// Wakers that send one user event per burst of output.
@@ -81,10 +97,15 @@ fn proxy_wakers(proxy: EventLoopProxy<UserEvent>) -> WakerFactory {
 /// the socket, asks it to open a window instead and returns.
 pub fn run(
     config: Config, config_path: PathBuf, socket: &str, cwd: Option<String>, command: Option<String>,
+    bench: Option<bench::LatencyBench>,
 ) -> Result<(), String> {
     let event_loop = EventLoop::<UserEvent>::with_user_event().build().map_err(|e| format!("no event loop: {e}"))?;
+    phase("event_loop");
     match Gui::new(&event_loop, config, config_path, socket, cwd, command)? {
-        Some(mut gui) => event_loop.run_app(&mut gui).map_err(|e| format!("event loop: {e}")),
+        Some(mut gui) => {
+            gui.bench = bench;
+            event_loop.run_app(&mut gui).map_err(|e| format!("event loop: {e}"))
+        }
         None => Ok(()),
     }
 }
@@ -119,6 +140,7 @@ impl Gui {
             os_dark: true,
             _watcher: watcher,
             probe_done: false,
+            bench: None,
         }))
     }
 
@@ -221,6 +243,7 @@ impl Gui {
                 {
                     eprintln!("terminus: draw failed: {e}");
                 }
+                self.startup_probe(el, id);
             }
             Err(e) => {
                 eprintln!("terminus: {e}");
@@ -311,6 +334,28 @@ impl Gui {
         }
     }
 
+    /// Injects the next benchmark key when it is due, writes the report when every key is measured,
+    /// and returns when the benchmark next needs to wake.
+    fn bench_step(&mut self, el: &ActiveEventLoop, now: Instant) -> Option<Instant> {
+        let b = self.bench.as_mut()?;
+        if b.done() {
+            let name = self.windows.values().next().map(|w| w.painter.name()).unwrap_or_default();
+            let report = b.report(&name);
+            let _ = std::fs::write(&b.out, &report);
+            print!("{report}");
+            self.bench = None;
+            self.app.effects.push(Effect::Quit);
+            self.apply_effects(el);
+            return None;
+        }
+        if let Some(raw) = b.due(now)
+            && let Some(ws) = self.windows.values_mut().next()
+        {
+            handle::raw_key(ws, &mut self.app, &self.bound, &raw);
+        }
+        self.bench.as_ref().and_then(|b| b.next_at())
+    }
+
     /// Writes the startup probe (P4) after the first frame that shows the shell's output, when
     /// `TERMINUS_STARTUP_PROBE` names a file.
     fn startup_probe(&mut self, el: &ActiveEventLoop, id: WinId) {
@@ -331,13 +376,41 @@ impl Gui {
         }
         self.probe_done = true;
         let ms = STARTED.get().map(|s| s.elapsed().as_secs_f64() * 1000.0).unwrap_or(0.0);
-        let _ =
-            std::fs::write(&path, format!("{{\"first_frame_ms\":{ms:.2},\"renderer\":\"{}\"}}\n", ws.painter.name()));
+        let phases: Vec<String> =
+            PHASES.lock().map(|p| p.iter().map(|(n, t)| format!("\"{n}\":{t:.2}")).collect()).unwrap_or_default();
+        let _ = std::fs::write(
+            &path,
+            format!(
+                "{{\"first_frame_ms\":{ms:.2},\"renderer\":\"{}\",\"phases\":{{{}}}}}\n",
+                ws.painter.name(),
+                phases.join(",")
+            ),
+        );
         if std::env::var("TERMINUS_STARTUP_PROBE_EXIT").is_ok_and(|v| v == "1") {
             self.app.effects.push(Effect::Quit);
             self.apply_effects(el);
         }
     }
+}
+
+/// Gives the latency benchmark the frame just painted.
+fn bench_after_paint(b: &mut bench::LatencyBench, ws: &WinState, app: &App) {
+    let painted = Instant::now();
+    if !ws.painter.is_gpu() {
+        return;
+    }
+    let Some(wi) = app.model.window_index(ws.id) else { return };
+    let Some(view) = ws.views.get(&app.model.windows[wi].tab().focus) else { return };
+    let lines = &view.state.lines;
+    let cell = |r: usize, c: usize| lines.get(r).and_then(|l| l.cells.get(c)).and_then(|x| x.text.first());
+    let prompt = || {
+        lines.iter().position(|l| {
+            let mut s = String::new();
+            l.cells.iter().take(21).for_each(|c| c.text.push_to(&mut s));
+            s.starts_with("terminus latency echo")
+        })
+    };
+    b.after_paint(painted, cell, prompt);
 }
 
 /// Sets the window title to the active tab's title.
@@ -354,6 +427,7 @@ impl ApplicationHandler<UserEvent> for Gui {
     /// Opens the first window.
     fn resumed(&mut self, el: &ActiveEventLoop) {
         if let Some((cwd, command)) = self.initial.take() {
+            phase("resumed");
             if let Err(e) = crate::actions::new_window(&mut self.app, cwd.map(PathBuf::from), command.as_deref()) {
                 eprintln!("terminus: {e}");
                 el.exit();
@@ -368,6 +442,7 @@ impl ApplicationHandler<UserEvent> for Gui {
         match ev {
             UserEvent::Wake(pane, flag) => {
                 flag.store(false, Ordering::Release);
+                phase("wake");
                 let notices = crate::events::pump(&mut self.app, pane, self.os_dark);
                 self.notices(notices);
                 if let Some(w) = self.app.window_of(pane)
@@ -412,8 +487,12 @@ impl ApplicationHandler<UserEvent> for Gui {
                 ws.relayout(app);
             }
             WindowEvent::RedrawRequested => {
+                phase("redraw_requested");
                 if let Err(e) = ws.draw(app) {
                     eprintln!("terminus: draw failed: {e}");
+                }
+                if let Some(b) = &mut self.bench {
+                    bench_after_paint(b, ws, app);
                 }
                 self.startup_probe(el, id);
             }
@@ -442,10 +521,10 @@ impl ApplicationHandler<UserEvent> for Gui {
         self.apply_effects(el);
     }
 
-    /// Wakes windows waiting on synchronized output.
+    /// Wakes windows waiting on synchronized output, and drives the latency benchmark.
     fn about_to_wait(&mut self, el: &ActiveEventLoop) {
         let now = Instant::now();
-        let mut next: Option<Instant> = None;
+        let mut next: Option<Instant> = self.bench_step(el, now);
         for ws in self.windows.values_mut() {
             if let Some(t) = ws.wake_at {
                 if t <= now {

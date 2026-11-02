@@ -103,6 +103,8 @@ pub struct WinState {
     pub shown: bool,
     /// When to draw again for synchronized output or a timer.
     pub wake_at: Option<Instant>,
+    /// The GPU renderer being built, until the window switches to it.
+    pub upgrade: Option<crate::gui::paint::GpuUpgrade>,
 }
 
 impl WinState {
@@ -115,19 +117,18 @@ impl WinState {
             .with_visible(false)
             .with_decorations(config.window.decorations);
         let window = Arc::new(el.create_window(attrs).map_err(|e| format!("could not create a window: {e}"))?);
+        crate::gui::phase("window_created");
         let scale = window.scale_factor();
         let points = config.font.size as f32;
         let grid = look::font_grid(config, points, scale)?;
+        crate::gui::phase("fonts_loaded");
         let opts = look::build_options(config, scale);
         let m = *grid.metrics();
         let w = config.window.columns * m.width + 2 * opts.padding.0;
         let h = config.window.rows * m.height + 2 * opts.padding.1;
         let _ = window.request_inner_size(PhysicalSize::new(w, h));
-        let (painter, why) = Painter::new(&window, config.window.renderer)?;
-        if let Some(why) = why {
-            eprintln!("terminus: {why}");
-        }
-        window.set_ime_allowed(true);
+        let (painter, upgrade) = Painter::new(&window, config.window.renderer)?;
+        crate::gui::phase("renderer_ready");
         let colors = look::colors(config, os_dark);
         Ok(WinState {
             id,
@@ -153,6 +154,7 @@ impl WinState {
             colors,
             shown: false,
             wake_at: None,
+            upgrade,
         })
     }
 
@@ -227,6 +229,7 @@ impl WinState {
 
     /// Draws the window: each visible pane, the tab bar, the banner and the preedit.
     pub fn draw(&mut self, app: &mut App) -> Result<(), String> {
+        self.take_gpu();
         let Some(wi) = app.model.window_index(self.id) else { return Ok(()) };
         let focus = app.model.windows[wi].tab().focus;
         self.wake_at = None;
@@ -253,12 +256,40 @@ impl WinState {
             }
         }
         self.painter.paint(Rgba::rgb(bg.r, bg.g, bg.b), &layers, &self.grid)?;
+        if !self.shown {
+            crate::gui::phase("first_paint");
+        }
         self.place_ime(focus);
         if !self.shown {
             self.window.set_visible(true);
             self.shown = true;
+            crate::gui::phase("shown");
+            // Allowing IME starts the text services on this thread, which costs tens of
+            // milliseconds; it is done after the first frame is on screen.
+            self.window.set_ime_allowed(true);
+            crate::gui::phase("ime_allowed");
         }
         Ok(())
+    }
+
+    /// Switches to the GPU renderer once the background thread has built it. A failure keeps the
+    /// CPU renderer and says why.
+    fn take_gpu(&mut self) {
+        let Some(rx) = &self.upgrade else { return };
+        match rx.try_recv() {
+            Ok(Ok(mut gpu)) => {
+                let size = self.window.inner_size();
+                terminus_render::Renderer::resize(&mut gpu, size.width, size.height);
+                self.painter = Painter::Gpu(Box::new(gpu));
+                self.upgrade = None;
+            }
+            Ok(Err(e)) => {
+                eprintln!("terminus: GPU renderer unavailable, staying on the CPU renderer: {e}");
+                self.upgrade = None;
+            }
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => self.upgrade = None,
+            Err(std::sync::mpsc::TryRecvError::Empty) => {}
+        }
     }
 
     /// Copies a pane's state under its lock and builds its frame.

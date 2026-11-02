@@ -35,6 +35,36 @@ pub struct VelloGpuRenderer {
     atlas: bool,
 }
 
+/// A GPU device the windows share: the instance, the adapter and its device and queue.
+#[derive(Clone)]
+pub struct GpuContext {
+    instance: wgpu::Instance,
+    adapter: wgpu::Adapter,
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+    info: wgpu::AdapterInfo,
+}
+
+impl GpuContext {
+    /// Starts a device on the high performance adapter of the primary backends (Vulkan, DX12,
+    /// Metal; not GL, whose start up alone costs about 170 ms here and which vello does not need).
+    pub fn new() -> Result<GpuContext, RenderError> {
+        let desc = wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::PRIMARY,
+            ..wgpu::InstanceDescriptor::new_without_display_handle()
+        };
+        let instance = wgpu::Instance::new(desc);
+        let (adapter, device, queue, info) =
+            request_device_for(&instance, None, false).ok_or_else(|| RenderError::Gpu("no GPU adapter".into()))?;
+        Ok(GpuContext { instance, adapter, device, queue, info })
+    }
+
+    /// The adapter's description.
+    pub fn info(&self) -> &wgpu::AdapterInfo {
+        &self.info
+    }
+}
+
 /// Asks wgpu for an adapter and device. None when no adapter is usable.
 pub fn request_device(fallback_adapter: bool) -> Option<(wgpu::Device, wgpu::Queue, wgpu::AdapterInfo)> {
     let instance = wgpu::Instance::default();
@@ -42,12 +72,22 @@ pub fn request_device(fallback_adapter: bool) -> Option<(wgpu::Device, wgpu::Que
     Some((device, queue, info))
 }
 
+/// The adapter preference: the high performance GPU, or the integrated one when
+/// `TERMINUS_GPU_POWER=low` (used to measure R4 on an integrated GPU).
+fn power_preference() -> wgpu::PowerPreference {
+    if std::env::var("TERMINUS_GPU_POWER").is_ok_and(|v| v == "low") {
+        wgpu::PowerPreference::LowPower
+    } else {
+        wgpu::PowerPreference::HighPerformance
+    }
+}
+
 /// Asks an instance for an adapter (compatible with `surface` when given) and a device.
 fn request_device_for(
     instance: &wgpu::Instance, surface: Option<&wgpu::Surface<'static>>, fallback_adapter: bool,
 ) -> Option<(wgpu::Adapter, wgpu::Device, wgpu::Queue, wgpu::AdapterInfo)> {
     let opts = wgpu::RequestAdapterOptions {
-        power_preference: wgpu::PowerPreference::HighPerformance,
+        power_preference: power_preference(),
         force_fallback_adapter: fallback_adapter,
         compatible_surface: surface,
         apply_limit_buckets: false,
@@ -79,11 +119,15 @@ fn target_texture(device: &wgpu::Device, width: u16, height: u16) -> wgpu::Textu
 
 /// Picks the surface format (8 bit, not sRGB, because vello writes sRGB encoded values) and the
 /// present mode (mailbox when offered, for the lowest latency without tearing, else FIFO).
-fn surface_config(caps: &wgpu::SurfaceCapabilities, w: u16, h: u16) -> Option<wgpu::SurfaceConfiguration> {
+fn surface_config(
+    caps: &wgpu::SurfaceCapabilities, w: u16, h: u16, unpaced: bool,
+) -> Option<wgpu::SurfaceConfiguration> {
     let format = [wgpu::TextureFormat::Rgba8Unorm, wgpu::TextureFormat::Bgra8Unorm]
         .into_iter()
         .find(|f| caps.formats.contains(f))?;
-    let present_mode = if caps.present_modes.contains(&wgpu::PresentMode::Mailbox) {
+    let present_mode = if unpaced && caps.present_modes.contains(&wgpu::PresentMode::Immediate) {
+        wgpu::PresentMode::Immediate
+    } else if caps.present_modes.contains(&wgpu::PresentMode::Mailbox) {
         wgpu::PresentMode::Mailbox
     } else {
         wgpu::PresentMode::Fifo
@@ -120,22 +164,42 @@ impl VelloGpuRenderer {
     }
 
     /// A renderer that presents into a window. `window` is anything wgpu can make a surface from
-    /// (a winit window in an `Arc`). Errors name what failed, so the app can fall back to the CPU
+    /// (a winit window in an `Arc`). `unpaced` presents immediately instead of at the display rate
+    /// (the latency benchmark). Errors name what failed, so the app can fall back to the CPU
     /// renderer and say why.
     pub fn new_for_window(
-        window: impl Into<wgpu::SurfaceTarget<'static>>, width: u32, height: u32, atlas: bool,
+        window: impl Into<wgpu::SurfaceTarget<'static>>, width: u32, height: u32, atlas: bool, unpaced: bool,
     ) -> Result<VelloGpuRenderer, RenderError> {
-        let instance = wgpu::Instance::default();
-        let surface = instance.create_surface(window).map_err(|e| RenderError::Gpu(format!("create surface: {e}")))?;
-        let (adapter, device, queue, info) = request_device_for(&instance, Some(&surface), false)
-            .ok_or_else(|| RenderError::Gpu("no GPU adapter can draw to this window".into()))?;
-        let caps = surface.get_capabilities(&adapter);
+        let ctx = GpuContext::new()?;
+        Self::new_for_window_in(&ctx, window, width, height, atlas, unpaced)
+    }
+
+    /// A renderer for a window on a device that already exists. Starting a device takes most of a
+    /// second on this machine, so the app makes one context and every window shares it.
+    pub fn new_for_window_in(
+        ctx: &GpuContext, window: impl Into<wgpu::SurfaceTarget<'static>>, width: u32, height: u32, atlas: bool,
+        unpaced: bool,
+    ) -> Result<VelloGpuRenderer, RenderError> {
+        let surface =
+            ctx.instance.create_surface(window).map_err(|e| RenderError::Gpu(format!("create surface: {e}")))?;
+        if !ctx.adapter.is_surface_supported(&surface) {
+            return Err(RenderError::Gpu(format!("{} cannot draw to this window", ctx.info.name)));
+        }
+        let caps = surface.get_capabilities(&ctx.adapter);
         let (w, h) = (clamp_dim(width), clamp_dim(height));
-        let config = surface_config(&caps, w, h)
+        let config = surface_config(&caps, w, h, unpaced)
             .ok_or_else(|| RenderError::Gpu("the surface offers no 8 bit RGBA or BGRA format".into()))?;
-        surface.configure(&device, &config);
+        surface.configure(&ctx.device, &config);
         let format = config.format;
-        Ok(Self::assemble(device, queue, info, Target::Surface { surface, config }, format, (w, h), atlas))
+        Ok(Self::assemble(
+            ctx.device.clone(),
+            ctx.queue.clone(),
+            ctx.info.clone(),
+            Target::Surface { surface, config },
+            format,
+            (w, h),
+            atlas,
+        ))
     }
 
     /// Builds the renderer around a device and a target.

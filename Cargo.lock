@@ -2649,10 +2649,13 @@ dependencies = [
 name = "terminus-bench"
 version = "0.1.0"
 dependencies = [
+ "pollster",
  "serde_json",
  "terminus-font",
  "terminus-render",
  "terminus-vt",
+ "vello_gpu",
+ "wgpu",
 ]
 
 [[package]]

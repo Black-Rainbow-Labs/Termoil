@@ -8,6 +8,7 @@
 //! reaches its limit) and the steady state. Every run appends JSON rows to
 //! `_agent_output/bench/` with the machine, build and commit.
 
+mod gpuinit;
 mod render;
 mod streams;
 
@@ -205,6 +206,7 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     match args.get(1).map(String::as_str) {
         Some("parse") => parse_only(),
+        Some("gpu-init") => gpuinit::run(args.get(2).map(String::as_str).unwrap_or("every")),
         Some("render") => {
             let frames = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(1200);
             let results = render::measure(frames);

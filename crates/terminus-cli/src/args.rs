@@ -2,8 +2,9 @@
 //!
 //! `--name value` and `--name=value` set a parameter; a boolean may be given as a bare `--name`.
 //! One bare word fills the action's first required parameter, so `terminus +send-text "ls\n"`
-//! works. `\n`, `\r`, `\t`, `\e` and `\\` in a text parameter are unescaped, so a shell that cannot
-//! type a newline can still send one.
+//! works. `\n`, `\r`, `\t`, `\e` and `\\` are unescaped in the `text` parameter only (what
+//! `send-text` types), so a shell that cannot type a newline can still send one, while a Windows
+//! path given to `--command` or `--cwd` keeps its backslashes.
 
 use serde_json::{Map, Value, json};
 use terminus_protocol::{ActionDef, CATALOGUE, ParamKind, action};
@@ -32,14 +33,14 @@ pub fn parse(name: &str, rest: &[String]) -> Result<Map<String, Value>, String> 
                     rest.get(i).cloned().ok_or_else(|| format!("--{key} needs a value"))?
                 }
             };
-            out.insert(key.to_string(), typed(p.kind, &value).map_err(|e| format!("--{key}: {e}"))?);
+            out.insert(key.to_string(), typed(p.name, p.kind, &value).map_err(|e| format!("--{key}: {e}"))?);
         } else {
             let p = def
                 .params
                 .iter()
                 .find(|p| p.required && !out.contains_key(p.name))
                 .ok_or_else(|| format!("unexpected argument '{a}'"))?;
-            out.insert(p.name.to_string(), typed(p.kind, a)?);
+            out.insert(p.name.to_string(), typed(p.name, p.kind, a)?);
         }
         i += 1;
     }
@@ -55,8 +56,8 @@ fn check_required(def: &ActionDef, args: &Map<String, Value>) -> Result<(), Stri
     }
 }
 
-/// Converts a word to the parameter's JSON type.
-fn typed(kind: ParamKind, v: &str) -> Result<Value, String> {
+/// Converts a word to the parameter's JSON type. Only the `text` parameter is unescaped.
+fn typed(name: &str, kind: ParamKind, v: &str) -> Result<Value, String> {
     Ok(match kind {
         ParamKind::Int | ParamKind::Pane => {
             json!(v.trim().parse::<i64>().map_err(|_| format!("'{v}' is not an integer"))?)
@@ -67,7 +68,7 @@ fn typed(kind: ParamKind, v: &str) -> Result<Value, String> {
             _ => return Err(format!("'{v}' is not true or false")),
         },
         ParamKind::Choice(c) if !c.contains(&v) => return Err(format!("'{v}' is not one of {}", c.join(", "))),
-        ParamKind::Text => json!(unescape(v)),
+        ParamKind::Text if name == "text" => json!(unescape(v)),
         _ => json!(v),
     })
 }
@@ -136,5 +137,8 @@ mod tests {
         assert!(parse("resize", &v(&["--cols", "80"])).unwrap_err().contains("--rows"));
         assert!(parse("copy", &[]).unwrap_err().contains("run-action"));
         assert!(parse("nope", &[]).is_err());
+        let a = parse("new-tab", &v(&["--command", r"C:\tools\new\x.exe", "--cwd", r"C:\temp"])).unwrap();
+        assert_eq!(a["command"], r"C:\tools\new\x.exe");
+        assert_eq!(a["cwd"], r"C:\temp");
     }
 }

@@ -282,7 +282,9 @@ fn spawn_reader(
             match reader.read(&mut buf) {
                 Ok(0) | Err(_) => break,
                 Ok(n) => {
-                    shared.bytes_read.fetch_add(n as u64, Ordering::Relaxed);
+                    if shared.bytes_read.fetch_add(n as u64, Ordering::Relaxed) == 0 {
+                        crate::gui::phase("first_output");
+                    }
                     if tx.send(buf[..n].to_vec()).is_err() {
                         break;
                     }

@@ -108,6 +108,7 @@ fn layout_action(app: &mut App, name: &str, args: &Map<String, Value>) -> Outcom
 pub fn new_window(app: &mut App, cwd: Option<PathBuf>, command: Option<&str>) -> Result<Value, ActionError> {
     let grid = app.grid(app.model.focused);
     let pane = app.spawn_pane(grid, cwd, command)?;
+    crate::gui::phase("shell_spawned");
     let win = app.model.add_window(pane);
     app.effects.push(Effect::OpenWindow(win));
     Ok(json!({ "window": win, "pane": pane }))

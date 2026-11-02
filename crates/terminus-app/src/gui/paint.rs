@@ -1,12 +1,12 @@
 //! Putting frames on a window: `VelloGpuRenderer` on the window's surface, or `VelloCpuRenderer`
-//! presented through `softbuffer` when no GPU can draw to the window or the configuration asks for
-//! the CPU (`window.renderer`).
+//! presented through `softbuffer` while the GPU starts, when no GPU can draw to the window, or when
+//! the configuration asks for the CPU (`window.renderer`).
 
 use std::num::NonZeroU32;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use terminus_font::FontGrid;
-use terminus_render::{FrameStats, Layer, Renderer, Rgba, VelloCpuRenderer, VelloGpuRenderer};
+use terminus_render::{FrameStats, GpuContext, Layer, Renderer, Rgba, VelloCpuRenderer, VelloGpuRenderer};
 use winit::window::Window;
 
 use crate::config::Renderer as Choice;
@@ -19,28 +19,33 @@ pub enum Painter {
     Cpu { renderer: Box<VelloCpuRenderer>, surface: softbuffer::Surface<Arc<Window>, Arc<Window>> },
 }
 
+/// The GPU renderer being built for a window on a background thread.
+pub type GpuUpgrade = std::sync::mpsc::Receiver<Result<VelloGpuRenderer, String>>;
+
+/// The GPU device every window shares, started once by the first window's background thread.
+static SHARED_GPU: OnceLock<Result<GpuContext, String>> = OnceLock::new();
+
 impl Painter {
-    /// Creates the painter the configuration asks for, falling back to the CPU when the GPU
-    /// cannot draw to the window. The second value says why it fell back, for the log.
-    pub fn new(window: &Arc<Window>, choice: Choice) -> Result<(Painter, Option<String>), String> {
+    /// Creates a window's painter. Starting a GPU device takes most of a second, so unless the
+    /// configuration asks for the CPU only, the window starts on the CPU renderer (ready in
+    /// milliseconds) and the GPU renderer is built on a background thread; the receiver delivers it
+    /// and the window switches on its next frame (P4, `docs/decisions/renderer.md`).
+    pub fn new(window: &Arc<Window>, choice: Choice) -> Result<(Painter, Option<GpuUpgrade>), String> {
         let size = window.inner_size();
-        let mut why = None;
-        if choice != Choice::Cpu {
-            match VelloGpuRenderer::new_for_window(window.clone(), size.width, size.height, true) {
-                Ok(r) => return Ok((Painter::Gpu(Box::new(r)), None)),
-                Err(e) if choice == Choice::Gpu => {
-                    return Err(format!("the GPU renderer failed and window.renderer is \"gpu\": {e}"));
-                }
-                Err(e) => why = Some(format!("GPU renderer unavailable, using the CPU renderer: {e}")),
-            }
+        let upgrade = (choice != Choice::Cpu).then(|| start_gpu(window.clone()));
+        match cpu_painter(window, size.width, size.height) {
+            Ok(p) => Ok((p, upgrade)),
+            Err(e) => match upgrade.map(|rx| rx.recv()) {
+                Some(Ok(Ok(g))) => Ok((Painter::Gpu(Box::new(g)), None)),
+                Some(Ok(Err(g))) => Err(format!("{e}; and the GPU renderer: {g}")),
+                _ => Err(e),
+            },
         }
-        let context = softbuffer::Context::new(window.clone()).map_err(|e| format!("softbuffer: {e}"))?;
-        let surface = softbuffer::Surface::new(&context, window.clone()).map_err(|e| format!("softbuffer: {e}"))?;
-        let threads = std::thread::available_parallelism().map(|n| n.get().min(4) as u16).unwrap_or(0);
-        let mut p =
-            Painter::Cpu { renderer: Box::new(VelloCpuRenderer::new(size.width, size.height, threads, true)), surface };
-        p.resize(size.width, size.height);
-        Ok((p, why))
+    }
+
+    /// True when drawing with the GPU.
+    pub fn is_gpu(&self) -> bool {
+        matches!(self, Painter::Gpu(_))
     }
 
     /// Resizes the target.
@@ -75,6 +80,35 @@ impl Painter {
             Painter::Cpu { renderer, .. } => renderer.name(),
         }
     }
+}
+
+/// The CPU renderer presented through softbuffer.
+fn cpu_painter(window: &Arc<Window>, width: u32, height: u32) -> Result<Painter, String> {
+    let context = softbuffer::Context::new(window.clone()).map_err(|e| format!("softbuffer: {e}"))?;
+    let surface = softbuffer::Surface::new(&context, window.clone()).map_err(|e| format!("softbuffer: {e}"))?;
+    let threads = std::thread::available_parallelism().map(|n| n.get().min(4) as u16).unwrap_or(0);
+    let mut p = Painter::Cpu { renderer: Box::new(VelloCpuRenderer::new(width, height, threads, true)), surface };
+    p.resize(width, height);
+    Ok(p)
+}
+
+/// Builds the GPU renderer for a window on a background thread, on the shared device, and asks
+/// the window to redraw when it is ready.
+fn start_gpu(window: Arc<Window>) -> GpuUpgrade {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let unpaced = std::env::var("TERMINUS_PRESENT").is_ok_and(|v| v == "immediate");
+    let _ = std::thread::Builder::new().name("terminus gpu start".into()).spawn(move || {
+        let ctx = SHARED_GPU.get_or_init(|| GpuContext::new().map_err(|e| e.to_string()));
+        let size = window.inner_size();
+        let r = match ctx {
+            Ok(ctx) => VelloGpuRenderer::new_for_window_in(ctx, window.clone(), size.width, size.height, true, unpaced)
+                .map_err(|e| e.to_string()),
+            Err(e) => Err(e.clone()),
+        };
+        let _ = tx.send(r);
+        window.request_redraw();
+    });
+    rx
 }
 
 /// Copies the CPU renderer's premultiplied RGBA pixels into the softbuffer as 0RGB words.
