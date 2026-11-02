@@ -234,6 +234,11 @@ impl GraphicsStore {
         }
     }
 
+    /// The most pixels one image may have.
+    pub fn max_pixels(&self) -> u64 {
+        self.max_pixels
+    }
+
     /// Sets the most pixels one image may have; larger images are answered with EFBIG.
     pub fn set_max_pixels(&mut self, max_pixels: u64) {
         self.max_pixels = max_pixels;

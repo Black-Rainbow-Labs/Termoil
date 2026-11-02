@@ -25,7 +25,7 @@ impl Terminal {
             Some(9) => self.osc_9(rest),
             Some(n @ 10..=19) => self.osc_dynamic_colors(n, rest, term),
             Some(52) => self.osc_clipboard(rest),
-            Some(99) => self.osc_kitty_notification(rest),
+            Some(99) => self.osc_kitty_notification(rest, term),
             Some(104) => self.osc_reset_palette(rest),
             Some(105) => self.osc_reset_special_colors(rest),
             Some(n @ 110..=119) => self.reset_dynamic_color(n - 100),
@@ -168,6 +168,24 @@ impl Terminal {
             12 => cur.cursor.or(def.cursor).or(cur.foreground).or(def.foreground),
             17 => cur.selection_background.or(def.selection_background),
             19 => cur.selection_foreground.or(def.selection_foreground),
+            13 | 15 | 18 => {
+                self.extra_color_slot(n).and_then(|i| self.extra_colors[i]).or_else(|| self.dynamic_color(10))
+            }
+            14 | 16 => self.extra_color_slot(n).and_then(|i| self.extra_colors[i]).or_else(|| self.dynamic_color(11)),
+            _ => None,
+        }
+    }
+
+    /// The slot in `extra_colors` for the dynamic colours Terminus stores only to answer queries
+    /// (13 mouse foreground, 14 mouse background, 15 Tektronix foreground, 16 Tektronix
+    /// background, 18 Tektronix cursor).
+    fn extra_color_slot(&self, n: u16) -> Option<usize> {
+        match n {
+            13 => Some(0),
+            14 => Some(1),
+            15 => Some(2),
+            16 => Some(3),
+            18 => Some(4),
             _ => None,
         }
     }
@@ -180,7 +198,12 @@ impl Terminal {
             12 => self.colors.cursor = c,
             17 => self.colors.selection_background = c,
             19 => self.colors.selection_foreground = c,
-            _ => return,
+            _ => {
+                let Some(slot) = self.extra_color_slot(n) else { return };
+                self.extra_colors[slot] = c;
+                self.event(Event::ColorsChanged);
+                return;
+            }
         }
         self.event(Event::ColorsChanged);
         self.mark_all_dirty();
@@ -211,16 +234,8 @@ impl Terminal {
         }
         let id = params.split(':').find_map(|kv| kv.strip_prefix("id=")).map(str::to_string);
         let link = Hyperlink { id, uri: uri.to_string() };
-        let index = match self.hyperlink_index.get(&link) {
-            Some(&i) => i,
-            None => {
-                let i = self.hyperlinks.len() as u32;
-                self.hyperlinks.push(link.clone());
-                self.hyperlink_index.insert(link, i);
-                i
-            }
-        };
-        self.screen_mut().cursor.hyperlink = Some(index);
+        let index = Some(self.intern_hyperlink(link));
+        self.screen_mut().cursor.hyperlink = index;
     }
 
     /// OSC 9: a notification, or ConEmu's 9;4 progress and 9;9 working directory.
@@ -247,46 +262,6 @@ impl Terminal {
         if it.next() == Some("notify") {
             let title = it.next().unwrap_or("").to_string();
             let body = it.next().unwrap_or("").to_string();
-            self.event(Event::Notification { title, body });
-        }
-    }
-
-    /// OSC 99: a kitty desktop notification. Chunks with `d=0` accumulate until `d=1`.
-    fn osc_kitty_notification(&mut self, rest: &[u8]) {
-        let text = String::from_utf8_lossy(rest).into_owned();
-        let Some((meta, payload)) = text.split_once(';') else { return };
-        let mut done = true;
-        let mut part = "title";
-        let mut base64 = false;
-        for kv in meta.split(':') {
-            match kv.split_once('=') {
-                Some(("d", "0")) => done = false,
-                Some(("p", p)) => {
-                    part = if p == "body" {
-                        "body"
-                    } else if p == "title" {
-                        "title"
-                    } else {
-                        "other"
-                    }
-                }
-                Some(("e", "1")) => base64 = true,
-                _ => {}
-            }
-        }
-        let payload = if base64 {
-            decode_base64(payload.as_bytes()).map(|b| String::from_utf8_lossy(&b).into_owned()).unwrap_or_default()
-        } else {
-            payload.to_string()
-        };
-        let pending = &mut self.notification_pending;
-        match part {
-            "body" => pending.1.push_str(&payload),
-            "title" => pending.0.push_str(&payload),
-            _ => {}
-        }
-        if done {
-            let (title, body) = std::mem::take(pending);
             self.event(Event::Notification { title, body });
         }
     }
@@ -404,7 +379,7 @@ fn has_scheme(uri: &str) -> bool {
 }
 
 /// The terminator to answer a query with: the one the query used.
-fn terminator(term: Terminator) -> &'static str {
+pub(super) fn terminator(term: Terminator) -> &'static str {
     match term {
         Terminator::Bel => "\x07",
         Terminator::St => "\x1b\\",

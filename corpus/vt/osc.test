@@ -71,7 +71,54 @@ EVENT Notification { title: "Title", body: "Body text" }
 PUSH "\e]99;e=1;aGk=\e\\"
 EVENT Notification { title: "hi", body: "" }
 
-# OSC 9;4 progress.
+# OSC 99 in full: a body with no title becomes the title, chunks of different identifiers
+# interleave, a close request discards a notification still being assembled, and a chunk with
+# d=0 sends nothing until the closing chunk arrives.
+SIZE 10 2
+PUSH "\e]99;i=b:p=body;Just body\e\\"
+EVENT Notification { title: "Just body", body: "" }
+PUSH "\e]99;i=one:d=0;First\e\\\e]99;i=two:d=0;Second\e\\"
+EVENT none
+PUSH "\e]99;i=two:p=body;Two body\e\\\e]99;i=one:p=body;One body\e\\"
+EVENT Notification { title: "Second", body: "Two body" }
+EVENT Notification { title: "First", body: "One body" }
+PUSH "\e]99;i=z:d=0;Dropped\e\\\e]99;i=z:p=close;\e\\\e]99;i=z:p=body:d=1;After\e\\"
+EVENT Notification { title: "After", body: "" }
+PUSH "\e]99;i=e:e=1:d=0;SGVs\e\\\e]99;i=e:e=1;bG8=\e\\"
+EVENT Notification { title: "Hello", body: "" }
+PUSH "\e]99;i=bad id!;Text\e\\"
+EVENT Notification { title: "Text", body: "" }
+PUSH "\e]99;i=none:p=icon;ignored\e\\"
+EVENT none
+
+# OSC 99 query and alive poll answer with the identifier of the request, and 0 when it has none.
+PUSH "\e]99;i=q1:p=?;\e\\"
+REPLY "\e]99;i=q1:p=?;p=title,body,close,alive,?:o=always\e\\"
+PUSH "\e]99;p=?;\a"
+REPLY "\e]99;i=0:p=?;p=title,body,close,alive,?:o=always\a"
+PUSH "\e]99;i=live:p=alive;\e\\"
+REPLY "\e]99;i=live:p=alive;\e\\"
+
+# OSC 13 to 19 are stored and answered with the rgb: form, a query before any is set answers the
+# foreground or background default, and OSC 113 to 119 reset them.
+SIZE 10 2
+PUSH "\e]13;rgb:11/22/33\a\e]13;?\a"
+REPLY "\e]13;rgb:1111/2222/3333\a"
+PUSH "\e]14;#040506\e\\\e]14;?\e\\"
+REPLY "\e]14;rgb:0404/0505/0606\e\\"
+PUSH "\e]15;#0a0b0c\a\e]16;#0d0e0f\a\e]18;#101112\a\e]15;?\a\e]16;?\a\e]18;?\a"
+REPLY "\e]15;rgb:0a0a/0b0b/0c0c\a\e]16;rgb:0d0d/0e0e/0f0f\a\e]18;rgb:1010/1111/1212\a"
+PUSH "\e]17;#202122\a\e]19;#232425\a\e]17;?\a\e]19;?\a"
+REPLY "\e]17;rgb:2020/2121/2222\a\e]19;rgb:2323/2424/2525\a"
+PUSH "\e]113;\a\e]114;\a\e]115;\a\e]116;\a\e]118;\a\e]117;\a\e]119;\a\e]13;?\a\e]14;?\a\e]15;?\a\e]16;?\a\e]18;?\a\e]17;?\a\e]19;?\a"
+REPLY "\e]13;rgb:0000/0000/0000\a\e]14;rgb:0000/0000/0000\a\e]15;rgb:0000/0000/0000\a\e]16;rgb:0000/0000/0000\a\e]18;rgb:0000/0000/0000\a\e]17;rgb:0000/0000/0000\a\e]19;rgb:0000/0000/0000\a"
+PUSH "\e]13;#010203;#040506;#070809\a\e]13;?\a\e]14;?\a\e]15;?\a"
+REPLY "\e]13;rgb:0101/0202/0303\a\e]14;rgb:0404/0505/0606\a\e]15;rgb:0707/0808/0909\a"
+PUSH "\e]13;#ffffff\a\ec\e]13;?\a"
+REPLY "\e]13;rgb:0000/0000/0000\a"
+
+# OSC 9;4 progress (a new terminal drops the colour change events queued above).
+SIZE 10 2
 PUSH "\e]9;4;1;40\a\e]9;4;2\a\e]9;4;0;0\a\e]9;4;3\a"
 EVENT Progress { state: 1, value: 40 }
 EVENT Progress { state: 2, value: 0 }

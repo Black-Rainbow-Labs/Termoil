@@ -4,9 +4,9 @@ SIZE 80 24
 # test_DA_NoParameter), with sixel (4) and clipboard (52) added. DA2 starts with 64 at level 5,
 # then a version number from 314 up, then 0 (test_DA2_0, test_DA2_NoParameter).
 PUSH "\e[c"
-REPLY "\e[?65;1;6;21;22;28;52c"
+REPLY "\e[?65;1;4;6;21;22;28;52c"
 PUSH "\e[0c"
-REPLY "\e[?65;1;6;21;22;28;52c"
+REPLY "\e[?65;1;4;6;21;22;28;52c"
 PUSH "\e[>c"
 REPLY "\e[>64;400;0c"
 PUSH "\e[=c"
@@ -101,3 +101,17 @@ PUSH "\e[1;0;3;1;3;1*y"
 REPLY "\eP1!~0020\e\\"
 PUSH "\e[2;0*y"
 REPLY "\eP2!~0426\e\\"
+
+# XTSMGRAPHICS (CSI ? Pi ; Pa ; Pv S): Pi 1 is the sixel colour registers, Pi 2 the sixel geometry.
+# Read and maximum succeed, reset answers the default, a set request fails with status 3, an
+# unknown item answers status 1 and an unknown action status 2.
+SIZE 80 24
+PUSH "\e[?1;1S\e[?1;2S\e[?1;4S"
+REPLY "\e[?1;0;256S\e[?1;0;256S\e[?1;0;256S"
+PUSH "\e[?1;3;16S"
+REPLY "\e[?1;3S"
+PUSH "\e[?2;1S\e[?2;4S"
+REPLY "\e[?2;0;800;480S\e[?2;0;16384;6103S"
+PUSH "\e[?2;3;100;100S\e[?3;1S\e[?1;9S"
+REPLY "\e[?2;3S\e[?3;1S\e[?1;2S"
+

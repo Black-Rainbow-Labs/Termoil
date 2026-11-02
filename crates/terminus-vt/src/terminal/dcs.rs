@@ -24,9 +24,21 @@ impl Terminal {
 
     /// Applies a sequence tmux wrapped for the outer terminal, as if it had arrived directly.
     fn tmux_passthrough(&mut self, inner: &[u8]) {
-        self.tmux_passthrough.push(inner.to_vec());
+        self.queue_passthrough(inner);
         let mut parser = Parser::new(self.config.parser_limits);
         parser.advance(inner, self);
+    }
+
+    /// Queues a passthrough sequence for the host, dropping the oldest queued sequences while the
+    /// queue holds more than `max_passthrough_bytes`. The newest sequence is always kept.
+    fn queue_passthrough(&mut self, inner: &[u8]) {
+        self.tmux_passthrough.push_back(inner.to_vec());
+        self.tmux_passthrough_bytes += inner.len();
+        while self.tmux_passthrough_bytes > self.config.max_passthrough_bytes && self.tmux_passthrough.len() > 1 {
+            if let Some(old) = self.tmux_passthrough.pop_front() {
+                self.tmux_passthrough_bytes -= old.len();
+            }
+        }
     }
 
     /// Dispatches an APC payload; only kitty graphics (`G`) is recognised.

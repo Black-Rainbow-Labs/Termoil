@@ -260,16 +260,16 @@ MODE ?60 4
 # DECID (ESC Z) answers like DA1 (test_DECID_Basic).
 SIZE 80 25
 PUSH "\eZ"
-REPLY "\e[?65;1;6;21;22;28;52c"
+REPLY "\e[?65;1;4;6;21;22;28;52c"
 
 # DECSCL sets the conformance level, which changes DA1, DA2 and DECRQSS, and it ends DECRQM at
 # level 2 (test_DECSCL_Level2DoesntSupportDECRQM, test_DECRQSS_DECSCL).
 PUSH "\e[64;1\"p\e[c\e[>c"
-REPLY "\e[?64;1;6;21;22;28;52c\e[>41;400;0c"
+REPLY "\e[?64;1;4;6;21;22;28;52c\e[>41;400;0c"
 PUSH "\e[63;1\"p\e[c\e[>c\eP$q\"p\e\\"
-REPLY "\e[?63;1;6;22;52c\e[>24;400;0c\eP1$r63;1\"p\e\\"
+REPLY "\e[?63;1;4;6;22;52c\e[>24;400;0c\eP1$r63;1\"p\e\\"
 PUSH "\e[62;1\"p\e[c\e[>c"
-REPLY "\e[?62;1;6;22;52c\e[>1;400;0c"
+REPLY "\e[?62;1;4;6;22;52c\e[>1;400;0c"
 PUSH "\e[4$p\e[?7$p"
 REPLY ""
 PUSH "\e[65;1\"p\e[4$p"

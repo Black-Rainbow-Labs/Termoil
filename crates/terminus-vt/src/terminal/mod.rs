@@ -9,6 +9,8 @@ mod control;
 mod csi;
 mod dcs;
 mod edit;
+mod hyperlink;
+mod notify;
 mod osc;
 mod print;
 mod report;
@@ -54,6 +56,17 @@ pub struct TerminalConfig {
     pub max_title: usize,
     /// Prompt marks kept before the oldest are dropped.
     pub max_marks: usize,
+    /// Most OSC 8 hyperlinks kept. At the limit, links no cell refers to are dropped first, then
+    /// the oldest eighth of the links; cells that held a dropped link print without a link.
+    pub max_hyperlinks: usize,
+    /// Most bytes of tmux passthrough (DCS tmux) the host has not yet taken; the oldest is dropped
+    /// first.
+    pub max_passthrough_bytes: usize,
+    /// Most OSC 99 notifications held while their chunks are still arriving; the oldest is dropped
+    /// first.
+    pub max_pending_notifications: usize,
+    /// Most bytes kept of one OSC 99 title and of one body; chunks after that are ignored.
+    pub max_notification_bytes: usize,
     /// How the kitty graphics protocol reads a shared memory object (`t=s`); the host supplies it
     /// (`terminus_pty::shm`). None answers `t=s` with an error.
     pub shared_memory: Option<crate::graphics::SharedMemoryReader>,
@@ -76,6 +89,10 @@ impl Default for TerminalConfig {
             max_hyperlink_uri: 4096,
             max_title: 4096,
             max_marks: 100_000,
+            max_hyperlinks: 32_768,
+            max_passthrough_bytes: 1 << 20,
+            max_pending_notifications: 16,
+            max_notification_bytes: 64 << 10,
             shared_memory: None,
         }
     }
@@ -211,7 +228,8 @@ pub struct Terminal {
     sasd: u16,
     status_line_type: u16,
     sgr_stack: Vec<Style>,
-    hyperlinks: Vec<Hyperlink>,
+    hyperlinks: std::collections::BTreeMap<u32, Hyperlink>,
+    hyperlink_next: u32,
     hyperlink_index: std::collections::HashMap<Hyperlink, u32>,
     events: Vec<Event>,
     replies: Vec<u8>,
@@ -222,13 +240,15 @@ pub struct Terminal {
     sync_generation: u64,
     cell_pixel: (u16, u16),
     last_exit_code: Option<i32>,
-    tmux_passthrough: Vec<Vec<u8>>,
+    tmux_passthrough: std::collections::VecDeque<Vec<u8>>,
+    tmux_passthrough_bytes: usize,
     modify_other_keys: u8,
-    notification_pending: (String, String),
+    notification_pending: Vec<notify::PendingNotification>,
     click_events: Option<String>,
     marks: Vec<Mark>,
     protect_iso: bool,
     special_colors: [Option<Rgb>; 5],
+    extra_colors: [Option<Rgb>; 5],
 }
 
 impl Terminal {
@@ -260,7 +280,8 @@ impl Terminal {
             sasd: 0,
             status_line_type: 0,
             sgr_stack: Vec::new(),
-            hyperlinks: Vec::new(),
+            hyperlinks: std::collections::BTreeMap::new(),
+            hyperlink_next: 0,
             hyperlink_index: std::collections::HashMap::new(),
             events: Vec::new(),
             replies: Vec::new(),
@@ -271,13 +292,15 @@ impl Terminal {
             sync_generation: 0,
             cell_pixel: (10, 20),
             last_exit_code: None,
-            tmux_passthrough: Vec::new(),
+            tmux_passthrough: std::collections::VecDeque::new(),
+            tmux_passthrough_bytes: 0,
             modify_other_keys: 0,
-            notification_pending: (String::new(), String::new()),
+            notification_pending: Vec::new(),
             click_events: None,
             marks: Vec::new(),
             protect_iso: false,
             special_colors: [None; 5],
+            extra_colors: [None; 5],
             config,
         }
     }
@@ -386,7 +409,7 @@ impl Terminal {
 
     /// The hyperlink with id `id`.
     pub fn hyperlink(&self, id: u32) -> Option<&Hyperlink> {
-        self.hyperlinks.get(id as usize)
+        self.hyperlinks.get(&id)
     }
 
     /// The kitty graphics store.
@@ -436,7 +459,8 @@ impl Terminal {
 
     /// Sequences tmux asked to pass through to the outer terminal (DCS tmux; ...), as raw bytes.
     pub fn take_passthrough(&mut self) -> Vec<Vec<u8>> {
-        std::mem::take(&mut self.tmux_passthrough)
+        self.tmux_passthrough_bytes = 0;
+        std::mem::take(&mut self.tmux_passthrough).into()
     }
 
     /// True while a synchronized update (mode 2026) is open; the host holds frames until it

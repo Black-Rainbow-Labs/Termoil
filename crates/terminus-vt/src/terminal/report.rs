@@ -66,6 +66,9 @@ pub const TERMINFO_CAPS: &[(&str, &str)] = &[
 /// expect a value from 314 up.
 const DA2_VERSION: u16 = 400;
 
+/// The widest sixel image the decoder accepts, and the tallest it accepts before the pixel cap.
+const SIXEL_MAX_DIMENSION: u64 = 16_384;
+
 impl Terminal {
     /// CSI sequences that answer with a report, plus anything unrecognised (ignored).
     pub(super) fn report_dispatch(&mut self, seq: &CsiSeq) {
@@ -74,6 +77,7 @@ impl Terminal {
             (0, [], b'c') if p.get(0) == 0 => self.reply_da1(),
             (b'>', [], b'c') if p.get(0) == 0 => self.reply_da2(),
             (b'=', [], b'c') if p.get(0) == 0 => self.reply(b"\x1bP!|5445524d\x1b\\"),
+            (b'?', [], b'S') => self.xtsmgraphics(p.get(0), p.get(1)),
             (0, [], b'n') => self.dsr(p.get(0)),
             (b'?', [], b'n') => self.dec_dsr(p.get(0), p.get(1)),
             (0, [b'$'], b'p') if self.vt_level >= 3 => self.decrqm(ModeKind::Ansi, p.get(0)),
@@ -87,19 +91,51 @@ impl Terminal {
     }
 
     /// DA1 (and DECID): the conformance level, then the features Terminus implements: 132 columns
-    /// (1), selective erase (6), horizontal scrolling (21), ANSI colour (22), rectangular editing
-    /// (28) and clipboard access (52). xterm also lists a printer, ReGIS, sixel, NRCS, the technical
+    /// (1), sixel graphics (4), selective erase (6), horizontal scrolling (21), ANSI colour (22),
+    /// rectangular editing (28) and clipboard access (52). xterm also lists a printer, ReGIS, NRCS, the technical
     /// character set, a locator and user windows; Terminus leaves out what it does not have, because
-    /// programs read this list to decide what to send. Sixel (4) is added when sixel images draw.
+    /// programs read this list to decide what to send. Level 1 (VT100) has no feature list.
     pub(super) fn reply_da1(&mut self) {
         let reply = match self.vt_level {
             1 => "[?1;2c",
-            2 => "[?62;1;6;22;52c",
-            3 => "[?63;1;6;22;52c",
-            4 => "[?64;1;6;21;22;28;52c",
-            _ => "[?65;1;6;21;22;28;52c",
+            2 => "[?62;1;4;6;22;52c",
+            3 => "[?63;1;4;6;22;52c",
+            4 => "[?64;1;4;6;21;22;28;52c",
+            _ => "[?65;1;4;6;21;22;28;52c",
         };
         self.reply(reply.as_bytes());
+    }
+
+    /// XTSMGRAPHICS (`CSI ? Pi ; Pa ; Pv S`): answers `CSI ? Pi ; Ps ; Pv... S`. Pi 1 is the number of
+    /// sixel colour registers (always 256) and Pi 2 the sixel geometry in pixels. Read (Pa 1) and
+    /// maximum (Pa 4) succeed, and reset (Pa 2) answers the default, which is the same value. A set
+    /// request (Pa 3) fails with Ps 3, because the sizes are fixed. Pi 3 (ReGIS) is not supported.
+    fn xtsmgraphics(&mut self, item: u16, action: u16) {
+        if !(1..=2).contains(&item) {
+            self.reply(format!("[?{item};1S").as_bytes());
+            return;
+        }
+        if !(1..=4).contains(&action) {
+            self.reply(format!("[?{item};2S").as_bytes());
+            return;
+        }
+        if action == 3 {
+            self.reply(format!("[?{item};3S").as_bytes());
+            return;
+        }
+        let value = if item == 1 { "256".to_string() } else { self.sixel_geometry(action == 4) };
+        self.reply(format!("[?{item};0;{value}S").as_bytes());
+    }
+
+    /// The `width;height` XTSMGRAPHICS reports for sixel: the maximum an image may be (16384
+    /// wide, and as tall as the pixel cap allows), or the size of the window in pixels.
+    fn sixel_geometry(&self, maximum: bool) -> String {
+        if maximum {
+            let height = (self.graphics.max_pixels() / SIXEL_MAX_DIMENSION).clamp(1, SIXEL_MAX_DIMENSION);
+            return format!("{SIXEL_MAX_DIMENSION};{height}");
+        }
+        let (cw, ch) = self.cell_pixel;
+        format!("{};{}", self.cols() as u32 * cw as u32, self.rows() as u32 * ch as u32)
     }
 
     /// DA2: the terminal type for the conformance level (as xterm reports it), a version number

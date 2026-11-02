@@ -594,6 +594,11 @@ impl Page {
         self.hyperlinks.get(&index).copied()
     }
 
+    /// Adds the hyperlink id of every cell in this page that has one to `out`.
+    pub fn collect_hyperlink_ids(&self, out: &mut std::collections::HashSet<u32>) {
+        out.extend(self.hyperlinks.values().copied());
+    }
+
     /// Attaches hyperlink `id` to row `i`, column `col`.
     pub fn set_hyperlink(&mut self, i: usize, col: usize, id: u32) {
         let index = self.cell_index(i, col);

@@ -284,6 +284,21 @@ impl PageList {
         }
     }
 
+    /// Adds the hyperlink id of every cell in every page, history included, to `out`. A compressed
+    /// page is decompressed into a temporary.
+    pub fn collect_hyperlink_ids(&self, out: &mut std::collections::HashSet<u32>) {
+        for node in &self.nodes {
+            match &node.data {
+                NodeData::Live(page) => page.collect_hyperlink_ids(out),
+                NodeData::Compressed { bytes } => {
+                    if let Some(page) = Page::decompress(bytes) {
+                        page.collect_hyperlink_ids(out);
+                    }
+                }
+            }
+        }
+    }
+
     /// The header of row `y`.
     pub fn row_header(&self, y: usize) -> Row {
         self.with_row(y, |p, r| *p.row(r))

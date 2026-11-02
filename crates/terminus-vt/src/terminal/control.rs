@@ -312,6 +312,8 @@ impl Terminal {
         self.modes.set(Mode::GraphemeCluster, self.config.grapheme_clustering);
         self.palette = default_palette();
         self.special_colors = [None; 5];
+        self.extra_colors = [None; 5];
+        self.notification_pending.clear();
         self.colors = super::DynamicColors::default();
         self.title_stack.clear();
         self.title_modes = 0;
