@@ -22,6 +22,7 @@ serde.workspace = true
 serde_json.workspace = true
 crossbeam-channel.workspace = true
 toml = "1"
+toml_edit = "0.25"
 regex.workspace = true
 winit = "0.30"
 softbuffer = "0.4"

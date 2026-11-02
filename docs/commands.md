@@ -36,6 +36,7 @@ or the IPC socket asked for it.
 | [`reload-config`](#reload-config) | yes | yes | nothing | Reads the configuration file again and applies it. |
 | [`set-theme`](#set-theme) | yes | yes | nothing | Switches to a bundled colour theme and writes it to the configuration file. |
 | [`choose-theme`](#choose-theme) | no | yes | a window | Lists the bundled themes, previewing each as it is highlighted; Enter keeps one. |
+| [`open-settings`](#open-settings) | no | yes | a window | Opens the settings view: every setting with its help text and value, edited in place and written to the configuration file. |
 | [`open-config`](#open-config) | no | yes | nothing | Opens the configuration file in the configured editor. |
 | [`activate-key-table`](#activate-key-table) | yes | no | nothing | Makes a key table active: keys are looked up in its bindings first until it is deactivated. |
 | [`deactivate-key-table`](#deactivate-key-table) | yes | no | nothing | Deactivates the key table that was activated last. |
@@ -413,6 +414,12 @@ Over IPC: `{"id":1,"action":"set-theme","args":{...}}`. MCP tool: `terminus_set_
 ## choose-theme
 
 Lists the bundled themes, previewing each as it is highlighted; Enter keeps one.
+
+No parameters.
+
+## open-settings
+
+Opens the settings view: every setting with its help text and value, edited in place and written to the configuration file.
 
 No parameters.
 

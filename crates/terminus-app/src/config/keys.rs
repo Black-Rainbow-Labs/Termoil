@@ -221,6 +221,7 @@ pub fn default_keybindings() -> Vec<Binding> {
         ("ctrl+shift+n", "new-window"),
         ("ctrl+shift+k", "clear-scrollback"),
         ("ctrl+shift+h", "show-hints"),
+        ("ctrl+,", "open-settings"),
     ];
     let mut out: Vec<Binding> = table.iter().map(|(k, a)| Binding::new(k, a)).collect();
     out.extend(resize_bindings("ctrl+shift+alt"));
@@ -270,6 +271,7 @@ pub fn default_keybindings_macos() -> Vec<Binding> {
         ("ctrl+cmd+f", "toggle-fullscreen"),
         ("cmd+n", "new-window"),
         ("cmd+k", "clear-scrollback"),
+        ("cmd+,", "open-settings"),
     ];
     let mut out: Vec<Binding> = table.iter().map(|(k, a)| Binding::new(k, a)).collect();
     out.extend(resize_bindings("cmd+ctrl"));

@@ -23,7 +23,7 @@ pub fn set(app: &mut crate::app::App, name: &str) -> Result<(), String> {
 }
 
 /// Writes the file, creating its folder.
-fn write_file(path: &Path, text: &str) -> Result<(), String> {
+pub(crate) fn write_file(path: &Path, text: &str) -> Result<(), String> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }

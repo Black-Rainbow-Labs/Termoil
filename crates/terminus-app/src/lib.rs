@@ -20,6 +20,7 @@ pub mod palette;
 pub mod paths;
 pub mod platform;
 pub mod session;
+pub mod settings;
 pub mod shell_integration;
 pub mod terminfo;
 pub mod themes;
