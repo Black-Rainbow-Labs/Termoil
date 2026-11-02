@@ -101,7 +101,7 @@ pub fn unescape(s: &str) -> String {
 /// The `+help` text: every command line action with its parameters.
 pub fn usage() -> String {
     let mut s = String::from(
-        "terminus                      start the Terminus window\nterminus +<command> [args]    send a command to the running Terminus\nterminus +mcp                 serve the commands as MCP tools on stdin and stdout\n\nCommands:\n",
+        "terminus                      start the Terminus window\nterminus +<command> [args]    send a command to the running Terminus\nterminus +mcp                 serve the commands as MCP tools on stdin and stdout\nterminus ssh [--no-terminfo] <ssh arguments>\n                              copy the xterm-terminus terminfo entry to the remote host, then\n                              run ssh with TERM=xterm-terminus (xterm-256color if the copy fails)\n\nCommands:\n",
     );
     for a in CATALOGUE.iter().filter(|a| a.cli) {
         let params: Vec<String> = a
