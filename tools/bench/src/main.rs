@@ -5,9 +5,12 @@
 //! and prints MB/s per scenario; the gate scenario is `mixed`, a 1 GB stream of build log style
 //! text with colours, progress bars and some UTF-8. `terminus-bench alloc` counts heap
 //! allocations while the same stream is applied, split into the warm up (until the scrollback
-//! reaches its limit) and the steady state. Every run appends JSON rows to
-//! `_agent_output/bench/` with the machine, build and commit.
+//! reaches its limit) and the steady state. `terminus-bench compare` runs the same bytes through
+//! vte, alacritty_terminal and terminus-vt and prints one table in MB/s; `terminus-bench
+//! write-stream mixed <path>` writes the 1 GiB gate file for `tools/bench-ghostty.ps1`. Every run
+//! appends JSON rows to `_agent_output/bench/` with the machine, build and commit.
 
+mod compare;
 mod gpuinit;
 mod memory;
 mod render;
@@ -97,8 +100,7 @@ fn throughput(samples: usize, only: Option<&str>) -> Vec<Sample> {
         if only.is_some_and(|o| o != name) {
             continue;
         }
-        let target: u64 = if name == "mixed" { 1 << 30 } else { 256 << 20 };
-        let repeat = (target / data.len() as u64).max(1) as usize;
+        let repeat = streams::repeat_for(data.len(), streams::target_bytes(name));
         let mut times = Vec::new();
         for _ in 0..samples {
             times.push(run(&data, repeat));
@@ -157,9 +159,14 @@ fn commit() -> String {
         .unwrap_or_default()
 }
 
+/// The folder benchmark rows are written to: `_agent_output/bench/` at the repository root.
+fn bench_dir() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../_agent_output/bench")
+}
+
 /// Appends JSON rows to `_agent_output/bench/<file>`.
 fn record(file: &str, rows: &[serde_json::Value]) {
-    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../_agent_output/bench");
+    let dir = bench_dir();
     let _ = std::fs::create_dir_all(&dir);
     let mut text = String::new();
     for r in rows {
@@ -206,11 +213,84 @@ fn parse_only() {
     }
 }
 
-/// Entry point: `throughput [samples]`, `parse`, `alloc`, or `render [frames]`.
+/// The P1 gate line both `throughput` and `compare` print, from the `mixed` rate in MB/s.
+fn p1_gate_line(mixed: f64) -> String {
+    let gate = P1_GATE_MB_PER_S;
+    let verdict = if mixed >= gate { "PASS" } else { "FAIL" };
+    format!("P1 gate (mixed >= {gate} MB/s, Terminal 200x60, default scrollback): {mixed:.0} MB/s {verdict}")
+}
+
+/// `throughput [samples] [scenario]`: terminus-vt full on every scenario, rows to p1.jsonl, the gate line.
+fn throughput_command(args: &[String]) {
+    let samples = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(3);
+    let results = throughput(samples, args.get(3).map(String::as_str));
+    let rows: Vec<serde_json::Value> = results.iter().map(|s| serde_json::json!({"machine": machine(), "source": "throughput", "scenario": s.scenario, "bytes": s.bytes, "seconds": s.seconds, "mb_per_s": s.bytes as f64 / s.seconds / 1e6})).collect();
+    record("p1.jsonl", &rows);
+    if let Some(m) = results.iter().find(|s| s.scenario == "mixed") {
+        println!("{}", p1_gate_line(m.bytes as f64 / m.seconds / 1e6));
+    }
+}
+
+/// `compare [samples] [scenario|all]`: the comparison table, p1.jsonl rows carrying the
+/// comparison numbers, and the gate line from the terminus-vt full `mixed` row.
+fn compare_command(args: &[String]) {
+    let samples = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(3);
+    let ghostty = compare::latest_ghostty(&bench_dir());
+    println!("{}", composition_line("mixed", &streams::mixed(64 << 20)));
+    let rows = compare::run(samples, args.get(3).map(String::as_str), ghostty);
+    let json: Vec<serde_json::Value> = rows.iter().map(|r| serde_json::json!({"machine": machine(), "source": "compare", "scenario": r.stream, "bytes": r.bytes, "seconds": r.tvt_full_seconds, "mb_per_s": r.tvt_full, "comparison": compare::json(r)})).collect();
+    record("p1.jsonl", &json);
+    if let Some(m) = rows.iter().find(|r| r.stream == "mixed") {
+        println!("{}", p1_gate_line(m.tvt_full));
+    }
+}
+
+/// One line describing a block: its length, checksum and composition, to check against the pin in
+/// `streams::tests` and the table in `docs/decisions/throughput.md`.
+fn composition_line(name: &str, block: &[u8]) -> String {
+    let c = streams::composition(block);
+    format!(
+        "{name} block: {} bytes, fnv1a {:#018x}, {} lines, {:.1} bytes per line, {:.1} escape sequences per KB, {:.1} UTF-8 multibyte per KB, {:.1} % of bytes inside escape sequences",
+        c.bytes,
+        streams::fnv1a(block),
+        c.lines,
+        c.bytes_per_line,
+        c.escapes_per_kb,
+        c.utf8_multibyte_per_kb,
+        c.fraction_in_escape * 100.0
+    )
+}
+
+/// `write-stream <scenario> <path>`: writes the scenario's block repeated to its target size, so
+/// `write-stream mixed` writes the 1 GiB P1 gate file (sixteen copies of `mixed(64 << 20)`).
+fn write_stream_command(args: &[String]) {
+    use std::io::Write;
+    let (Some(name), Some(path)) = (args.get(2), args.get(3)) else {
+        eprintln!("usage: terminus-bench write-stream <scenario> <path>");
+        std::process::exit(2);
+    };
+    let Some((_, block)) = streams::scenarios().into_iter().find(|(n, _)| n == name) else {
+        eprintln!("unknown scenario {name}");
+        std::process::exit(2);
+    };
+    let repeat = streams::repeat_for(block.len(), streams::target_bytes(name));
+    let mut f = std::io::BufWriter::new(std::fs::File::create(path).expect("create the stream file"));
+    for _ in 0..repeat {
+        f.write_all(&block).expect("write the stream file");
+    }
+    f.flush().expect("flush the stream file");
+    println!("{}", composition_line(name, &block));
+    println!("wrote {} bytes ({repeat} copies of the block) to {path}", block.len() * repeat);
+}
+
+/// Entry point: `throughput [samples] [scenario]`, `compare [samples] [scenario|all]`,
+/// `write-stream <scenario> <path>`, `parse`, `alloc`, `memory`, `gpu-init`, or `render [frames]`.
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     match args.get(1).map(String::as_str) {
         Some("parse") => parse_only(),
+        Some("compare") => compare_command(&args),
+        Some("write-stream") => write_stream_command(&args),
         Some("memory") => {
             let rows: Vec<serde_json::Value> = memory::measure()
                 .into_iter()
@@ -255,15 +335,6 @@ fn main() {
                 std::process::exit(1);
             }
         }
-        _ => {
-            let samples = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(3);
-            let results = throughput(samples, args.get(3).map(String::as_str));
-            let rows: Vec<serde_json::Value> = results.iter().map(|s| serde_json::json!({"machine": machine(), "scenario": s.scenario, "bytes": s.bytes, "seconds": s.seconds, "mb_per_s": s.bytes as f64 / s.seconds / 1e6})).collect();
-            record("p1.jsonl", &rows);
-            let mixed =
-                results.iter().find(|s| s.scenario == "mixed").map(|s| s.bytes as f64 / s.seconds / 1e6).unwrap_or(0.0);
-            let gate = P1_GATE_MB_PER_S;
-            println!("P1 gate (mixed >= {gate} MB/s): {mixed:.0} MB/s {}", if mixed >= gate { "PASS" } else { "FAIL" });
-        }
+        _ => throughput_command(&args),
     }
 }

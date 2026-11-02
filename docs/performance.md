@@ -33,11 +33,69 @@ Other rows from the same runs, for comparison and not gated:
 
 | Row | Value |
 |---|---|
-| `dense_cells` (a colour change per cell) | 259.4 MB/s on core 12; alacritty_terminal measured 216 |
-| `unicode` (wide and combining characters) | 204.8 MB/s on core 12; alacritty_terminal measured 87 |
+| `dense_cells` (a colour change per cell) | 259.4 MB/s on core 12; alacritty_terminal 302 in the P1 comparison below |
+| `unicode` (wide and combining characters) | 204.8 MB/s on core 12; alacritty_terminal 109 in the P1 comparison below |
 | R4 without the glyph atlas | p99 17.57 ms; the atlas is the configuration Terminus ships |
 | R4 on `vello_cpu` (the start up and fallback renderer) | p99 14.64 to 15.76 ms |
 | P2 on OpenGL (the fallback backend) | p50 3.83 ms, p99 31.71 ms (200 keys) |
+
+## P1 comparison
+
+`docs/TEST-SUITE.md` section 13 asks each published P1 run to record alacritty_terminal and Ghostty 1.4 on the same
+bytes. Measured on 2026-11-02 in one session, terminus-vt at commit `f2ff2a4` (the last commit to touch
+`crates/terminus-vt`, inside the 1.0.0 release `855b681`), Rust 1.95.0, release profile.
+
+The gate stream is `streams::mixed(64 << 20)` repeated sixteen times: 1,073,743,136 bytes. The block is 67,108,946 bytes
+with FNV-1a 64 `0xbcf285359a5a6081`, 94.8 bytes per line, 29.2 escape sequences per KB, 13.3 UTF-8 multibyte sequences per
+KB and 16.4 % of bytes inside escape sequences. The test `mixed_gate_stream_is_pinned` in `tools/bench/src/streams.rs`
+fails if any of these change.
+
+How each column was measured:
+
+| Column | What runs |
+|---|---|
+| vte 0.15 parser only | `vte::Parser` with a `Perform` that counts calls |
+| alacritty_terminal 0.26 full | `Term` at 200 by 60, `scrolling_history` 100,000 lines (about 9.5 MB of `mixed`), fed through `vte::ansi::Processor` |
+| Ghostty 1.4 full | `ghostty-bench +terminal-stream --terminal-cols=200 --terminal-rows=60` on the gate file, Ghostty v1.4.0 built with zig 0.17.0 and `-Doptimize=ReleaseFast` in WSL2 on this machine, default 10 MB scrollback; the time is the whole process, start up included; not pinned (a WSL2 thread cannot be pinned to a host core) |
+| terminus-vt parser only | `terminus_vt::parser::Parser` with a handler that counts actions |
+| terminus-vt full | `Terminal::new(200, 60, TerminalConfig::default())`, the 50 MB default scrollback |
+
+Every engine is fed 64 KiB slices on one thread. MB/s is bytes / seconds / 1e6, median of 3. `mixed` is fed 1 GiB, the
+other streams 256 MiB. The Windows columns ran pinned to performance core 12 at high priority; other programs used 20 to 36
+% of the CPU during the run. Parser only columns are not like for like: vte calls `print` once per character, terminus-vt
+emits one action per printable run.
+
+| Stream | vte 0.15 parser only | alacritty_terminal 0.26 full | Ghostty 1.4 full | terminus-vt parser only | terminus-vt full |
+|---|---|---|---|---|---|
+| `mixed` (the gate) | 631 | 82 | 234 | 946 | 267 |
+| `scrolling` | 4653 | 110 | | 6006 | 851 |
+| `dense_cells` | 507 | 302 | | 853 | 260 |
+| `scrolling_in_region` | 4332 | 179 | | 6370 | 832 |
+| `unicode` | 348 | 109 | | 5364 | 211 |
+| `cursor_motion` | 402 | 241 | | 647 | 238 |
+| `erase_redraw` | 2373 | 194 | | 5931 | 1514 |
+| `mixed_plain` | 4637 | 75 | | 4064 | 712 |
+| `mixed_sgr` | 729 | 81 | | 1237 | 325 |
+| `mixed_unicode` | 2273 | 76 | | 2434 | 505 |
+| `mixed_progress` | 4294 | 78 | | 4027 | 708 |
+
+Ghostty's three runs were 246.4, 229.9 and 233.9 MB/s. The same comparison unpinned gave terminus-vt full 274 MB/s on
+`mixed`, alacritty_terminal 81, vte 619, terminus-vt parser only 975. `terminus-bench throughput 3 mixed` on core 12 in the
+same session gave 255.7 MB/s.
+
+On `mixed` terminus-vt full is 14 % faster than Ghostty 1.4 and 226 % faster than alacritty_terminal. Two streams are
+slower in terminus-vt full than in alacritty_terminal: `dense_cells` (260 against 302) and `cursor_motion` (238 against
+241).
+
+To repeat it:
+
+```
+pwsh tools/bench-ghostty.ps1                          # Ghostty: appends a row to _agent_output/bench/ghostty.jsonl
+cargo run --release -p terminus-bench -- compare      # every engine; shows the newest Ghostty row beside mixed
+```
+
+`compare` writes one row per stream to `_agent_output/bench/p1.jsonl` with `"source": "compare"` and the numbers above
+under `comparison`. `compare 3 all` adds the `micro_` streams, and `compare 3 <stream>` runs one.
 
 ## Open
 
@@ -47,5 +105,5 @@ Other rows from the same runs, for comparison and not gated:
 - R4 on a laptop's integrated GPU: measured here on a desktop CPU's integrated GPU only.
 - P3 measures the terminal core in its own process. The window's own memory (fonts, the GPU device and its buffers) is not
   gated and has not been measured.
-- The P1 comparison: alacritty_terminal and Ghostty were measured without a recorded core; task-2461 repeats them pinned to
-  a performance core.
+- The P1 comparison runs Ghostty inside WSL2, where its thread cannot be pinned to a host core, and its time includes
+  process start up. The Windows engines are pinned to core 12.

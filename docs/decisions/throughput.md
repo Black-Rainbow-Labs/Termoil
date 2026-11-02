@@ -85,7 +85,7 @@ The gate line in `docs/TEST-SUITE.md` section 13 now reads: the `mixed` 1 GiB st
 
 - `_agent_output/task-2459-throughput/comparison.md` and `comparison.jsonl`: the Windows runs, machine, crate versions, commands, and the noisy samples named.
 - `_agent_output/task-2459-throughput/ghostty.md` and `ghostty-runs.txt`: the Ghostty source quotes with URLs, the WSL build and run commands, and the raw runs.
-- `_agent_output/task-2459-throughput/harness/`: the Rust harness that drove vte, alacritty_terminal and terminus-vt on the same bytes. The follow up ticket adds it to `tools/bench` so the comparison runs with each release.
+- `_agent_output/task-2459-throughput/harness/`: the Rust harness that drove vte, alacritty_terminal and terminus-vt on the same bytes. task-2461 copied it into `tools/bench` as `terminus-bench compare` (`tools/bench/src/compare.rs`), with Ghostty measured by `tools/bench-ghostty.ps1`, so the comparison runs with each release. The repeat with the 1.0 build is in `docs/performance.md`.
 
 ## Measured (task-2458, 2026-11-01)
 

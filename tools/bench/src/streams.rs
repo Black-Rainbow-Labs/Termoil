@@ -250,3 +250,103 @@ pub fn scenarios() -> Vec<(&'static str, Vec<u8>)> {
         ("micro_print_home", b"abc\x1b[H".repeat(3 << 20)),
     ]
 }
+
+/// How many bytes each scenario is fed to: `mixed` to 1 GiB (the P1 gate file), the others to 256 MiB.
+pub fn target_bytes(name: &str) -> u64 {
+    if name == "mixed" { 1 << 30 } else { 256 << 20 }
+}
+
+/// How many times a block of `len` bytes is repeated to come nearest `target` bytes. Rounding to
+/// the nearest count makes the `mixed` block (64 MiB and 82 bytes) sixteen copies, the gate file.
+pub fn repeat_for(len: usize, target: u64) -> usize {
+    let len = len.max(1) as u64;
+    ((target + len / 2) / len).max(1) as usize
+}
+
+/// What a stream is made of, measured the way `docs/decisions/throughput.md` reports it.
+#[derive(Debug, Clone, Copy)]
+pub struct Composition {
+    pub bytes: usize,
+    pub lines: u64,
+    pub bytes_per_line: f64,
+    pub escapes_per_kb: f64,
+    pub utf8_multibyte_per_kb: f64,
+    pub fraction_in_escape: f64,
+}
+
+/// Counts lines, escape sequences, UTF-8 lead bytes and the bytes inside CSI sequences of `d`.
+pub fn composition(d: &[u8]) -> Composition {
+    let (mut lf, mut esc, mut multibyte, mut inside) = (0u64, 0u64, 0u64, 0u64);
+    let mut i = 0;
+    while i < d.len() {
+        let b = d[i];
+        lf += u64::from(b == b'\n');
+        multibyte += u64::from(b >= 0xC0);
+        if b == 0x1b {
+            esc += 1;
+            let start = i;
+            i += 1;
+            if i < d.len() && d[i] == b'[' {
+                i += 1;
+                while i < d.len() && !(0x40..=0x7e).contains(&d[i]) {
+                    i += 1;
+                }
+                i += 1;
+            }
+            inside += (i.min(d.len()) - start) as u64;
+            continue;
+        }
+        i += 1;
+    }
+    let n = d.len() as f64;
+    Composition {
+        bytes: d.len(),
+        lines: lf,
+        bytes_per_line: n / lf.max(1) as f64,
+        escapes_per_kb: esc as f64 / (n / 1024.0),
+        utf8_multibyte_per_kb: multibyte as f64 / (n / 1024.0),
+        fraction_in_escape: inside as f64 / n,
+    }
+}
+
+/// FNV-1a, 64 bit: a stable checksum written here so the pin needs no dependency.
+pub fn fnv1a(d: &[u8]) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for &b in d {
+        h ^= u64::from(b);
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    h
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The length of the P1 gate block, `mixed(64 << 20)`. The 1 GiB gate file is this block sixteen times.
+    const MIXED_LEN: usize = 67_108_946;
+    /// FNV-1a 64 of the P1 gate block.
+    const MIXED_FNV1A: u64 = 0xbcf2_8535_9a5a_6081;
+
+    /// The P1 gate stream cannot change without this test failing. The composition is the one in
+    /// `docs/decisions/throughput.md`: 94.8 bytes per line, 29.2 escape sequences per KB, 13.3 UTF-8
+    /// multibyte sequences per KB, 16.4 percent of bytes inside escape sequences. A change to the
+    /// stream is a change to the P1 gate and needs a decision record, not a new pin.
+    #[test]
+    fn mixed_gate_stream_is_pinned() {
+        let d = mixed(64 << 20);
+        assert_eq!(d.len(), MIXED_LEN);
+        assert_eq!(fnv1a(&d), MIXED_FNV1A, "fnv1a {:#018x}", fnv1a(&d));
+        let c = composition(&d);
+        assert_eq!(format!("{:.1}", c.bytes_per_line), "94.8");
+        assert_eq!(format!("{:.1}", c.escapes_per_kb), "29.2");
+        assert_eq!(format!("{:.1}", c.utf8_multibyte_per_kb), "13.3");
+        assert_eq!(format!("{:.1}", c.fraction_in_escape * 100.0), "16.4");
+    }
+
+    /// The gate file written by `write-stream mixed` is sixteen copies of the block.
+    #[test]
+    fn mixed_gate_file_is_sixteen_blocks() {
+        assert_eq!(repeat_for(MIXED_LEN, target_bytes("mixed")), 16);
+    }
+}

@@ -1,6 +1,6 @@
 [package]
 name = "terminus-bench"
-description = "Terminus performance benchmarks: parser throughput (P1) and allocation counting (P5)."
+description = "Terminus performance benchmarks: parser throughput and the comparison with vte, alacritty_terminal and Ghostty (P1), memory (P3), allocation counting (P5) and frame time (R4)."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -14,6 +14,9 @@ serde_json.workspace = true
 wgpu = "30"
 vello_gpu = "0.3"
 pollster = "0.4"
+# The P1 comparison (`terminus-bench compare`) only. Never dependencies of terminus-vt, which CI builds for wasm.
+vte = "0.15"
+alacritty_terminal = "0.26"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = ["Win32_System_ProcessStatus", "Win32_System_Threading"] }
