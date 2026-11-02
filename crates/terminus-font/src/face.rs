@@ -50,6 +50,16 @@ impl FontStyle {
     }
 }
 
+/// How a cluster asks to be drawn: as text, or as a colour emoji (Unicode's Emoji_Presentation, or
+/// a VS16 selector after the character).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum Presentation {
+    /// A text glyph. The colour emoji face is the last fallback.
+    Text,
+    /// A colour emoji. The colour emoji face is tried before the primary face.
+    Emoji,
+}
+
 /// One loaded face.
 #[derive(Clone, Debug)]
 pub struct Face {
@@ -87,13 +97,31 @@ pub struct FaceSet {
     faces: Vec<Face>,
     primary: [FaceId; 4],
     emoji: Option<FaceId>,
-    fallback: HashMap<(char, FontStyle), FaceId>,
+    fallback: HashMap<(char, FontStyle, Presentation), FaceId>,
     by_blob: HashMap<(usize, u32), FaceId>,
 }
 
 /// Emoji families tried, in order, for emoji presentation characters.
 const EMOJI_FAMILIES: &[&str] =
     &["Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", "Twemoji Mozilla", "Noto Emoji"];
+
+/// Families with wide symbol coverage, tried after the system fallback for a character no other face
+/// has. The system fallback for symbols and combining marks (scripts Common and Inherited) does not
+/// reach these on Windows, which left ✢, ⏵, ⧉ and U+0310 as missing glyph boxes (task-2468).
+const SYMBOL_FAMILIES: &[&str] = &[
+    "Segoe UI Symbol",
+    "Cambria Math",
+    "Segoe UI",
+    "Segoe UI Historic",
+    "Apple Symbols",
+    "STIX Two Math",
+    "Noto Sans Symbols 2",
+    "Noto Sans Symbols",
+    "Noto Sans Math",
+    "DejaVu Sans",
+    "Symbola",
+    "Arial Unicode MS",
+];
 
 impl FaceSet {
     /// Loads the configured font files and families and picks the primary face for each style.
@@ -185,31 +213,42 @@ impl FaceSet {
         id
     }
 
-    /// The face that draws `c` in `style`, finding and caching a fallback when needed.
-    pub fn face_for(&mut self, c: char, style: FontStyle, configured: &[String]) -> FaceId {
+    /// The face that draws `c` in `style` and `presentation`, finding and caching a fallback when
+    /// needed. An emoji presentation goes to the colour emoji face first; text goes to the primary face,
+    /// then the fallbacks, and reaches the colour emoji face only when nothing else has the character.
+    pub fn face_for(&mut self, c: char, style: FontStyle, presentation: Presentation, configured: &[String]) -> FaceId {
         let primary = self.primary(style);
+        let emoji = self.emoji.filter(|&e| self.face(e).glyph(c).is_some());
+        if let (Presentation::Emoji, Some(e)) = (presentation, emoji) {
+            return e;
+        }
         if self.face(primary).glyph(c).is_some() {
             return primary;
         }
-        if let Some(&id) = self.fallback.get(&(c, style)) {
+        if let Some(&id) = self.fallback.get(&(c, style, presentation)) {
             return id;
         }
-        let found = self.find_fallback(c, style, configured).unwrap_or(primary);
-        self.fallback.insert((c, style), found);
+        let found = self.find_fallback(c, style, configured).or(emoji).unwrap_or(primary);
+        self.fallback.insert((c, style, presentation), found);
         found
     }
 
-    /// Searches configured families, the emoji face and the system fallback for `c`.
+    /// Searches the configured families, the system fallback and the symbol families for a text face
+    /// that has `c`. Colour faces are passed over, so a text symbol is never drawn as an emoji when a
+    /// text face has it.
     fn find_fallback(&mut self, c: char, style: FontStyle, configured: &[String]) -> Option<FaceId> {
         for name in configured {
             if let Some(id) = self.query_family(name, style).filter(|&id| self.face(id).glyph(c).is_some()) {
                 return Some(id);
             }
         }
-        if let Some(e) = self.emoji.filter(|&e| self.face(e).glyph(c).is_some()) {
-            return Some(e);
+        if let Some(id) = self.system_fallback(c, style).filter(|&id| Some(id) != self.emoji) {
+            return Some(id);
         }
-        self.system_fallback(c, style)
+        SYMBOL_FAMILIES.iter().find_map(|name| {
+            let id = self.query_family(name, style)?;
+            (Some(id) != self.emoji && self.face(id).glyph(c).is_some()).then_some(id)
+        })
     }
 
     /// Asks the platform's fallback list for the character's script for a face that has `c`.

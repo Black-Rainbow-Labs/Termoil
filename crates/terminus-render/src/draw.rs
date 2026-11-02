@@ -206,32 +206,34 @@ fn dashes<C: Canvas>(c: &mut C, x0: f64, x1: f64, y: f64, t: f64, on: f64, off: 
     }
 }
 
-/// A wavy band from `x0` to `x1`, one wave per four thicknesses, as a filled outline.
+/// A wavy band from `x0` to `x1` as a filled outline, its lowest point where a straight underline at
+/// `y` would end. A wave is about a cell wide (eight thicknesses, at least six pixels) and swings one
+/// and a half thicknesses. Before task-2468 a wave was four thicknesses with a one thickness swing, so
+/// the peaks sat a pixel apart and it could not be told from a dotted line, and its lower edge joined
+/// only the ends of each half wave, which drew a row of humps on a flat line.
 fn curly(x0: f64, x1: f64, y: f64, t: f64) -> BezPath {
-    let amp = t.max(1.0);
-    let period = (4.0 * amp).max(4.0);
-    let mut top = BezPath::new();
-    top.move_to((x0, y));
-    let mut x = x0;
-    let mut up = true;
+    let amp = (1.5 * t).max(1.5);
+    let period = (8.0 * t).max(6.0);
+    let mid = y - amp;
+    let mut halves = Vec::new();
+    let (mut x, mut up) = (x0, true);
     while x < x1 {
         let next = (x + period / 2.0).min(x1);
-        let dy = if up { -amp } else { amp };
-        top.quad_to(((x + next) / 2.0, y + dy * 2.0), (next, y));
+        let control = ((x + next) / 2.0, mid + if up { -2.0 * amp } else { 2.0 * amp });
+        halves.push((x, control, next));
         x = next;
         up = !up;
     }
-    // Offset the same curve down by the thickness to close a band.
-    let mut band = top.clone();
-    let bottom: Vec<_> = (Affine::translate((0.0, t)) * top).elements().iter().rev().copied().collect();
-    band.line_to((x1, y + t));
-    for el in bottom.iter().skip(1) {
-        if let Some(p) = el.end_point() {
-            band.line_to(p);
-        }
+    let mut band = BezPath::new();
+    band.move_to((x0, mid));
+    for &(_, c, end) in &halves {
+        band.quad_to(c, (end, mid));
+    }
+    band.line_to((x1, mid + t));
+    for &(start, c, _) in halves.iter().rev() {
+        band.quad_to((c.0, c.1 + t), (start, mid + t));
     }
     band.close_path();
-    band.bounding_box();
     band
 }
 

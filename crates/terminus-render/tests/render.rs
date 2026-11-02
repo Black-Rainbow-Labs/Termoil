@@ -72,6 +72,30 @@ fn r1_runs_split_at_colour_changes() {
     assert_ne!(colors[0], colors[1]);
 }
 
+/// SGR 8 text stays invisible with `window.minimum_contrast` on (task-2468): the text colour is the
+/// background, and the contrast lift used to bring it back to 4.5:1, so concealed text was readable.
+#[test]
+fn r1_hidden_text_is_not_lifted_by_minimum_contrast() {
+    let mut g = grid(16.0);
+    let mut t = Terminal::new(20, 2, TerminalConfig::default());
+    t.advance(b"\x1b[8msecret\x1b[0m shown");
+    let mut state = RenderState::new(20, 2, Colors::dark_default());
+    state.update(&mut t, 0);
+    let opts = BuildOptions { minimum_contrast: 4.5, ..BuildOptions::default() };
+    let f = build_frame(&state, &mut g, &opts);
+    let bg = Colors::dark_default().background;
+    let hidden =
+        f.rows[0].runs.iter().find(|r| r.glyphs.first().is_some_and(|gl| gl.x < g.metrics().width as f32 * 6.0));
+    if let Some(run) = hidden {
+        assert_eq!(
+            (run.color.r, run.color.g, run.color.b),
+            (bg.r, bg.g, bg.b),
+            "hidden text was drawn in {:?}",
+            run.color
+        );
+    }
+}
+
 #[test]
 fn r1_decorations() {
     let mut g = grid(16.0);

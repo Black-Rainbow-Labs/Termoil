@@ -4,7 +4,7 @@
 //! run (through the font grid's run cache) and places every glyph at its cell's position so text
 //! stays on the grid, and collects decorations, sprite characters and the cursor.
 
-use terminus_font::{FaceId, FontGrid, FontStyle, sprite};
+use terminus_font::{FaceId, FontGrid, FontStyle, Presentation, sprite};
 use terminus_vt::style::{Rgb, Underline, attr};
 use terminus_vt::terminal::CursorShape;
 
@@ -211,10 +211,13 @@ fn cell_colors(state: &RenderState, cell: &CellState, r: u16, col: u16, opts: &B
         bg = c.selection_background;
         fg = c.selection_foreground.unwrap_or(fg);
     }
+    // Hidden text is drawn in the background colour and is not lifted by the minimum contrast,
+    // which would make it readable again (task-2468).
     if s.has(attr::INVISIBLE) {
         fg = bg;
+    } else {
+        fg = ensure_contrast(fg, bg, opts.minimum_contrast);
     }
-    fg = ensure_contrast(fg, bg, opts.minimum_contrast);
     let underline = match s.underline_color {
         terminus_vt::style::Color::Default => fg,
         other => c.resolve(other, fg),
@@ -354,7 +357,7 @@ fn text_runs(
             continue;
         }
         let style = FontStyle::from_flags(cell.style.has(attr::BOLD), cell.style.has(attr::ITALIC));
-        let face = grid.face_for(first, style);
+        let face = cluster_face(grid, &cell.text, first, style);
         let color = colors[col as usize].fg;
         if pending.as_ref().is_some_and(|p| p.face != face || p.color != color || p.style != style) {
             flush(row, &mut pending, y, grid, opts);
@@ -427,11 +430,50 @@ fn build_cursor(
     (cursor, text)
 }
 
+/// The face a cell's text is shaped with: the face for its first character, unless the text is a
+/// cluster with a mark that face lacks (such as `a` and U+0310), in which case the face that has the
+/// mark is used when it also has the first character, so the mark is not drawn as a missing glyph box.
+fn cluster_face(grid: &mut FontGrid, text: &CellText, first: char, style: FontStyle) -> FaceId {
+    let presentation = presentation(text);
+    let face = grid.face_for(first, style, presentation);
+    let CellText::Cluster(s) = text else { return face };
+    if presentation == Presentation::Emoji {
+        return face;
+    }
+    let format = |c: char| matches!(c, '\u{200d}' | '\u{fe00}'..='\u{fe0f}');
+    let Some(missing) = s.chars().skip(1).find(|&c| !format(c) && grid.glyph(face, c).is_none()) else { return face };
+    let other = grid.face_for(missing, style, Presentation::Text);
+    if grid.glyph(other, first).is_some() { other } else { face }
+}
+
+/// Whether a cell's text asks for a colour emoji: a VS16 selector in the cluster, or a first character
+/// whose default is emoji presentation with no VS15 selector after it. Everything else is text, so a
+/// symbol such as ⏺ or ✳ is drawn from a text face even though the emoji face also has it (task-2468).
+fn presentation(text: &CellText) -> Presentation {
+    let (first, rest) = match text {
+        CellText::Blank => return Presentation::Text,
+        CellText::Char(c) => (*c, ""),
+        CellText::Cluster(s) => {
+            let mut it = s.chars();
+            let Some(f) = it.next() else { return Presentation::Text };
+            (f, it.as_str())
+        }
+    };
+    let emoji = if rest.contains('\u{fe0f}') {
+        true
+    } else if rest.contains('\u{fe0e}') {
+        false
+    } else {
+        terminus_vt::unicode::props(first).emoji_presentation
+    };
+    if emoji { Presentation::Emoji } else { Presentation::Text }
+}
+
 /// The glyph under a block cursor, drawn in the background colour so it shows through.
 fn cursor_glyph(cell: &CellState, x: f32, y: f32, grid: &mut FontGrid, color: Rgba) -> Option<GlyphRun> {
     let first = cell.text.first().filter(|c| *c != ' ' && !sprite::is_sprite(*c))?;
     let style = FontStyle::from_flags(cell.style.has(attr::BOLD), cell.style.has(attr::ITALIC));
-    let face = grid.face_for(first, style);
+    let face = grid.face_for(first, style, presentation(&cell.text));
     let mut text = String::new();
     cell.text.push_to(&mut text);
     let shaped = grid.shape(face, &text);

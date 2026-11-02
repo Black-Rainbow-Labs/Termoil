@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use terminus_font::{FontConfig, FontGrid, FontStyle};
+use terminus_font::{FontConfig, FontGrid, FontStyle, Presentation};
 
 /// The vendored JetBrains Mono files.
 fn vendored() -> Vec<PathBuf> {
@@ -82,7 +82,7 @@ fn run_cache_hits_on_repeat() {
 #[test]
 fn missing_glyph_without_system_fonts_stays_on_primary() {
     let mut g = jbm(16.0, true);
-    let face = g.face_for('中', FontStyle::Regular);
+    let face = g.face_for('中', FontStyle::Regular, Presentation::Text);
     assert_eq!(face, g.primary(FontStyle::Regular));
     assert!(g.glyph(face, '中').is_none());
 }
@@ -110,7 +110,8 @@ fn system_fallback_matrix() {
     ];
     let mut missing = Vec::new();
     for (c, name) in samples {
-        let face = g.face_for(c, FontStyle::Regular);
+        let presentation = if name == "Emoji" { Presentation::Emoji } else { Presentation::Text };
+        let face = g.face_for(c, FontStyle::Regular, presentation);
         let found = g.glyph(face, c).is_some();
         eprintln!("{name:<11} {c} -> {} ({})", g.face(face).family, if found { "found" } else { "MISSING" });
         if !found {
@@ -119,5 +120,32 @@ fn system_fallback_matrix() {
     }
     if std::env::var("CI").is_err() {
         assert!(missing.is_empty(), "no fallback face on this machine for {missing:?}");
+    }
+}
+
+/// The symbols Claude Code draws its screen with (task-2468): every one is found in a text face, never
+/// the colour emoji face. Before, ⏺ and ✳ came out as colour emoji, and ✢, ⏵, ⧉ and the combining
+/// U+0310 as missing glyph boxes, because the emoji face was tried before the system fallback and the
+/// system fallback for symbols did not reach Segoe UI Symbol or Cambria Math.
+#[test]
+fn claude_code_symbols_are_drawn_as_text() {
+    let config =
+        FontConfig { families: vec!["JetBrains Mono".into()], font_files: vendored(), ..FontConfig::default() };
+    let mut g = FontGrid::new(config).expect("system collection loads");
+    let mut wrong = Vec::new();
+    for c in ['⏺', '⎿', '✻', '✶', '✳', '✢', '⏵', '⧉', '↯', '\u{0310}'] {
+        let face = g.face_for(c, FontStyle::Regular, Presentation::Text);
+        let f = g.face(face);
+        eprintln!("U+{:04X} -> {} (colour {})", c as u32, f.family, f.color);
+        if g.glyph(face, c).is_none() || f.color {
+            wrong.push(format!("U+{:04X} on {} (colour {})", c as u32, f.family, f.color));
+        }
+    }
+    if std::env::var("CI").is_err() {
+        assert!(wrong.is_empty(), "not drawn as text: {wrong:?}");
+    }
+    let emoji = g.face_for('😀', FontStyle::Regular, Presentation::Emoji);
+    if std::env::var("CI").is_err() {
+        assert!(g.face(emoji).color, "an emoji presentation is drawn by the colour emoji face");
     }
 }

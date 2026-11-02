@@ -16,7 +16,7 @@ pub mod sprite;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-pub use face::{Face, FaceId, FontStyle};
+pub use face::{Face, FaceId, FontStyle, Presentation};
 pub use fontique::Blob;
 pub use metrics::CellMetrics;
 pub use shape::{ShapedGlyph, ShapedRun};
@@ -136,11 +136,12 @@ impl FontGrid {
         self.faces.primary(style)
     }
 
-    /// The face that draws `c` in `style`: the primary face when it has the character, else a
-    /// fallback face (configured families, then the emoji face, then the system's fallback for the
-    /// character's script). The answer is cached per character and style.
-    pub fn face_for(&mut self, c: char, style: FontStyle) -> FaceId {
-        self.faces.face_for(c, style, &self.config.fallback_families)
+    /// The face that draws `c` in `style`. An emoji presentation is drawn by the colour emoji face when
+    /// it has the character. Otherwise the primary face when it has the character, else a fallback face
+    /// (the configured families, the system's fallback for the character's script, the symbol families,
+    /// and the colour emoji face last). The answer is cached per character, style and presentation.
+    pub fn face_for(&mut self, c: char, style: FontStyle, presentation: Presentation) -> FaceId {
+        self.faces.face_for(c, style, presentation, &self.config.fallback_families)
     }
 
     /// Shapes `text` with face `face`, returning glyphs with their cluster offsets. Runs are cached
