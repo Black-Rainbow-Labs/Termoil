@@ -125,11 +125,18 @@ pub static SECTIONS: &[Section] = &[
         keys: &[
             e("padding", "Pixels above and below the tab titles."),
             e("corner_radius", "Corner radius of a tab, in pixels."),
-            e("inset", "Pixels between a tab and its neighbours and the bar's edges."),
-            e("underline", "Thickness of the accent line under the tab that is showing, in pixels."),
+            e("inset", "Pixels between the top of the bar and the tabs, and between neighbouring tabs."),
+            e(
+                "underline",
+                "Thickness of the accent line along the top of the tab that is showing, in pixels. 0 draws none.",
+            ),
             e("min_columns", "The narrowest a tab is drawn, in columns, before tabs start being left off the end."),
             e("max_columns", "The widest a tab is drawn, in columns."),
             e("show_with_one_tab", "Show the tab bar, with its new tab button, when the window has one tab."),
+            e(
+                "bar_shade",
+                "How much darker the bar is than the terminal background, from 0 to 1. A light theme uses a third of it.",
+            ),
         ],
     },
     Section {

@@ -177,20 +177,22 @@ pub struct TabBar {
     pub min_columns: u16,
     pub max_columns: u16,
     pub show_with_one_tab: bool,
+    pub bar_shade: f32,
 }
 
 impl Default for TabBar {
-    /// Unluminous's file tabs: a rounded tab with a two pixel accent line, 12 to 32 columns wide, shown
-    /// with one tab too so the new tab button is always there.
+    /// Tabs 12 to 26 columns wide with rounded top corners and a two pixel accent line, on a bar 30% darker
+    /// than the terminal, and no bar at all while the window has one tab (task-2487).
     fn default() -> Self {
         TabBar {
-            padding: 7,
-            corner_radius: 7.0,
-            inset: 3.0,
+            padding: 8,
+            corner_radius: 8.0,
+            inset: 5.0,
             underline: 2.0,
             min_columns: 12,
-            max_columns: 32,
-            show_with_one_tab: true,
+            max_columns: 26,
+            show_with_one_tab: false,
+            bar_shade: 0.3,
         }
     }
 }

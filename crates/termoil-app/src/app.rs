@@ -260,6 +260,7 @@ impl App {
         let id = self.model.next_id();
         let mut opts = self.session_options(grid, cwd, command);
         opts.history = history;
+        let title = crate::view::program_name(&opts.spawn.program);
         let waker = (self.wakers)(id);
         let session =
             Session::spawn(opts, waker).map_err(|e| ActionError::Failed(format!("could not start the shell: {e}")))?;
@@ -274,7 +275,7 @@ impl App {
                 selection: None,
                 selection_empty: false,
                 search: None,
-                title: String::new(),
+                title,
                 cwd,
                 progress: None,
                 command: command.map(String::from),

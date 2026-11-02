@@ -464,8 +464,9 @@ fn resize_step(g: &mut Gui, el: &ActiveEventLoop) -> Result<bool, String> {
 }
 
 /// The tab bar with the pointer (task-2468): with a third tab open, the pointer over the last tab's cross
-/// is a hover on that cross, a click there closes the tab through `close-tab`, and a click on the plus
-/// opens a tab through `new-tab`.
+/// is a hover on that cross, a click there closes the tab through `close-tab`, the bar is hidden if that
+/// left one tab (task-2487), and a click at the right end of the bar, where the plus is, opens a tab
+/// through `new-tab`.
 fn tab_bar_step(g: &mut Gui, el: &ActiveEventLoop) -> Result<bool, String> {
     use termoil_app::gui::tab_bar::TabHit;
     let (_, before) = focus(g).ok_or("pane")?;
@@ -491,20 +492,33 @@ fn tab_bar_step(g: &mut Gui, el: &ActiveEventLoop) -> Result<bool, String> {
     }
     ws.relayout(app);
     ws.draw(app)?;
-    let plus = ws.tab_layout.new_tab.ok_or("no new tab button")? as f64 * cw + cw;
-    handle::cursor_moved(ws, app, plus, y);
+    if app.model.windows[0].tabs.len() == 1 && ws.tab_bar_h != 0.0 {
+        return Err(format!("with one tab the bar is {} pixels high, not hidden", ws.tab_bar_h));
+    }
+    app.run_named("new-tab").map_err(|e| e.to_string())?;
+    let tabs = app.model.windows[0].tabs.len();
+    ws.relayout(app);
+    ws.draw(app)?;
+    let y = ws.tab_bar_h as f64 / 2.0;
+    let width = ws.window.inner_size().width as f64;
+    handle::cursor_moved(ws, app, width - cw, y);
+    if ws.tab_hover != Some(TabHit::NewTab) {
+        return Err(format!("the pointer at the right end of the bar is {:?}, not the plus", ws.tab_hover));
+    }
     handle::button(ws, app, winit::event::ElementState::Pressed, winit::event::MouseButton::Left);
     handle::button(ws, app, winit::event::ElementState::Released, winit::event::MouseButton::Left);
-    if app.model.windows[0].tabs.len() != tabs {
-        return Err(format!("the plus left {} tabs, not {tabs}", app.model.windows[0].tabs.len()));
+    if app.model.windows[0].tabs.len() != tabs + 1 {
+        return Err(format!("the plus left {} tabs, not {}", app.model.windows[0].tabs.len(), tabs + 1));
     }
-    // Put things back for the steps after this one: close the tab the plus opened, and focus the pane
+    // Put things back for the steps after this one: close the tabs this step opened, and focus the pane
     // that had the keyboard before.
-    let opened = app.model.windows[0].tab().focus;
-    let _ = app.run_action(&termoil_protocol::ActionCall {
-        action: "close-tab".into(),
-        args: serde_json::Map::from_iter([("pane".to_string(), serde_json::json!(opened))]),
-    });
+    while app.model.windows[0].tabs.len() > tabs - 1 {
+        let opened = app.model.windows[0].tab().focus;
+        let _ = app.run_action(&termoil_protocol::ActionCall {
+            action: "close-tab".into(),
+            args: serde_json::Map::from_iter([("pane".to_string(), serde_json::json!(opened))]),
+        });
+    }
     termoil_app::actions::focus_pane(app, before).map_err(|e| e.to_string())?;
     Ok(true)
 }

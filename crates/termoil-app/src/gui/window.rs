@@ -741,20 +741,23 @@ impl WinState {
         let w = &app.model.windows[wi];
         let titles: Vec<String> = w.tabs.iter().map(|t| tab_label(app, t)).collect();
         self.tab_layout = tab_bar::layout(titles.len(), cols, &app.config.tab_bar);
-        let bytes = tab_bar::text(&titles, w.active, &self.tab_layout, &self.chrome);
+        let background = [self.colors.background.r, self.colors.background.g, self.colors.background.b];
+        let bar = tab_bar::bar_color(background, &app.config.tab_bar);
+        let bytes = tab_bar::text(&titles, w.active, &self.tab_layout, &self.chrome, bar);
         let opts = BuildOptions { padding: (0, self.tab_bar_padding(app)), ..opts.clone() };
         self.tab_strip.frame(cols, 1, &bytes, &self.colors, &mut self.grid, &opts);
+        let width = self.window.inner_size().width;
         let look = tab_bar::Look {
             chrome: &self.chrome,
+            background,
             cell: self.cell(),
+            width: width as f32,
             height: self.tab_bar_h,
             scale: self.scale as f32,
             sizes: &app.config.tab_bar,
             focused: self.focused,
         };
         let shapes = tab_bar::shapes(&self.tab_layout, w.active, self.tab_hover, &look);
-        let bar = self.chrome.bar;
-        let width = self.window.inner_size().width;
         self.tab_strip.decorate(width, self.tab_bar_h as u32, Rgba::rgb(bar[0], bar[1], bar[2]), shapes);
     }
 

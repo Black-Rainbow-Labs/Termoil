@@ -1,4 +1,4 @@
-//! The tab bar (task-2468): pixel goldens of the bar in each state and in each theme taken from
+//! The tab bar (task-2468, redesigned in task-2487): pixel goldens of the bar in each state and in each theme taken from
 //! Unluminous, rendered with the CPU renderer on the vendored JetBrains Mono. The accepted images are under
 //! `corpus/render/<platform>/tab_bar_*.png`; `TERMOIL_BLESS=1` accepts new ones.
 
@@ -59,7 +59,9 @@ fn render(case: &Case, g: &mut FontGrid) -> termoil_render::Image {
     let cols = (WIDTH / cw) as u16;
     let titles = ["pwsh".to_string(), "cargo build --release".into(), "a title far too long to fit in its tab".into()];
     let layout = tab_bar::layout(titles.len(), cols, &sizes);
-    let bytes = tab_bar::text(&titles, case.active, &layout, &chrome);
+    let background = [colors.background.r, colors.background.g, colors.background.b];
+    let bar = tab_bar::bar_color(background, &sizes);
+    let bytes = tab_bar::text(&titles, case.active, &layout, &chrome, bar);
     let opts = BuildOptions {
         padding: (0, sizes.padding),
         all_rows: true,
@@ -70,14 +72,16 @@ fn render(case: &Case, g: &mut FontGrid) -> termoil_render::Image {
     strip.frame(cols, 1, &bytes, &colors, g, &opts);
     let look = Look {
         chrome: &chrome,
+        background,
         cell: (cw, ch),
+        width: WIDTH as f32,
         height: height as f32,
         scale: 1.0,
         sizes: &sizes,
         focused: case.focused,
     };
     let shapes = tab_bar::shapes(&layout, case.active, case.hover, &look);
-    strip.decorate(WIDTH, height, Rgba::rgb(chrome.bar[0], chrome.bar[1], chrome.bar[2]), shapes);
+    strip.decorate(WIDTH, height, Rgba::rgb(bar[0], bar[1], bar[2]), shapes);
     let frame = strip.frame_ref().expect("built");
     let mut r = VelloCpuRenderer::new(frame.width, frame.height, 0, false);
     r.render(frame, g).expect("render");
@@ -142,4 +146,41 @@ fn every_theme_from_unluminous_has_its_own_chrome() {
 #[test]
 fn the_default_theme_is_unluminous_dark() {
     assert_eq!(Config::default().theme(true).name, "Unluminous Dark");
+}
+
+#[test]
+fn the_tab_bar_is_hidden_with_one_tab_and_shown_with_two() {
+    let config = Config::default();
+    assert_eq!(look::tab_bar_height(&config, 20, 1.0, 1), 0, "one tab: no bar");
+    assert!(look::tab_bar_height(&config, 20, 1.0, 2) > 20, "two tabs: the bar is taller than a cell");
+    let mut always = Config::default();
+    always.tab_bar.show_with_one_tab = true;
+    assert!(look::tab_bar_height(&always, 20, 1.0, 1) > 0, "show_with_one_tab brings it back");
+}
+
+#[test]
+fn the_new_tab_button_is_drawn_against_the_right_edge() {
+    let config = Config::default();
+    let chrome = chrome_for(&config.theme(true));
+    let sizes = TabBar::default();
+    let layout = tab_bar::layout(2, 100, &sizes);
+    let look = Look {
+        chrome: &chrome,
+        background: [0x1b, 0x1f, 0x26],
+        cell: (9, 20),
+        width: 905.0,
+        height: 36.0,
+        scale: 1.0,
+        sizes: &sizes,
+        focused: true,
+    };
+    let shapes = tab_bar::shapes(&layout, 0, None, &look);
+    let rightmost = shapes
+        .iter()
+        .map(|s| match s {
+            termoil_render::Shape::Line { from, to, .. } => from.0.max(to.0),
+            termoil_render::Shape::RoundRect { area, .. } => area.x1,
+        })
+        .fold(0.0f32, f32::max);
+    assert!(rightmost > 880.0 && rightmost <= 905.0, "the plus ends near the right edge, at {rightmost}");
 }

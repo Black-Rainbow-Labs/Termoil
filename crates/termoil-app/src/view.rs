@@ -137,6 +137,14 @@ pub fn pane_title(title: &str, cwd: Option<&str>, follow_cwd: bool) -> String {
     name.strip_suffix(".exe").or_else(|| name.strip_suffix(".EXE")).unwrap_or(name).to_string()
 }
 
+/// The name a pane's tab shows until its program sets a title: the program's file name without its
+/// folder or a `.exe` ending, so `C:\Program Files\PowerShell\7\pwsh.exe` is `pwsh` and `/bin/zsh` is `zsh`.
+pub fn program_name(program: &str) -> String {
+    let name = program.trim().trim_matches('"').rsplit(['\\', '/']).next().unwrap_or_default();
+    let lower = name.to_ascii_lowercase();
+    if lower.ends_with(".exe") { name[..name.len() - 4].to_string() } else { name.to_string() }
+}
+
 /// One pane in the `list` output.
 fn pane_json(app: &App, id: PaneId, focused: Option<PaneId>) -> Value {
     let Some(p) = app.panes.get(&id) else { return json!({ "id": id }) };
@@ -435,8 +443,17 @@ pub fn open_config(app: &mut App) -> Result<Value, ActionError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{pane_title, with_exit_code, with_progress};
+    use super::{pane_title, program_name, with_exit_code, with_progress};
     use crate::app::Progress;
+
+    /// A tab with no title from its program shows the program's name.
+    #[test]
+    fn a_new_pane_is_named_after_its_program() {
+        assert_eq!(program_name(r"C:\Program Files\PowerShell\7\pwsh.exe"), "pwsh");
+        assert_eq!(program_name("powershell.EXE"), "powershell");
+        assert_eq!(program_name("/bin/zsh"), "zsh");
+        assert_eq!(program_name(r#""C:\tools\nu.exe""#), "nu");
+    }
 
     /// Progress goes in front of the label, in each state OSC 9;4 names.
     #[test]
