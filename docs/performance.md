@@ -39,6 +39,31 @@ Other rows from the same runs, for comparison and not gated:
 | R4 on `vello_cpu` (the start up and fallback renderer) | p99 14.64 to 15.76 ms |
 | P2 on OpenGL (the fallback backend) | p50 3.83 ms, p99 31.71 ms (200 keys) |
 
+## The whole application against Ghostty (task-2481, 2026-11-02)
+
+`termoil-bench apps` (`docs/decisions/efficiency.md`) runs Termoil and Ghostty for Windows (`shiweis/ghostty-windows`
+1.3.0, a fork of ghostty-org/ghostty with a Win32 runtime) on the same workloads in a 120 by 34 window and measures each
+terminal's own process. Median of three runs each, alternating:
+
+| Workload | Metric | Termoil 1.2.1 | Termoil now | Ghostty | Termoil/Ghostty |
+|---|---|---|---|---|---|
+| idle | private bytes, MB | 353.1 | 13.2 | 207.9 | 6.4 % |
+| idle | private working set, MB | 127.7 | 11.9 | 55.2 | 21.5 % |
+| idle | working set (shared DLL pages included), MB | 174.7 | 31.5 | 85.9 | 36.7 % |
+| idle | CPU over 10 s, s | 0.031 | 0.000 | 0.344 | 0 % |
+| idle | CPU to start, s | 1.125 | 0.094 | 0.922 | 10.2 % |
+| stream | CPU per 100 MB of `type` output, s | 91.5 | 15.5 | 89.8 | 17.2 % |
+| stream | peak private bytes, MB | 430.8 | 67.0 | 303.6 | 22.1 % |
+| stream | private working set after the output, MB | 147.3 | 22.5 | 72.2 | 31.2 % (23.5 % with Ghostty's 10 MB history) |
+
+The gates on the new default renderer (`RasterRenderer`), same session:
+
+| Gate | Requirement | Measured | Result |
+|---|---|---|---|
+| P2 latency | p50 under 8 ms, p99 under 16 ms | three runs of 800 keys: p50 1.74 to 1.84 ms, p99 4.16 to 4.63 ms | passes |
+| P4 start up | under 100 ms warm | median 79.3 ms over 20 warm runs with `cmd.exe` | passes |
+| R4 frame time | p99 under 8 ms | p50 3.06 ms, p99 4.67 ms (`vello_gpu` with the atlas in the same run: p99 6.40 ms) | passes |
+
 ## P1 comparison
 
 `docs/TEST-SUITE.md` section 13 asks each published P1 run to record alacritty_terminal and Ghostty 1.4 on the same
@@ -107,7 +132,7 @@ under `comparison`. `compare 3 all` adds the `micro_` streams, and `compare 3 <s
   Terminal and Alacritty on the same display. The same session films a launch for P4. This needs a person with a camera
   and has not been done.
 - R4 on a laptop's integrated GPU: measured here on a desktop CPU's integrated GPU only.
-- P3 measures the terminal core in its own process. The window's own memory (fonts, the GPU device and its buffers) is not
-  gated and has not been measured.
+- P3 measures the terminal core in its own process. The window's own memory is measured against Ghostty by
+  `termoil-bench apps` (above) and is reported, not gated.
 - The P1 comparison runs Ghostty inside WSL2, where its thread cannot be pinned to a host core, and its time includes
   process start up. The Windows engines are pinned to core 12.

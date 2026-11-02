@@ -122,6 +122,8 @@ pub fn measure(frames: usize) -> Vec<RenderResult> {
             None => println!("vello_gpu: no GPU adapter"),
         }
     }
+    let mut raster = termoil_render::RasterRenderer::new(w, h, termoil_render::DEFAULT_GLYPH_CAPACITY);
+    results.push(run(&mut raster, &mut grid, frames));
     for (threads, atlas) in [(0, true), (4, true)] {
         let mut r = VelloCpuRenderer::new(w, h, threads, atlas);
         let mut res = run(&mut r, &mut grid, frames.min(300));
@@ -148,4 +150,43 @@ pub fn measure(frames: usize) -> Vec<RenderResult> {
 /// Milliseconds as a float.
 fn ms(d: Duration) -> f64 {
     d.as_secs_f64() * 1000.0
+}
+
+/// `cpu-mem <threads> <atlas 0|1> <cols> <rows>`: the CPU renderer's memory and frame time at a
+/// grid size, with a full screen scroll every frame (task-2481). Prints private MB before the
+/// renderer exists, once it exists, and after the frames, with the frame times.
+pub fn cpu_memory(threads: u16, atlas: bool, cols: u16, rows: u16, raster: bool) {
+    let mut grid = gate_grid();
+    let m = *grid.metrics();
+    let (w, h) = (u32::from(cols) * m.width + 4, u32::from(rows) * m.height + 4);
+    let before = crate::memory::process_memory().0;
+    let mut r: Box<dyn Renderer> = if raster {
+        Box::new(termoil_render::RasterRenderer::new(w, h, termoil_render::DEFAULT_GLYPH_CAPACITY))
+    } else {
+        Box::new(VelloCpuRenderer::new(w, h, threads, atlas))
+    };
+    let made = crate::memory::process_memory().0;
+    let mut term = Terminal::new(cols, rows, TerminalConfig::default());
+    let mut state = RenderState::new(cols, rows, Colors::dark_default());
+    let (opts, mut builder) = (BuildOptions::default(), FrameBuilder::new());
+    let mut times = Vec::new();
+    for n in 0..300 {
+        term.advance(&line(n));
+        let start = Instant::now();
+        state.update(&mut term, 0);
+        let frame = builder.build(&state, &mut grid, &opts);
+        r.render(&frame, &grid).expect("render");
+        times.push(start.elapsed());
+    }
+    times.sort();
+    let after = crate::memory::process_memory().0;
+    println!(
+        "{} threads {threads} atlas {atlas} {w}x{h}: private before {:.1} MB, renderer made {:.1} MB, after frames {:.1} MB; frame p50 {:.2} ms p99 {:.2} ms",
+        r.name(),
+        before as f64 / 1e6,
+        made as f64 / 1e6,
+        after as f64 / 1e6,
+        ms(times[150]),
+        ms(times[296])
+    );
 }

@@ -32,6 +32,12 @@ fn time_backend(name: &str, backends: wgpu::Backends) {
     let _r = vello_gpu::Renderer::new(&device, &config);
     let t_renderer = t0.elapsed();
     let ms = |d: std::time::Duration| d.as_secs_f64() * 1000.0;
+    let (private, working) = crate::memory::process_memory();
+    println!(
+        "{name:<8} private {:.1} MB working set {:.1} MB once the device and vello's pipelines exist",
+        private as f64 / 1e6,
+        working as f64 / 1e6
+    );
     println!(
         "{name:<8} instance {:7.1} ms  adapter {:7.1} ms  device {:7.1} ms  vello pipelines {:7.1} ms  total {:7.1} ms",
         ms(t_instance),

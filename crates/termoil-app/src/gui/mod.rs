@@ -131,6 +131,9 @@ pub struct Gui {
     os_dark: bool,
     _watcher: Option<Watcher>,
     probe_done: bool,
+    /// Wakes from panes whose window has a frame already scheduled: their flags stay set, so the
+    /// session sends no more wakes, until that frame is drawn (task-2481).
+    held_wakes: Vec<(PaneId, Arc<AtomicBool>)>,
     /// When the first frame with the shell's output was painted, for the probe.
     painted_ms: Option<f64>,
     /// The latency benchmark, when running one.
@@ -211,6 +214,7 @@ impl Gui {
             os_dark: true,
             _watcher: watcher,
             probe_done: false,
+            held_wakes: Vec::new(),
             painted_ms: None,
             bench: None,
             quick: None,
@@ -612,6 +616,42 @@ impl Gui {
         self.bench.as_ref().and_then(|b| b.next_at())
     }
 
+    /// Applies a pane's events and updates its window's title.
+    fn pump_pane(&mut self, pane: PaneId) {
+        let notices = crate::events::pump(&mut self.app, pane, self.os_dark);
+        self.notices(notices);
+        if let Some(w) = self.app.window_of(pane)
+            && let Some(ws) = self.windows.get(&w)
+        {
+            update_title(ws, &self.app);
+        }
+    }
+
+    /// Whether the window holding `pane` already has a frame scheduled, which will show whatever
+    /// output arrives before it.
+    fn paint_scheduled(&self, pane: PaneId) -> bool {
+        let now = Instant::now();
+        let ws = self.app.window_of(pane).and_then(|w| self.windows.get(&w));
+        ws.is_some_and(|ws| ws.paint_held_until.is_some_and(|t| t > now))
+    }
+
+    /// Lets the panes whose scheduled frame has been drawn (or is overdue) wake the loop again,
+    /// and applies the events they queued meanwhile.
+    fn release_wakes(&mut self) {
+        if self.held_wakes.is_empty() {
+            return;
+        }
+        let held = std::mem::take(&mut self.held_wakes);
+        for (pane, flag) in held {
+            if self.paint_scheduled(pane) {
+                self.held_wakes.push((pane, flag));
+                continue;
+            }
+            flag.store(false, Ordering::Release);
+            self.pump_pane(pane);
+        }
+    }
+
     /// Writes the startup probe (P4) when `TERMOIL_STARTUP_PROBE` names a file. `painted_ms` is
     /// the first frame with the shell's output; `visible_ms`, the gate, is when the compositor has
     /// shown the first frame with that output presented after the window became visible.
@@ -668,7 +708,8 @@ impl Gui {
 /// Gives the latency benchmark the frame just painted.
 fn bench_after_paint(b: &mut bench::LatencyBench, ws: &WinState, app: &App) {
     let painted = Instant::now();
-    if !ws.painter.is_gpu() {
+    // Measure the renderer the window keeps: while a switch to the GPU is pending, wait for it.
+    if ws.upgrade.is_some() {
         return;
     }
     let Some(wi) = app.model.window_index(ws.id) else { return };
@@ -732,15 +773,13 @@ impl ApplicationHandler<UserEvent> for Gui {
     fn user_event(&mut self, el: &ActiveEventLoop, ev: UserEvent) {
         match ev {
             UserEvent::Wake(pane, flag) => {
-                flag.store(false, Ordering::Release);
                 phase("wake");
-                let notices = crate::events::pump(&mut self.app, pane, self.os_dark);
-                self.notices(notices);
-                if let Some(w) = self.app.window_of(pane)
-                    && let Some(ws) = self.windows.get(&w)
-                {
-                    update_title(ws, &self.app);
+                if self.paint_scheduled(pane) {
+                    self.held_wakes.push((pane, flag));
+                } else {
+                    flag.store(false, Ordering::Release);
                 }
+                self.pump_pane(pane);
             }
             UserEvent::Ipc(call, reply) => {
                 let _ = reply.send(self.app.run_action(&call));
@@ -763,6 +802,15 @@ impl ApplicationHandler<UserEvent> for Gui {
             access.process_event(&ws.window, &ev);
         }
         let app = &mut self.app;
+        if matches!(
+            ev,
+            WindowEvent::KeyboardInput { .. }
+                | WindowEvent::Ime(_)
+                | WindowEvent::MouseInput { .. }
+                | WindowEvent::MouseWheel { .. }
+        ) {
+            ws.last_input = Some(Instant::now());
+        }
         match ev {
             WindowEvent::CloseRequested => {
                 if app.model.windows.len() == 1 {
@@ -795,9 +843,10 @@ impl ApplicationHandler<UserEvent> for Gui {
             }
             WindowEvent::RedrawRequested => {
                 phase("redraw_requested");
-                if let Some(due) = ws.paint_due(Instant::now()) {
+                if let Some(due) = ws.paint_due(Instant::now(), &app.config.window) {
                     // Too soon after the last paint: paint once at the display rate instead.
                     ws.defer_paint(due);
+                    ws.paint_held_until = Some(due);
                     self.apply_effects(el);
                     return;
                 }
@@ -841,6 +890,7 @@ impl ApplicationHandler<UserEvent> for Gui {
 
     /// Wakes windows waiting on synchronized output, and drives the latency benchmark.
     fn about_to_wait(&mut self, el: &ActiveEventLoop) {
+        self.release_wakes();
         let now = Instant::now();
         let mut next: Option<Instant> = self.bench_step(el, now);
         for ws in self.windows.values_mut() {

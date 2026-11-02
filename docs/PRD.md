@@ -85,13 +85,13 @@ Each row is marked must (in 1.0), should (planned, may slip to 1.1) or later (no
 
 ### 5.2 Rendering (must)
 
-- vello for rendering, over wgpu on Vulkan, Metal, DX12 and OpenGL as the platform allows. The vello project has three renderers in November 2026: `vello_cpu` (the one it calls most mature), `vello_gpu` (the sparse strips GPU renderer it calls its future, formerly `vello_hybrid`) and the compute renderer `vello` now under `research/`. Termoil uses `vello_gpu` for the window and `vello_cpu` behind `softbuffer` when no adapter is usable (remote desktop sessions, virtual machines, CI). Both sit behind one `Renderer` trait, and milestone M2 measures `vello_gpu` on a 200 by 60 grid at 120 Hz against the latency and frame time gates before anything is built on it. If it fails the gate, the contingency is a Termoil owned wgpu glyph atlas with instanced cell quads behind the same trait, which is what Alacritty, Kitty, Rio and WezTerm do; vello stays for the CPU path and for vector drawing (cursor shapes, underlines, images, the tab bar) either way.
+- vello for rendering, over wgpu on Vulkan, Metal, DX12 and OpenGL as the platform allows. The vello project has three renderers in November 2026: `vello_cpu` (the one it calls most mature), `vello_gpu` (the sparse strips GPU renderer it calls its future, formerly `vello_hybrid`) and the compute renderer `vello` now under `research/`. Termoil used `vello_gpu` for the window and `vello_cpu` behind `softbuffer` when no adapter is usable; since task-2481 the window draws with Termoil's own CPU renderer, `RasterRenderer`, and starts no GPU device unless the GPU is asked for or a custom shader is set, because the GPU device alone cost more memory than a whole Ghostty window (`docs/decisions/efficiency.md`). Both sit behind one `Renderer` trait, and milestone M2 measures `vello_gpu` on a 200 by 60 grid at 120 Hz against the latency and frame time gates before anything is built on it. If it fails the gate, the contingency is a Termoil owned wgpu glyph atlas with instanced cell quads behind the same trait, which is what Alacritty, Kitty, Rio and WezTerm do; vello stays for the CPU path and for vector drawing (cursor shapes, underlines, images, the tab bar) either way.
 - A glyph cache keyed by font, size, subpixel offset and style so a frame of 80 by 50 cells costs a fixed number of draw calls. Cell advances are forced to whole pixels so one cache slot per glyph per style is enough.
 - Font shaping through parley and skrifa: ligatures (on by default, per font toggle), fallback across system fonts (DirectWrite on Windows, CoreText on macOS, fontconfig on Linux), colour emoji (COLRv1, CBDT and sbix bitmaps), hinting choices, subpixel positioning, bold and italic synthesis when a face is missing.
 - Cursor styles block, bar, underline, hollow when unfocused, blink, and the colour inversion rule.
 - Window opacity, background blur where the compositor supports it, padding, a configurable minimum contrast ratio for foreground against background.
 - Synchronized output honoured: a 2026 block paints as one frame.
-- Frame pacing: the renderer paints on damage at the display rate and never faster; an idle terminal uses no GPU.
+- Frame pacing: the renderer paints on damage at the display rate and never faster; while output streams and nothing was typed or clicked in the last quarter second it paints at most `window.output_fps` (60) times a second, because every row changes on every frame then (task-2481). An idle terminal uses no GPU and no CPU.
 - Images from the kitty graphics protocol composited into the cell grid with correct z order and clipping, and sixel decoded into the same image store.
 
 ### 5.3 Application (must)
@@ -164,7 +164,7 @@ A command that takes longer than ten seconds while the window is unfocused raise
 - The shell fails to start: the tab shows the error, the command tried, and a button to open the config.
 - A broken config line: the previous config stays in effect, a banner names the line and the error, and the banner clears when the file is fixed.
 - A font is missing: the fallback chain is used and the log names the missing face.
-- Output floods: the renderer keeps painting at the display rate from whatever state the parser reached; input is never dropped and the parser never blocks the UI thread.
+- Output floods: the renderer keeps painting at the display rate, or `window.output_fps` when nothing is being typed, from whatever state the parser reached; input is never dropped and the parser never blocks the UI thread.
 - A render pass fails (device lost): the renderer recreates the device, replays the current grid, and logs it. Never a crash.
 
 ## 7. Functional requirements and acceptance criteria

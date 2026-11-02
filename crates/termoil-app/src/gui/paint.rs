@@ -1,12 +1,13 @@
-//! Putting frames on a window: `VelloGpuRenderer` on the window's surface, or `VelloCpuRenderer`
-//! presented through `softbuffer` while the GPU starts, when no GPU can draw to the window, or when
-//! the configuration asks for the CPU (`window.renderer`).
+//! Putting frames on a window: `RasterRenderer` presented through `softbuffer`, which draws on the
+//! CPU with no GPU device and is the window's renderer unless the configuration needs the GPU, or
+//! `VelloGpuRenderer` on the window's surface when `window.renderer` is `gpu` or a custom shader is
+//! set (task-2481, `docs/decisions/efficiency.md`).
 
 use std::num::NonZeroU32;
 use std::sync::{Arc, OnceLock};
 
 use termoil_font::FontGrid;
-use termoil_render::{FrameStats, GpuContext, Layer, Renderer, Rgba, VelloCpuRenderer, VelloGpuRenderer};
+use termoil_render::{FrameStats, GpuContext, Layer, RasterRenderer, Renderer, Rgba, VelloGpuRenderer};
 use winit::event_loop::OwnedDisplayHandle;
 use winit::window::Window;
 
@@ -17,7 +18,7 @@ pub enum Painter {
     /// The GPU renderer, presenting itself.
     Gpu(Box<VelloGpuRenderer>),
     /// The CPU renderer and the surface its pixels are copied to.
-    Cpu { renderer: Box<VelloCpuRenderer>, surface: softbuffer::Surface<Arc<Window>, Arc<Window>> },
+    Cpu { renderer: Box<RasterRenderer>, surface: softbuffer::Surface<Arc<Window>, Arc<Window>> },
 }
 
 /// The GPU renderer being built for a window on a background thread.
@@ -27,15 +28,16 @@ pub type GpuUpgrade = std::sync::mpsc::Receiver<Result<VelloGpuRenderer, String>
 static SHARED_GPU: OnceLock<Result<GpuContext, String>> = OnceLock::new();
 
 impl Painter {
-    /// Creates a window's painter. Starting a GPU device takes most of a second, so unless the
-    /// configuration asks for the CPU only, the window starts on the CPU renderer (ready in
-    /// milliseconds) and the GPU renderer is built on a background thread; the receiver delivers it
-    /// and the window switches on its next frame (P4, `docs/decisions/renderer.md`).
+    /// Creates a window's painter. The window starts on the CPU renderer, ready in milliseconds.
+    /// When the GPU is wanted (`wants_gpu`), the GPU renderer is built on a background thread; the
+    /// receiver delivers it and the window switches on its next frame (P4,
+    /// `docs/decisions/renderer.md`). Otherwise no GPU device is ever made, which is most of the
+    /// memory the window saves (task-2481).
     pub fn new(
-        window: &Arc<Window>, choice: Choice, warm: Option<Box<VelloCpuRenderer>>, display: OwnedDisplayHandle,
+        window: &Arc<Window>, wants_gpu: bool, warm: Option<Box<RasterRenderer>>, display: OwnedDisplayHandle,
     ) -> Result<(Painter, Option<GpuUpgrade>), String> {
         let size = window.inner_size();
-        let upgrade = (choice != Choice::Cpu).then(|| start_gpu(window.clone(), display));
+        let upgrade = wants_gpu.then(|| start_gpu(window.clone(), display));
         match cpu_painter(window, size.width, size.height, warm) {
             Ok(p) => Ok((p, upgrade)),
             Err(e) => match upgrade.map(|rx| rx.recv()) {
@@ -72,13 +74,12 @@ impl Painter {
         match self {
             Painter::Gpu(r) => r.render_layers(background, layers, grid).map_err(|e| e.to_string()),
             Painter::Cpu { renderer, surface } => {
-                let stats = renderer.render_layers(background, layers, grid).map_err(|e| e.to_string())?;
+                let stats = render_and_present(renderer, surface, background, layers, grid)?;
                 // The first CPU frame's render and present are separate startup phases (P4).
                 let first = !FIRST_CPU_FRAME.swap(true, std::sync::atomic::Ordering::Relaxed);
                 if first {
                     crate::gui::phase("cpu_rendered");
                 }
-                present_pixmap(renderer, surface)?;
                 Ok(stats)
             }
         }
@@ -126,19 +127,26 @@ impl Painter {
 /// Set once the first CPU frame has been rendered in this process.
 static FIRST_CPU_FRAME: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-/// How many threads the CPU renderer uses.
-pub fn cpu_threads() -> u16 {
-    std::thread::available_parallelism().map(|n| n.get().min(4) as u16).unwrap_or(0)
+/// Whether a window with this configuration draws on the GPU: `window.renderer = "gpu"`, or
+/// `auto` with a custom shader, which only the GPU renderer runs.
+pub fn wants_gpu(choice: Choice, shader: &str) -> bool {
+    choice == Choice::Gpu || (choice == Choice::Auto && !shader.trim().is_empty())
+}
+
+/// Starts building the GPU renderer for a window that is drawing on the CPU (a shader was set
+/// after the window opened). The window takes it with its next frame.
+pub fn upgrade_to_gpu(window: &Arc<Window>, display: OwnedDisplayHandle) -> GpuUpgrade {
+    start_gpu(window.clone(), display)
 }
 
 /// The CPU renderer presented through softbuffer: `warm` when the start up thread made one,
 /// otherwise a new one.
 fn cpu_painter(
-    window: &Arc<Window>, width: u32, height: u32, warm: Option<Box<VelloCpuRenderer>>,
+    window: &Arc<Window>, width: u32, height: u32, warm: Option<Box<RasterRenderer>>,
 ) -> Result<Painter, String> {
     let context = softbuffer::Context::new(window.clone()).map_err(|e| format!("softbuffer: {e}"))?;
     let surface = softbuffer::Surface::new(&context, window.clone()).map_err(|e| format!("softbuffer: {e}"))?;
-    let renderer = warm.unwrap_or_else(|| Box::new(VelloCpuRenderer::new(width, height, cpu_threads(), true)));
+    let renderer = warm.unwrap_or_else(|| Box::new(RasterRenderer::new(width, height, glyph_capacity())));
     let mut p = Painter::Cpu { renderer, surface };
     p.resize(width, height);
     Ok(p)
@@ -195,16 +203,55 @@ pub fn translucent_painter(window: &Arc<Window>) -> Result<Painter, String> {
     Ok(Painter::Gpu(Box::new(gpu)))
 }
 
-/// Copies the CPU renderer's premultiplied RGBA pixels into the softbuffer as 0RGB words.
-fn present_pixmap(
-    renderer: &VelloCpuRenderer, surface: &mut softbuffer::Surface<Arc<Window>, Arc<Window>>,
-) -> Result<(), String> {
-    let pixmap = renderer.pixmap();
-    let (w, h) = (pixmap.width() as usize, pixmap.height() as usize);
+/// Glyphs the CPU renderer caches.
+pub fn glyph_capacity() -> usize {
+    termoil_render::DEFAULT_GLYPH_CAPACITY
+}
+
+/// Draws the layers straight into the window's softbuffer and presents the bands that changed.
+/// The buffer holds the last frame when its age is 1; otherwise the renderer draws it whole.
+fn render_and_present(
+    renderer: &mut RasterRenderer, surface: &mut softbuffer::Surface<Arc<Window>, Arc<Window>>, background: Rgba,
+    layers: &[Layer<'_>], grid: &FontGrid,
+) -> Result<FrameStats, String> {
+    let (w, h) = renderer.size();
     let mut buf = surface.buffer_mut().map_err(|e| format!("softbuffer: {e}"))?;
-    let src = pixmap.data_as_u8_slice();
-    for (dst, px) in buf.iter_mut().zip(src.chunks_exact(4)).take(w * h) {
-        *dst = (u32::from(px[0]) << 16) | (u32::from(px[1]) << 8) | u32::from(px[2]);
+    if buf.len() < w as usize * h as usize {
+        return Err("softbuffer: the buffer is smaller than the frame".into());
     }
-    buf.present().map_err(|e| format!("softbuffer: {e}"))
+    let valid = buf.age() == 1;
+    let stats = renderer.render_into(&mut buf, valid, background, layers, grid);
+    let rects: Vec<softbuffer::Rect> = renderer
+        .damage()
+        .iter()
+        .filter_map(|&(top, bottom)| {
+            let (top, bottom) = (top.min(h), bottom.min(h));
+            Some(softbuffer::Rect {
+                x: 0,
+                y: top,
+                width: NonZeroU32::new(w)?,
+                height: NonZeroU32::new(bottom.checked_sub(top)?)?,
+            })
+        })
+        .collect();
+    if rects.is_empty() {
+        return Ok(stats);
+    }
+    buf.present_with_damage(&rects).map_err(|e| format!("softbuffer: {e}"))?;
+    Ok(stats)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `auto` draws on the CPU unless a shader needs the GPU; `gpu` and `cpu` do what they say.
+    #[test]
+    fn only_gpu_or_a_shader_starts_the_gpu() {
+        assert!(!wants_gpu(Choice::Auto, ""));
+        assert!(!wants_gpu(Choice::Auto, "  "));
+        assert!(wants_gpu(Choice::Auto, "crt.wgsl"));
+        assert!(wants_gpu(Choice::Gpu, ""));
+        assert!(!wants_gpu(Choice::Cpu, "crt.wgsl"));
+    }
 }

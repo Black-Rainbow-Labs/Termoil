@@ -84,7 +84,10 @@ pub static SECTIONS: &[Section] = &[
             e("columns", "Columns in a new window."),
             e("rows", "Rows in a new window."),
             e("minimum_contrast", "Lift text colours that fall below this contrast ratio against their background."),
-            e("renderer", "auto, gpu or cpu."),
+            e(
+                "renderer",
+                "auto, gpu or cpu. auto draws on the CPU and starts the GPU only when a custom shader is set; gpu switches to the GPU once its device has started; cpu never uses the GPU.",
+            ),
             e("title_follows_cwd", "Show the working directory in the title when the program does not set one."),
             e("show_tab_bar", "Show the tab bar."),
             e("palette_hint", "Show the one line hint about the command palette until it is first used."),
@@ -92,7 +95,7 @@ pub static SECTIONS: &[Section] = &[
             e("quick_terminal_hotkey", "Global hotkey that toggles the quick terminal."),
             e(
                 "shader",
-                "Path to a WGSL file that runs as a post process pass over every frame (relative paths are read from the folder of this file; empty means none). The file defines fn termoil_shade(uv: vec2<f32>, color: vec4<f32>) -> vec4<f32>, see docs/shaders.md. Only the GPU renderer runs it; the CPU renderer ignores this setting. A shader with an error is reported in the window's banner and the window draws without it.",
+                "Path to a WGSL file that runs as a post process pass over every frame (relative paths are read from the folder of this file; empty means none). The file defines fn termoil_shade(uv: vec2<f32>, color: vec4<f32>) -> vec4<f32>, see docs/shaders.md. Only the GPU renderer runs it: with renderer = auto a shader starts the GPU, and with renderer = cpu the shader is ignored. A shader with an error is reported in the window's banner and the window draws without it.",
             ),
             e(
                 "shader_poll_ms",
@@ -105,6 +108,14 @@ pub static SECTIONS: &[Section] = &[
             e(
                 "repaint_retry_max_ms",
                 "The longest wait between attempts to draw a frame the window could not present.",
+            ),
+            e(
+                "output_fps",
+                "The most frames per second drawn for program output while nothing was typed or clicked in the last input_grace_ms. Streaming output changes every row of every frame, so frames above this rate cost CPU and show nothing more. The first frame after a quiet period is never held back. 0 draws at the display's rate.",
+            ),
+            e(
+                "input_grace_ms",
+                "Milliseconds after a key press, click or scroll during which frames are drawn at the display's rate, so typing is never held back by output_fps.",
             ),
         ],
     },

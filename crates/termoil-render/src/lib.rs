@@ -3,9 +3,10 @@
 //!
 //! The pipeline is: [`RenderState::update`] copies what changed under the terminal lock;
 //! [`build_frame`] turns it into a [`Frame`] of plain records outside the lock; a [`Renderer`]
-//! draws the frame. [`VelloGpuRenderer`] is the window's renderer and [`VelloCpuRenderer`] the
-//! fallback with no GPU and the pixel tests' reference. The frame builder knows nothing about
-//! either, so a third renderer (the atlas contingency) would only add a drawing backend.
+//! draws the frame. [`RasterRenderer`] draws on the CPU into a framebuffer, redrawing only what
+//! changed, and is the window's renderer unless the configuration needs the GPU (task-2481);
+//! [`VelloGpuRenderer`] draws on the GPU, and [`VelloCpuRenderer`] is the pixel tests' reference.
+//! The frame builder knows nothing about any of them.
 
 mod build;
 mod cpu;
@@ -15,6 +16,7 @@ pub mod golden;
 mod gpu;
 mod images;
 mod placeholder;
+mod raster;
 mod readback;
 mod shader;
 mod state;
@@ -31,6 +33,7 @@ pub use frame::{
 pub use gpu::{GpuContext, VelloGpuRenderer, request_device};
 pub use images::{ImageData, ImagePlacement, PxRect, Z_BELOW_BACKGROUND, drawn_size};
 pub use placeholder::{PLACEHOLDER, diacritic_for, diacritic_number};
+pub use raster::{DEFAULT_GLYPH_CAPACITY, RasterRenderer};
 pub use shader::{ENTRY_NAME as SHADER_ENTRY_NAME, reads_time as shader_reads_time};
 pub use state::{CellState, CellText, CellWidth, Colors, CursorState, RenderState, RowState};
 

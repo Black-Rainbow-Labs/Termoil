@@ -169,7 +169,9 @@ impl FaceSet {
         if let Some(e) = set.emoji {
             set.faces[e.0 as usize].color = true;
         }
-        let flags = set.intern(Blob::from(FLAGS_FONT.to_vec()), 0, "Termoil Flags", (false, false), Vec::new());
+        // The embedded file is read where it lies in the executable rather than copied (task-2481).
+        let flags =
+            set.intern(Blob::new(std::sync::Arc::new(FLAGS_FONT)), 0, "Termoil Flags", (false, false), Vec::new());
         set.faces[flags.0 as usize].color = true;
         set.flags = Some(flags);
         Ok(set)

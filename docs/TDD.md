@@ -4,7 +4,7 @@ Written 2026-11-01 for task-2456. Requirements are in `docs/PRD.md`. The test su
 
 ## 1. Introduction
 
-Termoil is a terminal emulator written from scratch in Rust for Windows, macOS and Linux. Its core is a headless library with no window, GPU or font dependency, the arrangement libghostty-vt and rio-vt use, so that the same core serves the Termoil window, the Unluminous IDE's terminal tile, the Tasks board's agent terminals and a future multiplexer server. Rendering goes through one `Renderer` trait with vello behind it: `vello_gpu` on wgpu for the window, `vello_cpu` behind `softbuffer` when no GPU adapter is usable, and a Termoil owned wgpu glyph atlas as the contingency if `vello_gpu` fails the frame time gate at milestone M2.
+Termoil is a terminal emulator written from scratch in Rust for Windows, macOS and Linux. Its core is a headless library with no window, GPU or font dependency, the arrangement libghostty-vt and rio-vt use, so that the same core serves the Termoil window, the Unluminous IDE's terminal tile, the Tasks board's agent terminals and a future multiplexer server. Rendering goes through one `Renderer` trait: `RasterRenderer`, Termoil's own CPU renderer behind `softbuffer`, draws the window by default with no GPU device (task-2481, `docs/decisions/efficiency.md`); `vello_gpu` on wgpu draws it when the configuration asks for the GPU or sets a custom shader; `vello_cpu` is the pixel tests' reference. A Termoil owned wgpu glyph atlas was the contingency if `vello_gpu` failed the frame time gate at milestone M2; it passed and the atlas was not built.
 
 The objective is parity with Ghostty, Alacritty, WezTerm, Kitty and Windows Terminal on the feature matrix in `docs/research/feature-parity.md`, with the performance gates in the PRD section 2 measured by the test suite, on all three platforms from one code base.
 
@@ -43,7 +43,7 @@ flowchart TB
   end
   subgraph platform [Platform]
     font[termoil-font\ndiscovery, fallback, shaping,\nrasterising, sprite glyphs]
-    render[termoil-render\nRenderer trait, RenderState,\nvello_gpu, vello_cpu, atlas]
+    render[termoil-render\nRenderer trait, RenderState,\nraster, vello_gpu, vello_cpu]
     app[termoil-app\nwinit windows, tabs, splits,\nconfig, IPC server, notifications]
   end
   cli[termoil-cli\ntermoil +command, MCP tool list]
@@ -86,12 +86,12 @@ sequenceDiagram
   Term-->>Render: wake (dirty rows)
   Render->>Term: lock, copy RenderState (dirty rows only), unlock
   Render->>Render: shape runs (cached), build cell quads and glyph runs
-  Render->>GPU: one frame, presented at the display rate
+  Render->>GPU: one frame, presented at the display rate (at most window.output_fps while output streams)
 ```
 
 Three threads on the hot path, following Ghostty 1.4 and Alacritty:
 
-- **Reader** reads the PTY into a 64 KiB buffer and hands chunks to the parser. It exists because the kernel caps a single PTY read at about 1 KiB on macOS and Linux, so reading and parsing on one thread leaves the pipe idle; Ghostty measured 25 % to 55 % more throughput from the split. On Windows the ConPTY pipe is synchronous and this thread is the only place it is read.
+- **Reader** reads the PTY into a 64 KiB buffer and hands chunks to the parser. It exists because the kernel caps a single PTY read at about 1 KiB on macOS and Linux, so reading and parsing on one thread leaves the pipe idle; Ghostty measured 25 % to 55 % more throughput from the split. On Windows the ConPTY pipe is synchronous and this thread is the only place it is read. While output streams (a read came within `stream_gap`, 3 ms, of the one before) the reader waits `read_coalesce` (1 ms) before reading again, so a program's many small writes arrive as one chunk: ConPTY otherwise delivered 16 MiB of `type` output as 228,583 reads of 77 bytes, each one a channel send, a parser wake and a UI wake, and this took the UI's CPU per 100 MB from 81 to 38 seconds (task-2481). A read after a quiet period is sent at once.
 - **Parser** turns bytes into typed actions and applies them to the `Terminal` under its mutex, in slices of at most 64 KiB per lock (Alacritty's `MAX_LOCKED_READ` idea), so the renderer is never starved during a flood.
 - **Renderer** (on the UI thread since M3: building a frame takes under 0.4 ms, and R4 and P2 pass without a separate thread; `docs/decisions/renderer.md`) wakes on a terminal event, holds the lock only to copy a `RenderState` snapshot of the dirty rows, and does all shaping and buffer building outside it. Ghostty needed two release cycles to get lock time down; the snapshot is the first thing built here.
 - **Search** runs on its own thread and takes the lock in small slices, restoring compressed pages as it goes.
@@ -141,18 +141,19 @@ Discovery and fallback through `fontique` (DirectWrite, CoreText, fontconfig beh
 flowchart LR
   snap[RenderState snapshot\ndirty rows, cursor, selection,\nimages, overlays] --> build[Frame builder\nbackground cells, shaped glyph runs,\ndecorations, images, chrome]
   build --> trait{Renderer trait}
+  trait --> raster[RasterRenderer\nglyph masks, row damage,\ninto the softbuffer]
   trait --> gpu[VelloGpuRenderer\nvello_gpu on wgpu 30]
-  trait --> cpu[VelloCpuRenderer\nvello_cpu + softbuffer]
-  trait --> atlas[AtlasRenderer\nwgpu glyph atlas, instanced quads\ncontingency, built only if M2 fails]
+  trait --> cpu[VelloCpuRenderer\nvello_cpu, the pixel tests' reference]
 ```
 
 The `Renderer` trait takes a `Frame` (a list of row records: background spans, glyph runs with cached glyph ids, underline and strike decorations, the cursor, selection rectangles, image placements, and the chrome layer for the tab bar, split borders, search bar and badges) and a damage list, and presents it. The frame builder is renderer independent, so the three implementations differ only in how they draw. On Windows the window surface is DX12: Vulkan and OpenGL surfaces on the RTX 5090 kept showing a window's first frame after a resize or move (`docs/decisions/renderer.md`, task-2468).
 
 - **VelloGpuRenderer** builds a vello scene per frame: background rectangles merged per row, glyph runs through `glifo`'s atlas (`full_image_support` on), decorations as paths, images as vello images, chrome as paths and text. It targets the winit surface through wgpu 30 with mailbox presentation when the surface offers it (FIFO otherwise) and a frame latency of one; one GPU device is shared by every window (`docs/decisions/renderer.md`). The glyph atlas is keyed by glyph id, face, size, style and the quantised subpixel offset; with whole pixel cell advances the offset is always zero and one slot per glyph per style suffices.
-- **VelloCpuRenderer** renders the same scene into a `Pixmap` with `vello_cpu` (multithreading feature on) and presents it with `softbuffer`. Used for the first frames of every window while the GPU device starts on a background thread (starting a device takes 0.6 to 1.4 s on this machine), when `wgpu::Instance::request_adapter` fails, when the config says `renderer = "cpu"`, in CI, and by the screenshot tests.
+- **RasterRenderer** (task-2481) draws the window unless the GPU is asked for. It draws through the same `Canvas` calls as the vello renderers, straight into the window's `softbuffer`: each glyph is rasterized once by `vello_cpu` and kept as a coverage mask cropped to its ink (premultiplied pixels for a colour face), rectangles are filled directly and paths through a small coverage rasterizer. It remembers what each layer's rows looked like, redraws only rows that changed, clipped to their band, moves the pixels when the rows scrolled, and presents only the changed bands. A GPU device with vello's pipelines commits 306 to 335 MB on this machine's driver and `vello_cpu`'s glyph atlas page is a fixed 64 MiB; with this renderer an idle window is 13 MB of private memory. It is also the first frames of a window that will switch to the GPU (`renderer = "gpu"` or a custom shader), and the renderer when no GPU adapter is usable. `docs/decisions/efficiency.md` has the measurements.
+- **VelloCpuRenderer** renders the same scene into a `Pixmap` with `vello_cpu`. It is the reference the pixel tests (R2) render with, and `termoil-bench` measures it; the window no longer uses it.
 - **AtlasRenderer** is the contingency: a background buffer indexed by cell, a foreground instance list per row rewritten only for dirty rows, grayscale and colour atlases packed with a shelf allocator, one instanced pipeline. It is built only if M2 fails its gate. If built, vello still draws the chrome and images into the same surface in a second pass. M2 passed with `vello_gpu` and the glyph atlas (p99 5.3 to 7.0 ms on the RTX 5090, 10.0 to 10.4 ms on the integrated GPU), so it was not built.
 
-Frame pacing: render on demand, never on a timer except cursor blink (600 ms) and graphics animation. The first frame after quiet input is immediate; later wakeups during a flood are coalesced to the display rate. Synchronized output (mode 2026) holds the frame until the end sequence or a one second timeout. An idle window issues no frames and the display link or swap chain is paused, so twenty idle tabs cost no GPU time. A lost device recreates the renderer from the last snapshot.
+Frame pacing: render on demand, never on a timer except cursor blink (600 ms) and graphics animation. The first frame after quiet input is immediate; later wakeups during a flood are coalesced to the display rate, or to `window.output_fps` (60) when nothing was typed, clicked or scrolled in the last `window.input_grace_ms` (250 ms), because streaming output redraws every row of every frame (task-2481). While a window has a frame scheduled, wakes from its panes are held until it is drawn. Synchronized output (mode 2026) holds the frame until the end sequence or a one second timeout. An idle window issues no frames and the display link or swap chain is paused, so twenty idle tabs cost no GPU time. A lost device recreates the renderer from the last snapshot.
 
 The M2 gate: a 200 by 60 grid at 120 Hz with a full screen scroll of mixed coloured text, p99 frame time under 8 ms on this machine's RTX 5090, p99 under 16 ms on the integrated GPU of a laptop, and LCD or grayscale text that a reviewer accepts next to Windows Terminal's at the same font. The latency harness (P2) runs on each candidate. Results are recorded in `docs/decisions/renderer.md` with the numbers.
 
@@ -260,7 +261,7 @@ termoil/
     termoil-pty/            openpty, ConPTY, spawn, exit
     termoil-protocol/       IPC messages, catalogue
     termoil-font/           discovery, fallback, shaping, raster, sprites
-    termoil-render/         Renderer trait, frame builder, vello_gpu, vello_cpu, atlas
+    termoil-render/         Renderer trait, frame builder, raster, vello_gpu, vello_cpu
     termoil-app/            windows, tabs, splits, config, IPC server
     termoil-cli/            termoil +command, MCP tool list
   shell-integration/         per shell scripts, terminfo source

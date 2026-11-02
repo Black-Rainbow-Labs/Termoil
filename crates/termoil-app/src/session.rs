@@ -45,6 +45,11 @@ pub struct SessionOptions {
     pub keep_live_pages: usize,
     /// Text fed to the terminal before the program's output, for session restore.
     pub history: Vec<u8>,
+    /// While output streams, how long the reader waits before its next read, so the program's
+    /// small writes collect in the pipe and arrive as one read (task-2481). Zero reads at once.
+    pub read_coalesce: Duration,
+    /// A read that returns within this long of the previous one means output is streaming.
+    pub stream_gap: Duration,
 }
 
 impl SessionOptions {
@@ -62,6 +67,8 @@ impl SessionOptions {
             idle_compress: Duration::from_secs(2),
             keep_live_pages: 4,
             history: Vec::new(),
+            read_coalesce: Duration::from_millis(1),
+            stream_gap: Duration::from_millis(3),
         }
     }
 }
@@ -143,7 +150,8 @@ impl Session {
             recorded: opts.record_input.then(|| Mutex::new(Vec::new())),
         };
         let (tx, rx) = bounded::<Vec<u8>>(opts.channel_depth.max(1));
-        spawn_reader(reader, tx, opts.read_buffer.max(1024), session.shared.clone())?;
+        let pacing = (opts.read_coalesce, opts.stream_gap);
+        spawn_reader(reader, tx, opts.read_buffer.max(1024), session.shared.clone(), pacing)?;
         spawn_parser(
             rx,
             session.term.clone(),
@@ -289,12 +297,17 @@ impl PromptWaiter {
     }
 }
 
-/// Starts the thread that reads the PTY.
+/// Starts the thread that reads the PTY. `pacing` is (`read_coalesce`, `stream_gap`): after a read
+/// that came within `stream_gap` of the one before it, the thread waits `read_coalesce` before
+/// reading again, so a streaming program's many small writes are read, sent and applied together.
+/// A read after a quiet period is sent at once and never waits, so typing is not delayed.
 fn spawn_reader(
     mut reader: Box<dyn Read + Send>, tx: Sender<Vec<u8>>, size: usize, shared: Arc<Shared>,
+    pacing: (Duration, Duration),
 ) -> std::io::Result<()> {
     thread::Builder::new().name("termoil pty reader".into()).spawn(move || {
         let mut buf = vec![0u8; size];
+        let mut last: Option<Instant> = None;
         loop {
             match reader.read(&mut buf) {
                 Ok(0) | Err(_) => break,
@@ -304,6 +317,12 @@ fn spawn_reader(
                     }
                     if tx.send(buf[..n].to_vec()).is_err() {
                         break;
+                    }
+                    let now = Instant::now();
+                    let streaming = last.is_some_and(|t| now - t < pacing.1);
+                    last = Some(now);
+                    if streaming && n < buf.len() && !pacing.0.is_zero() {
+                        thread::sleep(pacing.0);
                     }
                 }
             }

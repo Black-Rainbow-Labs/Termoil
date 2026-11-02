@@ -150,7 +150,7 @@ fn draw_row_text<C: Canvas>(c: &mut C, row: &RowFrame, frame: &Frame, grid: &Fon
 }
 
 /// Draws a glyph run.
-fn draw_run<C: Canvas>(c: &mut C, run: &GlyphRun, grid: &FontGrid) {
+pub(crate) fn draw_run<C: Canvas>(c: &mut C, run: &GlyphRun, grid: &FontGrid) {
     let face = grid.face(run.face);
     let font = FontData::new(face.blob.clone(), face.index);
     c.paint(run.color);
@@ -239,7 +239,7 @@ fn curly(x0: f64, x1: f64, y: f64, t: f64) -> BezPath {
 }
 
 /// Draws the cursor.
-fn draw_cursor<C: Canvas>(c: &mut C, cur: &crate::frame::CursorFrame, frame: &Frame) {
+pub(crate) fn draw_cursor<C: Canvas>(c: &mut C, cur: &crate::frame::CursorFrame, frame: &Frame) {
     c.paint(cur.color);
     let (x, y, w, h) = (cur.x as f64, cur.y as f64, cur.width as f64, cur.height as f64);
     let t = (frame.cell_width as f64 / 8.0).round().max(1.0);

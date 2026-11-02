@@ -131,6 +131,8 @@ pub struct WinState {
     pub hinting: bool,
     /// When the window last painted, for frame pacing.
     pub last_paint: Option<Instant>,
+    /// When the person last typed, clicked or scrolled in this window.
+    pub last_input: Option<Instant>,
     /// One refresh of the display the window is on: it never paints more often than this.
     pub frame_interval: std::time::Duration,
     /// Presents are not paced (`TERMOIL_PRESENT=immediate`, the latency benchmark).
@@ -139,6 +141,9 @@ pub struct WinState {
     pub translucent: bool,
     /// When to draw again for synchronized output or a timer.
     pub wake_at: Option<Instant>,
+    /// The time a frame that came too soon was moved to; cleared when a frame is drawn. Wakes
+    /// from this window's panes are held until then (`Gui::held_wakes`).
+    pub paint_held_until: Option<Instant>,
     /// When the blinking cursor last changed between shown and hidden, and whether it shows.
     pub blink: (Instant, bool),
     /// The link under the pointer: its pane and cells as (absolute row, first column, last column).
@@ -153,6 +158,8 @@ pub struct WinState {
     pub hint_strips: Vec<Strip>,
     /// The GPU renderer being built, until the window switches to it.
     pub upgrade: Option<crate::gui::paint::GpuUpgrade>,
+    /// The event loop's display, to start the GPU renderer later when a shader is set.
+    pub display: winit::event_loop::OwnedDisplayHandle,
     /// Screen reader access, when `accessibility.enabled` was on as the window opened.
     pub access: Option<crate::gui::access::AccessState>,
     /// The custom shader (`window.shader`) and its error.
@@ -222,7 +229,8 @@ impl WinState {
         let (mut painter, upgrade) = if translucent {
             (crate::gui::paint::translucent_painter(&window)?, None)
         } else {
-            Painter::new(&window, config.window.renderer, warm_cpu, el.owned_display_handle())?
+            let gpu = crate::gui::paint::wants_gpu(config.window.renderer, &config.window.shader);
+            Painter::new(&window, gpu, warm_cpu, el.owned_display_handle())?
         };
         crate::gui::backdrop::apply(&window, translucent, config.window.blur);
         painter.set_hinting(config.font.hinting);
@@ -262,11 +270,14 @@ impl WinState {
             ime_allowed: false,
             hinting: config.font.hinting,
             last_paint: None,
+            last_input: None,
             translucent,
             frame_interval: interval,
             unpaced: std::env::var("TERMOIL_PRESENT").is_ok_and(|v| v == "immediate"),
             wake_at: None,
+            paint_held_until: None,
             upgrade,
+            display: el.owned_display_handle(),
             access,
             shader,
             overlay: None,
@@ -387,6 +398,7 @@ impl WinState {
 
     /// Draws the window: each visible pane, the tab bar, the banner and the preedit.
     pub fn draw(&mut self, app: &mut App) -> Result<(), String> {
+        self.paint_held_until = None;
         let had_shader_error = self.shader.error.is_some();
         self.take_gpu();
         if had_shader_error != self.shader.error.is_some() {
@@ -467,10 +479,16 @@ impl WinState {
     }
 
     /// Sends the window's accessibility tree to the screen reader when it changed, at most once per
-    /// `accessibility.update_interval_ms` for a change of text. `force` sends it in any case.
+    /// `accessibility.update_interval_ms` for a change of text. `force` sends it in any case and marks the
+    /// first request from a client; before that nothing is captured or sent.
     /// A held back update wakes the window to try again.
     pub fn push_access(&mut self, app: &App, force: bool) {
         let Some(access) = self.access.as_mut() else { return };
+        // `force` is the first request from a client; nothing is sent before one.
+        access.requested |= force;
+        if !access.requested {
+            return;
+        }
         let Some((info, text)) = crate::gui::access::snapshot(
             app,
             self.id,
@@ -485,15 +503,18 @@ impl WinState {
         }
     }
 
-    /// When a paint now would come sooner than one display refresh after the last one: the time
-    /// it is due instead (PRD 5.2: paint on damage at the display rate and never faster). None
-    /// means paint now.
-    pub fn paint_due(&self, now: Instant) -> Option<Instant> {
+    /// When a paint now would come sooner than one frame interval after the last one: the time it
+    /// is due instead (PRD 5.2: paint on damage at the display rate and never faster). None means
+    /// paint now. The interval is one display refresh, or `1 / window.output_fps` when nothing was
+    /// typed, clicked or scrolled in the last `window.input_grace_ms` (task-2481: output that
+    /// streams changes every row of every frame, and a frame costs the same however little of it a
+    /// person can read).
+    pub fn paint_due(&self, now: Instant, cfg: &crate::config::Window) -> Option<Instant> {
         // The first frame after the show is the one a person sees first (P4); it never waits.
         if self.unpaced || (self.shown && !self.presented_shown) {
             return None;
         }
-        let due = self.last_paint? + self.frame_interval;
+        let due = self.last_paint? + output_interval(self.frame_interval, self.last_input, now, cfg);
         (now < due).then_some(due)
     }
 
@@ -527,6 +548,10 @@ impl WinState {
     /// when its text changed. A new banner changes the layout.
     pub fn config_shader(&mut self, app: &mut App) {
         self.shader.configure(&app.config, &app.config_path);
+        let gpu = crate::gui::paint::wants_gpu(app.config.window.renderer, &app.config.window.shader);
+        if gpu && !self.painter.is_gpu() && self.upgrade.is_none() {
+            self.upgrade = Some(crate::gui::paint::upgrade_to_gpu(&self.window, self.display.clone()));
+        }
         if self.shader.apply(&mut self.painter, false) {
             self.relayout(app);
         }
@@ -876,6 +901,20 @@ fn translucent_attributes(
     #[cfg(windows)]
     let attrs = winit::platform::windows::WindowAttributesExtWindows::with_no_redirection_bitmap(attrs, true);
     attrs.with_transparent(true)
+}
+
+/// The time between frames: one display refresh while the person is typing or clicking (input in
+/// the last `input_grace_ms`) or when `output_fps` is 0, otherwise the longer of that and one
+/// `output_fps` frame.
+fn output_interval(
+    display: Duration, last_input: Option<Instant>, now: Instant, cfg: &crate::config::Window,
+) -> Duration {
+    let typing =
+        last_input.is_some_and(|t| now.saturating_duration_since(t) < Duration::from_millis(cfg.input_grace_ms));
+    if typing || cfg.output_fps == 0 {
+        return display;
+    }
+    display.max(Duration::from_secs(1) / cfg.output_fps)
 }
 
 /// The refresh rate assumed when the monitor does not report one.

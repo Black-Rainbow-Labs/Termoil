@@ -175,7 +175,7 @@ fn steps() -> Vec<(&'static str, Step)> {
             }),
         ),
         (
-            "the window switches to the GPU renderer when the machine has a GPU",
+            "with renderer = \"gpu\" the window switches to the GPU renderer when the machine has a GPU",
             Box::new(|g: &mut Gui, _: &ActiveEventLoop| {
                 // The surface must be made on the window's own thread; made on the start thread it
                 // always failed and every window stayed on the CPU renderer (0.1.1).
@@ -328,7 +328,10 @@ fn e6_window_input_ime_paste_tabs_splits() {
     std::fs::create_dir_all(&dir).unwrap();
     let config_path = dir.join("config.toml");
     let shell = if cfg!(windows) { "cmd.exe" } else { "bash" };
-    std::fs::write(&config_path, format!("[shell]\nprogram = \"{shell}\"\n")).unwrap();
+    // `renderer = "gpu"`: the window starts on the CPU renderer and switches to the GPU, the path a
+    // step below checks. The default (`auto`) never starts a GPU device (task-2481).
+    let body = format!("[shell]\nprogram = \"{shell}\"\n\n[window]\nrenderer = \"gpu\"\n");
+    std::fs::write(&config_path, body).unwrap();
     let (config, _) = Config::load(&config_path).unwrap();
     let mut builder = EventLoop::<UserEvent>::with_user_event();
     #[cfg(windows)]

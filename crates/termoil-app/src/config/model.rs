@@ -251,6 +251,8 @@ pub struct Window {
     pub shader_poll_ms: u64,
     pub repaint_retry_ms: u64,
     pub repaint_retry_max_ms: u64,
+    pub output_fps: u32,
+    pub input_grace_ms: u64,
 }
 
 impl Default for Window {
@@ -274,6 +276,8 @@ impl Default for Window {
             shader_poll_ms: 1000,
             repaint_retry_ms: 16,
             repaint_retry_max_ms: 1000,
+            output_fps: 60,
+            input_grace_ms: 250,
         }
     }
 }

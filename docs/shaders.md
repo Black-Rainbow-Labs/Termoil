@@ -7,7 +7,7 @@
 shader = "shaders/crt.wgsl"   # relative to the folder of the config file, or an absolute path
 ```
 
-Only the GPU renderer runs the pass. With `window.renderer = "cpu"`, or when no GPU can draw to the window, the setting is ignored and no error is shown.
+Only the GPU renderer runs the pass. The window draws on the CPU by default; with `window.renderer = "auto"` (the default) setting a shader starts the GPU and the window switches to it once the device is ready (task-2481). With `window.renderer = "cpu"`, or when no GPU can draw to the window, the setting is ignored and no error is shown.
 
 ## What your file defines
 

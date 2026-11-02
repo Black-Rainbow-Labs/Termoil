@@ -155,3 +155,18 @@ Two smaller faults in the same path were fixed with it. A suboptimal surface tex
 before the surface was reconfigured; it is now dropped and a new one taken. A frame that is skipped (the surface is
 covered, minimised, timed out or lost) used to be gone for good until the program printed something; the window now draws
 it again after `window.repaint_retry_ms` (16), doubling to at most `window.repaint_retry_max_ms` (1000).
+
+## The window draws on the CPU by default (task-2481, 2026-11-02)
+
+`docs/decisions/efficiency.md` measured Termoil against Ghostty for memory and CPU. The GPU device with vello's pipelines
+commits 306 MB (Vulkan) to 335 MB (DX12) on the RTX 5090's driver before a frame is drawn, and `vello_cpu`'s glyph atlas
+page is a fixed 64 MiB. A new renderer, `RasterRenderer`, draws the window through the same `Canvas` calls with a glyph
+mask cache and row damage, straight into the softbuffer. Decision 2 above is replaced:
+
+2. `RasterRenderer` draws the window when `window.renderer` is `auto` (the default) and no custom shader is set, and no GPU
+   device is started; an idle window is 13 MB of private memory instead of 353. With `renderer = "gpu"` or a shader, it
+   draws the first frames and the window switches to `vello_gpu` as before. `vello_cpu` is the pixel tests' reference.
+
+On the new default: R4 p99 4.67 ms (p50 3.06), P2 p50 1.74 to 1.84 ms and p99 4.16 to 4.63 ms over three runs of 800
+keys, P4 median 79.3 ms. The E6 window test sets `renderer = "gpu"` so it still checks the switch to the GPU.
+

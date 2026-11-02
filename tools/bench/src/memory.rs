@@ -70,7 +70,7 @@ pub fn run_one(lines: usize, dense: bool, tabs: usize) {
 
 /// This process's private bytes and working set.
 #[cfg(windows)]
-fn process_memory() -> (u64, u64) {
+pub fn process_memory() -> (u64, u64) {
     use windows::Win32::System::ProcessStatus::{
         GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS, PROCESS_MEMORY_COUNTERS_EX,
     };
@@ -92,7 +92,7 @@ fn process_memory() -> (u64, u64) {
 
 /// This process's resident set from /proc (Linux), reported for both numbers.
 #[cfg(not(windows))]
-fn process_memory() -> (u64, u64) {
+pub fn process_memory() -> (u64, u64) {
     let rss = std::fs::read_to_string("/proc/self/statm")
         .ok()
         .and_then(|s| s.split_whitespace().nth(1).and_then(|v| v.parse::<u64>().ok()))

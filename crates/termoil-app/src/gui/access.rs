@@ -252,12 +252,16 @@ pub struct AccessState {
     pub last_sent: Option<Instant>,
     /// What the last tree update described.
     pub last: Option<(WindowInfo, PaneText)>,
+    /// A screen reader or other accessibility client has asked for the tree. Until then the
+    /// adapter sends nothing, so the window does not capture its text (task-2481: the capture made
+    /// a string per cell on every frame).
+    pub requested: bool,
 }
 
 impl AccessState {
     /// Creates the adapter for a window that is not shown yet.
     pub fn new(adapter: accesskit_winit::Adapter) -> AccessState {
-        AccessState { adapter, last_sent: None, last: None }
+        AccessState { adapter, last_sent: None, last: None, requested: false }
     }
 
     /// Sends the tree when it changed, as `decide` says. Returns when to try again when a text

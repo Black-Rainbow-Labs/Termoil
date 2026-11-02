@@ -11,8 +11,8 @@ use std::path::PathBuf;
 use termoil_font::{FontConfig, FontGrid};
 use termoil_render::golden::{self, Tolerance};
 use termoil_render::{
-    BuildOptions, Colors, CursorStyle, DecorationKind, Frame, RenderState, Renderer, Rgba, VelloCpuRenderer,
-    VelloGpuRenderer, build_frame,
+    BuildOptions, Colors, CursorStyle, DecorationKind, Frame, FrameBuilder, RasterRenderer, RenderState, Renderer,
+    Rgba, VelloCpuRenderer, VelloGpuRenderer, build_frame,
 };
 use termoil_vt::{Terminal, TerminalConfig};
 
@@ -403,4 +403,61 @@ fn translucent_window_colour_leaves_coloured_cells_opaque() {
     assert!((126..=130).contains(&empty), "empty cell alpha {empty}");
     // Column 0, row 0: red background, opaque.
     assert_eq!(alpha(px + cw / 2, py + ch / 2), 255);
+}
+
+/// The raster renderer (task-2481) against the CPU reference, under the tolerance the GPU renderer
+/// is held to: the rasterisers differ in their anti aliasing, not in what they draw.
+#[test]
+fn r3_raster_matches_cpu() {
+    let mut failures = Vec::new();
+    for (name, cols, rows, bytes, size) in pixel_scenes() {
+        let mut g = grid(size);
+        let f = scene(cols, rows, &bytes, &mut g);
+        let mut r = RasterRenderer::new(f.width, f.height, termoil_render::DEFAULT_GLYPH_CAPACITY);
+        r.render(&f, &g).expect("raster render");
+        let img = r.read_pixels().expect("raster pixels");
+        let cpu_img = render_cpu(&f, &g);
+        if let Some(why) = golden::compare(&cpu_img, &img, Tolerance::GPU, (f.cell_width, f.cell_height), f.padding) {
+            let dir = corpus().join("..").join("_agent_output").join("r3-raster");
+            let _ = std::fs::create_dir_all(&dir);
+            let _ = golden::write_png(&dir.join(format!("{name}.raster.png")), &img);
+            let _ = golden::write_png(&dir.join(format!("{name}.cpu.png")), &cpu_img);
+            failures.push(format!("{name}: {why}"));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// Drawing a run of frames with the raster renderer's row damage gives exactly the pixels of
+/// drawing the last frame whole: typing, a moving cursor, colour changes, a scroll and a clear.
+#[test]
+fn raster_damage_matches_a_full_redraw() {
+    let mut g = grid(16.0);
+    let (cols, rows) = (30u16, 6u16);
+    let mut t = Terminal::new(cols, rows, TerminalConfig::default());
+    let mut state = RenderState::new(cols, rows, Colors::dark_default());
+    let mut builder = FrameBuilder::new();
+    let opts = BuildOptions::default();
+    let steps: [&[u8]; 8] = [
+        b"$ ls\r\n",
+        b"\x1b[31mred\x1b[0m plain \x1b[44mblue bg\x1b[0m\r\n",
+        b"abc",
+        b"\x1b[D\x1b[D",
+        b"\x1b[3;5H\x1b[1mX\x1b[0m",
+        b"\r\n1\r\n2\r\n3\r\n4\r\n5 \xe2\x94\x80\xe2\x94\x80 \x1b[4:3mcurl\x1b[0m",
+        b"\x1b[2J\x1b[H\x1b[6 qnew",
+        b"\x1b[?25l done",
+    ];
+    let mut incremental: Option<RasterRenderer> = None;
+    for (i, bytes) in steps.iter().enumerate() {
+        t.advance(bytes);
+        state.update(&mut t, 0);
+        let f = builder.build(&state, &mut g, &opts);
+        let r = incremental.get_or_insert_with(|| RasterRenderer::new(f.width, f.height, 64));
+        r.render(&f, &g).expect("incremental render");
+        let mut whole = RasterRenderer::new(f.width, f.height, 64);
+        whole.render(&f, &g).expect("full render");
+        let (a, b) = (r.read_pixels().expect("pixels"), whole.read_pixels().expect("pixels"));
+        assert!(a == b, "step {i}: the damaged frame differs from the full redraw");
+    }
 }

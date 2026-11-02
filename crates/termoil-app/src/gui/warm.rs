@@ -1,7 +1,7 @@
 //! Start up work for the first window that does not need the window (P4,
 //! `docs/decisions/startup.md`). Loading the font grid took 11 to 13 ms and the first CPU frame
-//! took 16 ms more than later ones (the glyph atlas and the render threads start on it), all on
-//! the UI thread before the first paint. A thread started as soon as the event loop exists does
+//! took 16 ms more than later ones (it rasterized every glyph it drew), all on the UI thread
+//! before the first paint. A thread started as soon as the event loop exists does
 //! both while the UI thread spawns the shell and creates the window: it loads the grid at the
 //! scale the window will most likely have, and renders printable ASCII once into the CPU renderer
 //! the window will use. The first window takes them when its scale matches; otherwise it loads
@@ -11,14 +11,14 @@ use std::sync::Mutex;
 use std::sync::mpsc::{Receiver, channel};
 
 use termoil_font::FontGrid;
-use termoil_render::{Layer, Renderer, Rgba, VelloCpuRenderer};
+use termoil_render::{Layer, RasterRenderer, Renderer, Rgba};
 
 use crate::config::Config;
 use crate::gui::chrome::Strip;
 use crate::gui::look;
 
 /// What the thread made: the font grid and a CPU renderer that has drawn once.
-type Made = Result<(FontGrid, Box<VelloCpuRenderer>), String>;
+type Made = Result<(FontGrid, Box<RasterRenderer>), String>;
 
 /// The thread's result and the scale it used.
 static WARM: Mutex<Option<(f64, Receiver<Made>)>> = Mutex::new(None);
@@ -40,7 +40,7 @@ pub fn start(config: &Config) {
 
 /// The grid and renderer for a window at `scale`, once: None when the thread did not run, failed,
 /// or used another scale.
-pub fn take(scale: f64) -> Option<(FontGrid, Box<VelloCpuRenderer>)> {
+pub fn take(scale: f64) -> Option<(FontGrid, Box<RasterRenderer>)> {
     let (at, rx) = WARM.lock().ok()?.take()?;
     if (at - scale).abs() > f64::EPSILON {
         return None;
@@ -48,17 +48,21 @@ pub fn take(scale: f64) -> Option<(FontGrid, Box<VelloCpuRenderer>)> {
     rx.recv().ok()?.ok()
 }
 
-/// Loads the grid and draws printable ASCII once with a renderer sized like the first window.
+/// Loads the grid and draws printable ASCII once, so its glyphs are in the renderer's cache, then
+/// sizes the renderer like the first window. The strip is drawn into a buffer of its own size,
+/// which is freed: the window's renderer draws into the window's buffer.
 fn make(config: &Config, scale: f64) -> Made {
     let mut grid = look::font_grid(config, config.font.size as f32, scale)?;
     let opts = look::build_options(config, scale);
     let (w, h) = look::window_size(config, grid.metrics(), &opts, scale);
-    let mut renderer = Box::new(VelloCpuRenderer::new(w, h, crate::gui::paint::cpu_threads(), true));
     let colors = look::colors(config, true);
     let text: Vec<u8> = (0x20u8..0x7f).collect();
     let mut strip = Strip::new(1, colors.clone());
     let frame = strip.frame(text.len() as u16, 1, &text, &colors, &mut grid, &opts);
+    let mut renderer = Box::new(RasterRenderer::new(frame.width, frame.height, crate::gui::paint::glyph_capacity()));
     renderer.render_layers(Rgba::rgb(0, 0, 0), &[Layer { x: 0.0, y: 0.0, frame }], &grid).map_err(|e| e.to_string())?;
+    renderer.free_framebuffer();
+    renderer.resize(w, h);
     Ok((grid, renderer))
 }
 
