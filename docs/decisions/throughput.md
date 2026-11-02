@@ -86,3 +86,31 @@ The gate line in `docs/TEST-SUITE.md` section 13 now reads: the `mixed` 1 GiB st
 - `_agent_output/task-2459-throughput/comparison.md` and `comparison.jsonl`: the Windows runs, machine, crate versions, commands, and the noisy samples named.
 - `_agent_output/task-2459-throughput/ghostty.md` and `ghostty-runs.txt`: the Ghostty source quotes with URLs, the WSL build and run commands, and the raw runs.
 - `_agent_output/task-2459-throughput/harness/`: the Rust harness that drove vte, alacritty_terminal and terminus-vt on the same bytes. The follow up ticket adds it to `tools/bench` so the comparison runs with each release.
+
+## Measured (task-2458, 2026-11-01)
+
+The work in task-2458 (style hashing on two packed words, the written mark, a plain path for non ASCII characters that
+join nothing, prefetching recycled rows, one scan per printable run) moved `mixed` from 174 to 196 MB/s to the numbers
+below. `terminus-bench throughput 3`, release build, high priority, about 22 % of the CPU in use by a screen recorder:
+
+| Core | `mixed` | `dense_cells` | `unicode` | `mixed_plain` | `mixed_sgr` |
+|---|---|---|---|---|---|
+| Performance core 12 | **263.0** | 251.5 | 200.6 | 637.5 | 289.4 |
+| Left to the scheduler | **255.7** | 221.4 | 192.1 | 628.4 | 292.8 |
+| Efficiency core 6 (earlier runs) | 219 to 245 | 163 to 191 | 154 to 186 | 514 to 590 | 246 to 275 |
+
+The Core Ultra 9 285 has 8 performance cores and 16 efficiency cores, and one `throughput 1 mixed` run on each logical
+processor gave 251 to 268 MB/s on the performance cores (0, 1, 10 to 13, 23) and 204 to 239 on the efficiency cores. The
+earlier runs in this ticket were pinned to logical processor 6, an efficiency core, which is why they read below the gate.
+Windows schedules a busy foreground thread on a performance core, as the unpinned row shows, so **P1 passes**: 263 MB/s on
+one performance core, 256 left to the scheduler. The gate is now measured pinned to a performance core, and the unpinned
+number is recorded beside it.
+
+`dense_cells` (251.5 on a performance core, 221.4 unpinned) and `unicode` (200.6, 192.1) are above alacritty_terminal's
+216 and 87. The alacritty_terminal and Ghostty numbers above were measured without a recorded core, so the comparison is
+repeated pinned to a performance core by the comparison harness (task-2461) before it is published again.
+
+What the profile shows for the rest, for whoever works on it next: on `mixed`, a line feed into a full scrollback costs
+about 100 ns on cold memory against about 35 ns with a 4 MB scrollback, because a pruned page is the next one written; a
+colour change costs about 17 ns to parse and apply, and the print run it splits off costs about 17 ns more, most of it the
+style table lookup.

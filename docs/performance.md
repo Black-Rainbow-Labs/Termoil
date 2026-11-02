@@ -6,7 +6,7 @@ The gates from `docs/TEST-SUITE.md` section 13, as measured on this machine (Int
 
 | Gate | Requirement | Measured | Result | Where |
 |---|---|---|---|---|
-| P1 throughput | the `mixed` 1 GiB stream through `Terminal` (parser plus screen, 200 by 60, default scrollback) at 250 MB/s on one core | 174 to 196 MB/s; parser alone 655 to 866 MB/s | **fails**; work in progress in task-2458 | `docs/decisions/throughput.md` |
+| P1 throughput | the `mixed` 1 GiB stream through `Terminal` (parser plus screen, 200 by 60, default scrollback) at 250 MB/s on one core | 263.0 MB/s on a performance core, 255.7 MB/s left to the scheduler (219 to 245 on an efficiency core) | passes | `docs/decisions/throughput.md` |
 | P2 latency | p50 under 8 ms, p99 under 16 ms | with `vello_gpu` on Vulkan: p50 1.77 to 1.93 ms, p99 6.39 to 7.55 ms (three runs, 2,400 keys, 2026-11-01); windows drew with `vello_cpu` until that date because of a defect, see `docs/decisions/renderer.md` | passes | `docs/decisions/renderer.md` |
 | P3 memory | 100 000 lines under 150 MB, 1 000 000 lines under 400 MB, 200 columns, after the idle compression | 100 000 lines: 18.0 MB typical, 43.4 MB dense attributes; 1 000 000 lines: 144.3 MB typical, 376.3 MB dense; ten idle tabs: 21.9 MB (private bytes of the terminal core) | passes | `terminus-bench memory` |
 | P4 start up | under 100 ms warm on Windows, to the first frame with the prompt presented to a visible window | median 76.3, 77.4, 78.4 and 78.6 ms in four batches of 20 warm runs (64.6 to 102.8); the window is active at a median 80 to 82 ms | passes | `docs/decisions/startup.md` |
@@ -20,5 +20,5 @@ The gates from `docs/TEST-SUITE.md` section 13, as measured on this machine (Int
 - R4 on a laptop's integrated GPU: measured here on a desktop CPU's integrated GPU only.
 - P3 measures the terminal core in its own process. The window's own memory (fonts, the GPU device and its buffers) is
   measured separately once per release with the installed build.
-- P1: 1.44 times the current rate is needed. `docs/decisions/throughput.md` names the levers (writes to cold scrollback
-  pages, the SGR apply) and two rows slower than alacritty_terminal (`dense_cells`, `unicode`).
+- P1 comparison: alacritty_terminal and Ghostty were measured without a recorded core; task-2461 repeats them pinned to a
+  performance core.
