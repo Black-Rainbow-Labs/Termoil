@@ -99,7 +99,9 @@ function Write-Step([string] $Message) {
   The command to run.
 #>
 function Invoke-Checked([string] $What, [scriptblock] $Body) {
-    & $Body
+    # The command's output goes to the console, not into the caller's return value: a function that
+    # runs ISCC and then returns a path would otherwise return ISCC's whole log with the path.
+    & $Body | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "$What failed with exit code $LASTEXITCODE." }
 }
 
