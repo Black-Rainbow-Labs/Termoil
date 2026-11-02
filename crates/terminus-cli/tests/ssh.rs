@@ -92,7 +92,8 @@ impl Sandbox {
         let data = self.dir.join("data");
         let mut cmd = Command::new(cli_exe());
         cmd.arg("ssh").args(args).env("PATH", path).env("SSH_LOG", self.log_path());
-        cmd.env("LOCALAPPDATA", &data).env("XDG_DATA_HOME", &data).env("HOME", &data);
+        // TERMINUS_DATA_DIR names the data folder on every platform; macOS ignores the other two.
+        cmd.env("TERMINUS_DATA_DIR", data.join("terminus")).env("HOME", &data);
         for (k, v) in extra_env {
             cmd.env(k, v);
         }
