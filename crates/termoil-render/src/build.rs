@@ -183,7 +183,8 @@ fn build_row(state: &RenderState, r: u16, grid: &mut FontGrid, opts: &BuildOptio
 }
 
 /// Resolves the foreground, background and underline colour of a cell, applying inverse, faint,
-/// invisible, reverse video, the selection and the minimum contrast.
+/// invisible, reverse video, the selection and the minimum contrast, which block, box drawing, braille
+/// and powerline characters are left out of.
 fn cell_colors(state: &RenderState, cell: &CellState, r: u16, col: u16, opts: &BuildOptions) -> CellColors {
     let c = &state.colors;
     let s = &cell.style;
@@ -212,10 +213,12 @@ fn cell_colors(state: &RenderState, cell: &CellState, r: u16, col: u16, opts: &B
         fg = c.selection_foreground.unwrap_or(fg);
     }
     // Hidden text is drawn in the background colour and is not lifted by the minimum contrast,
-    // which would make it readable again (task-2468).
+    // which would make it readable again (task-2468). Block, box drawing, braille and powerline
+    // characters are pictures, not text: a half block's two halves are the text and background colours,
+    // and lifting one of them striped every picture drawn with half blocks (task-2487).
     if s.has(attr::INVISIBLE) {
         fg = bg;
-    } else {
+    } else if !cell.text.first().is_some_and(sprite::is_sprite) {
         fg = ensure_contrast(fg, bg, opts.minimum_contrast);
     }
     let underline = match s.underline_color {

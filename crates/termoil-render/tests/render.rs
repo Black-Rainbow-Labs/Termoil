@@ -96,6 +96,29 @@ fn r1_hidden_text_is_not_lifted_by_minimum_contrast() {
     }
 }
 
+/// Block, box drawing, braille and powerline characters keep their exact colour with
+/// `window.minimum_contrast` on (task-2487). A half block draws its top half in the text colour and its
+/// bottom half in the background colour, and in a picture made of half blocks the two are close, so
+/// lifting the text colour to 4.5:1 drew every top half white and striped the picture.
+#[test]
+fn r1_block_and_line_characters_are_not_lifted_by_minimum_contrast() {
+    let mut g = grid(16.0);
+    let mut t = Terminal::new(20, 2, TerminalConfig::default());
+    t.advance("\x1b[38;2;200;60;60;48;2;190;70;60m\u{2580}\u{2500}\u{28ff}\u{e0b0}\x1b[0m".as_bytes());
+    t.advance(b"\x1b[38;2;40;40;40;48;2;30;30;30mtext\x1b[0m");
+    let mut state = RenderState::new(20, 2, Colors::dark_default());
+    state.update(&mut t, 0);
+    let opts = BuildOptions { minimum_contrast: 4.5, ..BuildOptions::default() };
+    let f = build_frame(&state, &mut g, &opts);
+    let sprites = &f.rows[0].sprites;
+    assert_eq!(sprites.len(), 4, "{sprites:?}");
+    for s in sprites {
+        assert_eq!((s.color.r, s.color.g, s.color.b), (200, 60, 60), "{:?} was drawn in {:?}", s.ch, s.color);
+    }
+    let text = f.rows[0].runs.first().expect("the text run");
+    assert_ne!((text.color.r, text.color.g, text.color.b), (40, 40, 40), "ordinary text is still lifted");
+}
+
 #[test]
 fn r1_decorations() {
     let mut g = grid(16.0);
