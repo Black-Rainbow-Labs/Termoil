@@ -317,6 +317,11 @@ fn steps() -> Vec<(&'static str, Step)> {
 
 #[test]
 fn e6_window_input_ime_paste_tabs_splits() {
+    if cfg!(target_os = "macos") {
+        // winit on macOS creates its event loop only on the main thread, and the test harness runs
+        // each test on another thread. E6 runs on Windows and Linux.
+        return println!("winit needs the main thread on macOS; skipping E6");
+    }
     let dir = std::env::temp_dir().join(format!("terminus-e6-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let config_path = dir.join("config.toml");
