@@ -216,6 +216,8 @@ pub struct Window {
     pub palette_hint: bool,
     pub quick_terminal_edge: Edge,
     pub quick_terminal_hotkey: String,
+    pub shader: String,
+    pub shader_poll_ms: u64,
 }
 
 impl Default for Window {
@@ -235,6 +237,8 @@ impl Default for Window {
             palette_hint: true,
             quick_terminal_edge: Edge::Top,
             quick_terminal_hotkey: "ctrl+`".into(),
+            shader: String::new(),
+            shader_poll_ms: 1000,
         }
     }
 }

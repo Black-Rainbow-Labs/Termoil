@@ -90,6 +90,14 @@ pub static SECTIONS: &[Section] = &[
             e("palette_hint", "Show the one line hint about the command palette until it is first used."),
             e("quick_terminal_edge", "Screen edge the quick terminal slides from: top, bottom, left or right."),
             e("quick_terminal_hotkey", "Global hotkey that toggles the quick terminal."),
+            e(
+                "shader",
+                "Path to a WGSL file that runs as a post process pass over every frame (relative paths are read from the folder of this file; empty means none). The file defines fn terminus_shade(uv: vec2<f32>, color: vec4<f32>) -> vec4<f32>, see docs/shaders.md. Only the GPU renderer runs it; the CPU renderer ignores this setting. A shader with an error is reported in the window's banner and the window draws without it.",
+            ),
+            e(
+                "shader_poll_ms",
+                "Milliseconds between checks of the shader file's modified time, so an edit applies without a restart.",
+            ),
         ],
     },
     Section {
