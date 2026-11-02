@@ -50,13 +50,27 @@ pub enum ConptyChoice {
     Bundled(PathBuf),
 }
 
-/// Windows pseudoconsole settings for tests and diagnostics. Ignored on Unix.
-#[derive(Debug, Clone, Default)]
+/// The output pipe buffer `ConptyConfig::default` asks Windows for: 1 MiB (task-2485).
+pub const DEFAULT_OUTPUT_PIPE_BYTES: u32 = 1 << 20;
+
+/// Windows pseudoconsole settings. Ignored on Unix.
+#[derive(Debug, Clone)]
 pub struct ConptyConfig {
     /// Which pseudoconsole implementation to load.
     pub choice: ConptyChoice,
     /// CreatePseudoConsole flags. `None` selects the default for the implementation.
     pub flags: Option<u32>,
+    /// The buffer size asked of Windows for the pipe the pseudoconsole writes the program's output into. Zero is the
+    /// system default of about 4 KiB, which holds the pseudoconsole to one small chunk each time the reader pauses to
+    /// let output collect, about 4 MB/s.
+    pub output_pipe_bytes: u32,
+}
+
+impl Default for ConptyConfig {
+    /// The automatic implementation choice, its default flags and a 1 MiB output pipe.
+    fn default() -> Self {
+        ConptyConfig { choice: ConptyChoice::Auto, flags: None, output_pipe_bytes: DEFAULT_OUTPUT_PIPE_BYTES }
+    }
 }
 
 /// A running child process attached to a pseudoterminal. Dropping it ends the child and its tree.

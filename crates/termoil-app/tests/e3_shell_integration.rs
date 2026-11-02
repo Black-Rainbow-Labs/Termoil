@@ -145,7 +145,7 @@ impl Session {
 fn conpty_config() -> ConptyConfig {
     let bundled = scripts_dir().join("..").join("installer").join("windows").join("conpty");
     if bundled.join("conpty.dll").is_file() {
-        ConptyConfig { choice: ConptyChoice::Bundled(bundled), flags: None }
+        ConptyConfig { choice: ConptyChoice::Bundled(bundled), flags: None, ..ConptyConfig::default() }
     } else {
         ConptyConfig::default()
     }

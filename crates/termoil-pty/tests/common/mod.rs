@@ -170,11 +170,15 @@ pub fn bundled_present() -> bool {
 
 /// Every pseudoconsole configuration available here: the inbox one, and the bundled one when fetched.
 pub fn configs() -> Vec<(&'static str, ConptyConfig)> {
-    let mut all = vec![("inbox", ConptyConfig { choice: ConptyChoice::Inbox, flags: None })];
+    let mut all = vec![("inbox", ConptyConfig { choice: ConptyChoice::Inbox, flags: None, ..ConptyConfig::default() })];
     if bundled_present() {
         all.push((
             "bundled",
-            ConptyConfig { choice: ConptyChoice::Bundled(bundled_dir().canonicalize().unwrap()), flags: None },
+            ConptyConfig {
+                choice: ConptyChoice::Bundled(bundled_dir().canonicalize().unwrap()),
+                flags: None,
+                ..ConptyConfig::default()
+            },
         ));
     } else {
         println!("bundled conpty not fetched (run tools/fetch-conpty.ps1); testing the inbox ConPTY only");

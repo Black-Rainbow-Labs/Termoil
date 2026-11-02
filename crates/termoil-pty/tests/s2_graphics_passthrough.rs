@@ -83,7 +83,8 @@ fn inbox_conpty_strips_apc_and_dcs_and_passes_osc() {
 fn inbox_flags_do_not_enable_passthrough() {
     let combined = combined_payload();
     for flags in [0x2u32, 0x4, 0x8, 0x10, 0x20] {
-        let config = ConptyConfig { choice: termoil_pty::ConptyChoice::Inbox, flags: Some(flags) };
+        let config =
+            ConptyConfig { choice: termoil_pty::ConptyChoice::Inbox, flags: Some(flags), ..ConptyConfig::default() };
         let bytes = bytes_for(&format!("inbox-flags-{flags:x}"), &config, &combined);
         assert!(!show_bytes(&bytes).contains("Ga=q"), "inbox flag {flags:#x} now passes APC");
         assert!(!show_bytes(&bytes).contains("#0;2;0;0;0"), "inbox flag {flags:#x} now passes DCS");

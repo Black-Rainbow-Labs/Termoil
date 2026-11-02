@@ -168,6 +168,22 @@ After step 1 the UI still handled about 440 wakes a second while drawing 60 fram
 scheduled, a wake from one of its panes now leaves the pane's wake flag set, so the session sends no more, until that frame
 is drawn; the pane's events are applied then.
 
+### 7. A 1 MiB output pipe, so the pause in step 1 does not limit throughput (task-2485)
+
+Step 1 left the ConPTY output pipe at the system default buffer, about 4 KiB. While the reader pauses for
+`read_coalesce`, the pseudoconsole can put only one pipe's worth of output in it, so a program writing large escape
+sequences was held to about 4 KiB per millisecond, roughly 4 MB/s. The Termoil and Ghostty video found it: a Mandelbrot
+zoom sent as 800 by 520 kitty graphics frames at 30 a second (about 15 MB/s of base64) showed 77 frames in Termoil and 148
+in Ghostty over the same seconds, and Termoil's process used 1.7 s of CPU in 6 s, so it was waiting, not working.
+
+`ConptyConfig.output_pipe_bytes` (default 1 MiB) is now the pipe's buffer. With it both terminals show all 205 frames.
+`crates/termoil-pty/tests/w4_output_pipe.rs` streams 4 MB through `type` with a reader that pauses 1 ms after each read:
+the largest read was 9,975 bytes with the old pipe and the run took 5.2 s, against more than 16 KiB and 3.1 s now.
+
+The `apps` stream run is unchanged by it, because `type` writes small chunks: three runs each in the same session gave
+16.6 and 17.4 s of CPU per 100 MB for this build and 17.4 for 1.3.0 (the 15.5 in the table above was a quieter machine),
+and the same memory to within 0.1 MB.
+
 ### Tried and not kept
 
 - Compacting the process heap (`HeapCompact`) after the idle scrollback compression: no change in any number. The memory

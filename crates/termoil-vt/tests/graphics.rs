@@ -457,12 +457,26 @@ fn query_without_id_still_replies() {
 fn quiet_modes() {
     let mut s = store();
     assert!(send(&mut s, "a=t,i=1,f=32,s=1,v=1,q=1", &[0; 4]).reply.is_none());
-    assert!(send(&mut s, "a=t,i=1,f=32,s=1,v=1,q=2", &[0; 4]).reply.is_some());
+    // q=2 is the quiet mode the spec uses "so that there are no responses from the terminal": no OK either.
+    assert!(send(&mut s, "a=t,i=1,f=32,s=1,v=1,q=2", &[0; 4]).reply.is_none());
     assert!(send(&mut s, "a=t,i=1,f=32,s=1,v=1,q=1", &[0; 3]).reply.is_some());
     assert!(send(&mut s, "a=t,i=1,f=32,s=1,v=1,q=2", &[0; 3]).reply.is_none());
     assert!(cmd(&mut s, "a=p,i=77,q=2").reply.is_none());
     assert!(cmd(&mut s, "a=p,i=77").reply.is_some());
     assert!(cmd(&mut s, "a=p,i=1,q=1").reply.is_none());
+}
+
+/// A chunked a=T upload with q=2 on its first chunk only (the form a client streaming frames sends) gets no reply.
+#[test]
+fn quiet_chunked_upload_sends_no_reply() {
+    let mut s = store();
+    let ctx = ctx();
+    let text = b64(&solid(4, 4, [9, 9, 9, 255]));
+    let (head, tail) = text.split_at(text.len() / 2);
+    let first = s.kitty_command(format!("a=T,f=32,s=4,v=4,i=7,p=1,q=2,C=1,m=1;{head}").as_bytes(), &ctx);
+    let last = s.kitty_command(format!("m=0;{tail}").as_bytes(), &ctx);
+    assert!(first.reply.is_none());
+    assert!(last.reply.is_none());
 }
 
 #[test]

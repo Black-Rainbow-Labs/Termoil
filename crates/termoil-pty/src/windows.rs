@@ -43,8 +43,8 @@ impl PtyImpl {
     /// Creates the pipes and pseudoconsole, then starts the child inside the pseudoconsole and a job object.
     pub fn spawn(opts: &SpawnOptions, config: &ConptyConfig) -> io::Result<PtyImpl> {
         let api = load_api(&config.choice)?;
-        let (in_read, in_write) = make_pipe()?;
-        let (out_read, out_write) = make_pipe()?;
+        let (in_read, in_write) = make_pipe(0)?;
+        let (out_read, out_write) = make_pipe(config.output_pipe_bytes)?;
         let hpc = create_console(&api, opts.size, &in_read, &out_write, config.flags)?;
         // ConPTY duplicated the console side ends; our copies must close or the pipes never report EOF.
         drop(in_read);
@@ -158,11 +158,12 @@ fn coord(size: PtySize) -> COORD {
     COORD { X: size.cols as i16, Y: size.rows as i16 }
 }
 
-/// Creates an anonymous pipe whose ends are not inheritable and returns (read end, write end).
-fn make_pipe() -> io::Result<(OwnedHandle, OwnedHandle)> {
+/// Creates an anonymous pipe whose ends are not inheritable, with a buffer of `size` bytes (0 is the system default),
+/// and returns (read end, write end).
+fn make_pipe(size: u32) -> io::Result<(OwnedHandle, OwnedHandle)> {
     let (mut read, mut write) = (HANDLE::default(), HANDLE::default());
     // SAFETY: both out pointers are valid; null attributes make the handles non inheritable.
-    unsafe { CreatePipe(&mut read, &mut write, None, 0) }.map_err(io::Error::from)?;
+    unsafe { CreatePipe(&mut read, &mut write, None, size) }.map_err(io::Error::from)?;
     // SAFETY: CreatePipe returned two open handles that nothing else owns.
     unsafe { Ok((OwnedHandle::from_raw_handle(read.0), OwnedHandle::from_raw_handle(write.0))) }
 }

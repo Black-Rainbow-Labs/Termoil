@@ -30,12 +30,13 @@ pub(crate) struct ReplyIds {
 /// Builds the reply bytes for a command, or `None` when no reply is due.
 ///
 /// A reply is due only when the client used `i` or `I`, except for queries (`always`). `quiet` is the `q`
-/// key: 1 suppresses OK replies and 2 suppresses failure replies.
+/// key: 1 suppresses OK replies, and 2 suppresses failure replies as well, which is the quiet mode the spec
+/// describes as giving "no responses from the terminal".
 pub(crate) fn build_reply(ids: &ReplyIds, outcome: Result<(), &KErr>, quiet: u8, always: bool) -> Option<Vec<u8>> {
     if ids.id == 0 && ids.number == 0 && !always {
         return None;
     }
-    if (quiet == 1 && outcome.is_ok()) || (quiet == 2 && outcome.is_err()) {
+    if quiet >= 2 || (quiet == 1 && outcome.is_ok()) {
         return None;
     }
     let mut keys: Vec<String> = Vec::new();
