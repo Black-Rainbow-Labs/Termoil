@@ -224,21 +224,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
 
 [[package]]
-name = "terminus-fuzz"
+name = "termoil-fuzz"
 version = "0.0.0"
 dependencies = [
  "base64",
  "libfuzzer-sys",
- "terminus-input",
- "terminus-vt",
+ "termoil-input",
+ "termoil-vt",
 ]
 
 [[package]]
-name = "terminus-input"
+name = "termoil-input"
 version = "0.1.0"
 
 [[package]]
-name = "terminus-vt"
+name = "termoil-vt"
 version = "0.1.0"
 dependencies = [
  "base64",

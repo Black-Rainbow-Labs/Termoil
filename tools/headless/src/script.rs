@@ -1,4 +1,4 @@
-//! Scripted runs for `terminus-headless run --script FILE` (the vttest goldens,
+//! Scripted runs for `termoil-headless run --script FILE` (the vttest goldens,
 //! docs/TEST-SUITE.md section 5). A script drives an interactive program: it waits for text the
 //! program prints, sends it input, and saves the screen at the points worth comparing.
 //!

@@ -1,6 +1,6 @@
-# How terminal emulators are tested: corpora, harnesses and a plan for Terminus
+# How terminal emulators are tested: corpora, harnesses and a plan for Termoil
 
-Prepared 2026-11-01 for the Terminus test suite specification. Terminus is a terminal emulator written from scratch in Rust.
+Prepared 2026-11-01 for the Termoil test suite specification. Termoil is a terminal emulator written from scratch in Rust.
 
 Method. I cloned (treeless, shallow) the repositories for Alacritty, vtebench, Ghostty, WezTerm, kitty, xterm.js, Windows Terminal, Contour, foot, libvterm and esctest2 on 2026-11-01 and read the test directories, CI workflows and documentation directly. Test counts below come from searching those clones, so they are counts of what the search pattern matched on that date, and they are lower bounds where a project writes tests in more than one style. Pages I could read are cited. Pages I could not read are listed in the last section, so nothing in this report is quoted from memory without saying so.
 
@@ -28,7 +28,7 @@ How it drives a terminal. esctest runs inside the terminal under test. It writes
 
 Size. The esctest2 clone has 81 test modules under `esctest/tests` (apc, cbt, cha, cub, cud, cuf, cup, da, da2, dch, decaln, decbi, deccra, decdsr, decera, decfi, decfra, decic, decrqm, decrqss, decscl, decsed, decsel, decset, decstbm, decstr, dl, ech, ed, el, hpa, ich, il, ind, nel, rep, ri, ris, sgr, sm, su, tbc, vpa, xterm_winops and others) and 559 `def test_` functions.
 
-Licence. The `LICENSE` file in esctest2 is the GNU General Public License version 2. Terminus should run esctest2 as an external program in CI and must not copy its code into the Terminus repository.
+Licence. The `LICENSE` file in esctest2 is the GNU General Public License version 2. Termoil should run esctest2 as an external program in CI and must not copy its code into the Termoil repository.
 
 Who uses it. Ghostty runs it against libghostty-vt in a CI job that reports results and never fails the build (https://github.com/ghostty-org/ghostty/tree/main/test/esctest ). Contour runs it and gates the build on it (`src/vtconformance/EscTestSuite.cpp`). iTerm2 and xterm are the two terminals the README configures it for.
 
@@ -51,13 +51,13 @@ The Unicode Consortium publishes GraphemeBreakTest.txt, currently version 18.0.0
 - WezTerm runs the Unicode bidi conformance files `bidi/data/BidiTest.txt` and `bidi/data/BidiCharacterTest.txt` through `bidi/tests/conformance.rs`.
 - Contour uses the libunicode library for widths and graphemes, and the grapheme width behaviour is what the Terminal Unicode Core specification describes.
 
-The width of a cell is a terminal decision and no Unicode file gives it, so a width corpus has to be built in house from EastAsianWidth.txt, emoji-test.txt and the behaviour of the terminals Terminus wants to agree with. The GraphemeBreakTest file is only the segmentation half.
+The width of a cell is a terminal decision and no Unicode file gives it, so a width corpus has to be built in house from EastAsianWidth.txt, emoji-test.txt and the behaviour of the terminals Termoil wants to agree with. The GraphemeBreakTest file is only the segmentation half.
 
 ### Kitty keyboard protocol corpus
 
 The specification is https://sw.kovidgoyal.net/kitty/keyboard-protocol/ . It defines five progressive enhancement flags (disambiguate, report event types, report alternate keys, report all keys as escape codes, report associated text), the form `CSI unicode-key-code:alternate-key-codes ; modifiers:event-type ; text-as-codepoints u`, modifier bits (shift 1, alt 2, ctrl 4, super 8, hyper 16, meta 32, caps lock 64, num lock 128, sent as 1 plus the sum), event types (press 1, repeat 2, release 3), and private use area codes for F13 to F35, keypad and media keys. It has no test corpus of its own. The test material that exists is:
 
-- kitty's `kitty_tests/keys.py`, with `test_encode_key_event` (a very large table of modifiers, actions, alternate keys and text through a `csi()` helper) and `test_encode_mouse_event` (https://github.com/kovidgoyal/kitty/blob/master/kitty_tests/keys.py ). The kitty repository is GPL 3 (the header of `test.py` says so), so Terminus can read these tables and write its own, not copy them.
+- kitty's `kitty_tests/keys.py`, with `test_encode_key_event` (a very large table of modifiers, actions, alternate keys and text through a `csi()` helper) and `test_encode_mouse_event` (https://github.com/kovidgoyal/kitty/blob/master/kitty_tests/keys.py ). The kitty repository is GPL 3 (the header of `test.py` says so), so Termoil can read these tables and write its own, not copy them.
 - Ghostty `src/input/key_encode.zig` with 105 tests, `mouse_encode.zig` with 24, `key_mods.zig` with 23 and `paste.zig` with 14.
 - Windows Terminal `src/terminal/adapter/ut_adapter/kittyKeyboardProtocol.cpp` (7 test methods), plus `inputTest.cpp` and `MouseInputTest.cpp`.
 - libvterm `t/25state_input.test`, which checks ordinary keys, for example Ctrl+A is sent as the escape sequence for codepoint 65 with modifier 5 and Ctrl+Alt+A is sent with modifier 7.
@@ -103,7 +103,7 @@ Comparison with xterm. I found no automated xterm comparison harness in the repo
 
 Fuzzing. `test/fuzz-libghostty` uses AFL++ with three targets: `osc` (OSC parser with an allocator), `parser` (VT parser one byte at a time) and `stream` (a small `Terminal` driven through its stream handler, where the first input byte chooses between the SIMD slice path and the scalar path). The checked in corpora are `stream-cmin` (3,271 files), `parser-cmin` (616), `parser-initial` (50), `stream-initial` (24), `osc-initial` (20) and `osc-cmin` (20). A script, `replay-crashes.nu`, replays crashes. Source: https://github.com/ghostty-org/ghostty/tree/main/test/fuzz-libghostty .
 
-Benchmarks. `src/benchmark` has two roles. `ghostty-gen` generates input data and `ghostty-bench` consumes it. The benchmark list is `ApcParser`, `OscParser`, `TerminalParser`, `TerminalStream`, `TerminalFormatter`, `TerminalResize`, `TerminalSnapshot`, `ScreenClone`, `ScrollbackCompression`, `PageCompression`, `HyperlinkMap`, `ShaperRows`, `CodepointWidth`, `GraphemeBreak`, `IsSymbol` and a C API benchmark. The AGENTS.md rules are useful for Terminus: generate the data first and benchmark it later, reuse the same files across revisions, use fixed seeds, use `hyperfine` with warmups and medians, build with ReleaseFast, and never run two benchmarks at once.
+Benchmarks. `src/benchmark` has two roles. `ghostty-gen` generates input data and `ghostty-bench` consumes it. The benchmark list is `ApcParser`, `OscParser`, `TerminalParser`, `TerminalStream`, `TerminalFormatter`, `TerminalResize`, `TerminalSnapshot`, `ScreenClone`, `ScrollbackCompression`, `PageCompression`, `HyperlinkMap`, `ShaperRows`, `CodepointWidth`, `GraphemeBreak`, `IsSymbol` and a C API benchmark. The AGENTS.md rules are useful for Termoil: generate the data first and benchmark it later, reuse the same files across revisions, use fixed seeds, use `hyperfine` with warmups and medians, build with ReleaseFast, and never run two benchmarks at once.
 
 CI. The workflow (`.github/workflows/test.yml`) uses self provisioned runners (`namespace-profile-ghostty-*`) and has jobs that build the libghostty-vt library for macOS, Windows, Android, WebAssembly and freestanding targets, run `zig build test-lib-vt` on Windows, and run esctest with `continue-on-error`.
 
@@ -134,7 +134,7 @@ foot has one C test file (`tests/test-config.c`, configuration parsing) and reli
 
 ### Contour
 
-Contour has the largest in repo test culture of the non Ghostty projects: a search finds 3,186 `TEST_CASE` or `TEST_METHOD` entries in `src/vtbackend`, `src/vtpty` and `src/vtconformance`, with separate test files for the Sixel parser, Kitty graphics, ReGIS, search, images and color. Three parts matter to Terminus.
+Contour has the largest in repo test culture of the non Ghostty projects: a search finds 3,186 `TEST_CASE` or `TEST_METHOD` entries in `src/vtbackend`, `src/vtpty` and `src/vtconformance`, with separate test files for the Sixel parser, Kitty graphics, ReGIS, search, images and color. Three parts matter to Termoil.
 
 1. `src/vtconformance` runs vttest and esctest against a headless `vtbackend::Terminal` (https://github.com/contour-terminal/contour/tree/master/src/vtconformance ). The design document says esctest gates the build and vttest is judged by golden screen dumps. It records these rules:
    - The harness answers a vttest prompt when the bytes of the prompt arrive and captures a golden only at the "Push RETURN" banner, so a capture never happens in the middle of a drawn screen. A separate timer exists only to detect a program that has gone silent.
@@ -168,7 +168,7 @@ vtebench (https://github.com/alacritty/vtebench ) measures only how quickly a te
 
 ### Byte stream in, grid state out
 
-This is the dominant approach and the cheapest. The forms in use are: Alacritty's recording plus `grid.json` (full cell structure including attributes), xterm.js's `.in` plus `.text` (characters only, from xterm), WezTerm's `assert_visible_contents` (an array of expected lines), libvterm's text script (cursor, pen and screen callbacks) and Ghostty's inline Zig tests plus a binary snapshot format. Terminus should keep two grid forms: a plain text dump (one string per row, easy to review in a diff) and a full cell dump (character, width, foreground, background, underline colour, attribute flags, hyperlink, wrap flag) for the cases where attributes matter. A recording should be a raw byte file so one input can be replayed with every chunking of the bytes (whole, one byte at a time, random splits); Contour's note that a byte sequential parser must give the same screen wherever a read ends is the property to test.
+This is the dominant approach and the cheapest. The forms in use are: Alacritty's recording plus `grid.json` (full cell structure including attributes), xterm.js's `.in` plus `.text` (characters only, from xterm), WezTerm's `assert_visible_contents` (an array of expected lines), libvterm's text script (cursor, pen and screen callbacks) and Ghostty's inline Zig tests plus a binary snapshot format. Termoil should keep two grid forms: a plain text dump (one string per row, easy to review in a diff) and a full cell dump (character, width, foreground, background, underline colour, attribute flags, hyperlink, wrap flag) for the cases where attributes matter. A recording should be a raw byte file so one input can be replayed with every chunking of the bytes (whole, one byte at a time, random splits); Contour's note that a byte sequential parser must give the same screen wherever a read ends is the property to test.
 
 ### Screenshot comparison with tolerance
 
@@ -176,7 +176,7 @@ The pattern used by wgpu is the best documented. Its GPU test job uploads `*-act
 
 ### Rendering headless with wgpu
 
-The wgpu repository's own CI job (`.github/workflows/ci.yml`, job `gpu-test`) runs on windows-2022, macos-14 and ubuntu-24.04, with steps that install DXC, WARP, the Agility SDK, Mesa and the Vulkan SDK on Windows, the Vulkan SDK on macOS, and the Vulkan SDK and Mesa on Linux. It runs `cargo --locked xtask test --llvm-cov`, prints the GPU configurations it found at the end, and sets `LVP_POISON_MEMORY=true` on Linux, which the testing documentation says makes the software Vulkan driver fill new memory with non zero values to catch uninitialized memory. It uses `WGPU_DX12_COMPILER=dxc` on Windows. The workflow does not mention Xvfb. Source: https://raw.githubusercontent.com/gfx-rs/wgpu/trunk/.github/workflows/ci.yml . From this, the working set for Terminus is:
+The wgpu repository's own CI job (`.github/workflows/ci.yml`, job `gpu-test`) runs on windows-2022, macos-14 and ubuntu-24.04, with steps that install DXC, WARP, the Agility SDK, Mesa and the Vulkan SDK on Windows, the Vulkan SDK on macOS, and the Vulkan SDK and Mesa on Linux. It runs `cargo --locked xtask test --llvm-cov`, prints the GPU configurations it found at the end, and sets `LVP_POISON_MEMORY=true` on Linux, which the testing documentation says makes the software Vulkan driver fill new memory with non zero values to catch uninitialized memory. It uses `WGPU_DX12_COMPILER=dxc` on Windows. The workflow does not mention Xvfb. Source: https://raw.githubusercontent.com/gfx-rs/wgpu/trunk/.github/workflows/ci.yml . From this, the working set for Termoil is:
 
 - Linux: Mesa's software Vulkan driver (lavapipe) through wgpu's Vulkan backend. Rendering to an offscreen texture needs no display server.
 - Windows: WARP through the DX12 backend with a DXC shader compiler.
@@ -186,7 +186,7 @@ The wgpu repository's own CI job (`.github/workflows/ci.yml`, job `gpu-test`) ru
 
 ### Testing a PTY end to end
 
-Spawn the real program in a PTY, feed what it writes into an in process emulator, and assert on the emulator's grid. Rust crates in this space, from a search (not verified by running them): `portable-pty` from the WezTerm project (one API across Windows ConPTY, Unix PTY and SSH), the `vt100` crate as the emulator, `expectrl` and `rexpect` for matching on the byte stream, and newer wrappers `termlens`, `ttry` and `testty` that combine them. Terminus owns its emulator, so the Terminus core can be the screen model for these tests: a test harness spawns `sh` or `cmd` through ConPTY, types keystrokes as bytes through the same input encoder the GUI uses, waits for a marker that arrives in the byte stream, and reads the grid. The wait must be on a marker from the program and a long overall deadline, never on a short sleep, which is the lesson in Contour's document. kitty's `create_pty` and Contour's `TerminalHarness` are the two worked examples.
+Spawn the real program in a PTY, feed what it writes into an in process emulator, and assert on the emulator's grid. Rust crates in this space, from a search (not verified by running them): `portable-pty` from the WezTerm project (one API across Windows ConPTY, Unix PTY and SSH), the `vt100` crate as the emulator, `expectrl` and `rexpect` for matching on the byte stream, and newer wrappers `termlens`, `ttry` and `testty` that combine them. Termoil owns its emulator, so the Termoil core can be the screen model for these tests: a test harness spawns `sh` or `cmd` through ConPTY, types keystrokes as bytes through the same input encoder the GUI uses, waits for a marker that arrives in the byte stream, and reads the grid. The wait must be on a marker from the program and a long overall deadline, never on a short sleep, which is the lesson in Contour's document. kitty's `create_pty` and Contour's `TerminalHarness` are the two worked examples.
 
 ### CI on Windows, macOS and Linux
 
@@ -204,7 +204,7 @@ What Ghostty's targets check. The three targets only check that the code does no
 
 Differential testing. I found two published patterns. Termless (https://termless.dev/emulator-differences.html ) sends the same escape sequences to several emulator backends with xterm.js as the reference, compares screen text and scrollback, logs known divergences instead of failing, and lets the reference backend gate CI. The tuios blog post (https://tuios.dev/blog/the-fuzzer-that-found-nothing ) fuzzes with structured sequences and hostile parameters, checks invariants after every step, and replays emitted frames to confirm they redraw the same screen. I did not find a published harness that compares grids against VTE or libvterm directly. Differential testing against libvterm is practical because it is a small C library with `vterm-dump` in `bin/`, and against xterm through esctest's DECRQCRA readback.
 
-Recommendation for Terminus. Use `cargo fuzz` (https://rust-fuzz.github.io/book/cargo-fuzz.html ) for these targets: parser alone, parser plus screen, OSC and APC and DCS payloads with allocation limits, kitty graphics command parser, sixel decoder, key encoder, mouse encoder, resize and reflow with a random sequence of operations. Use `proptest` (https://proptest-rs.github.io/proptest/ ) for properties that need no oracle: the same bytes in any chunking give the same grid; the cursor is always inside the grid; every row has exactly the column count; wide characters never leave half a cell; resize to a new size and back keeps the text of the visible rows when no content was lost; scrollback never exceeds its limit; no sequence makes memory grow without bound.
+Recommendation for Termoil. Use `cargo fuzz` (https://rust-fuzz.github.io/book/cargo-fuzz.html ) for these targets: parser alone, parser plus screen, OSC and APC and DCS payloads with allocation limits, kitty graphics command parser, sixel decoder, key encoder, mouse encoder, resize and reflow with a random sequence of operations. Use `proptest` (https://proptest-rs.github.io/proptest/ ) for properties that need no oracle: the same bytes in any chunking give the same grid; the cursor is always inside the grid; every row has exactly the column count; wide characters never leave half a cell; resize to a new size and back keeps the text of the visible rows when no content was lost; scrollback never exceeds its limit; no sequence makes memory grow without bound.
 
 ---
 
@@ -220,7 +220,7 @@ Memory. Fill 100,000 and 1,000,000 lines of scrollback with typical text and wit
 
 Startup. Time from process launch to the first frame that shows the prompt, measured as Contour does with a probe reported by the GUI itself, with cold and warm cases kept apart.
 
-How emulators publish. foot commits dated tables in `doc/benchmark.md` with the machine, geometry, font and scrollback listed. kitty publishes a table with the hardware and a statement that the same font, font size and window size were used. Contour publishes a method document and a gate, and no numbers. Ghostty publishes rules for running benchmarks and comparing branches and no numbers. Terminus should publish the machine, the build flags, the number of samples, median and p99, and the commit.
+How emulators publish. foot commits dated tables in `doc/benchmark.md` with the machine, geometry, font and scrollback listed. kitty publishes a table with the hardware and a statement that the same font, font size and window size were used. Contour publishes a method document and a gate, and no numbers. Ghostty publishes rules for running benchmarks and comparing branches and no numbers. Termoil should publish the machine, the build flags, the number of samples, median and p99, and the commit.
 
 ---
 
@@ -248,7 +248,7 @@ IME and dead keys. I did not find an IME test corpus in any of the projects I re
 
 ---
 
-## Recommended test suite structure for Terminus
+## Recommended test suite structure for Termoil
 
 Counts are targets for the first release, chosen so each category can be written, reviewed and kept fast. The total is about 4,300 automated tests plus 14 fuzz targets and property tests, and a conformance run on top.
 
@@ -258,7 +258,7 @@ Counts are targets for the first release, chosen so each category can be written
 | 2. Control function behaviour, text script format | 1,400 | In house, in a libvterm style `.test` file format (text in, expected cursor and rows out), written by hand and by porting cases from libvterm (MIT). Covers cursor movement, margins, origin mode, wrap and the pending wrap flag, tab stops, insert and delete, erase, scrolling regions, alternate screen, save and restore, DECSTR and RIS, modes, character sets, double width and height lines, SGR, hyperlinks, titles, reports. |
 | 3. Recorded sessions, grid golden | 80 | In house recordings in Alacritty's layout (recording, size, config, expected grid), including real vim, tmux, htop, less, zsh and fish sessions, each replayed with whole, byte at a time and random chunking. Alacritty's recordings can be reused under Apache 2.0 as inputs, with expected grids regenerated and reviewed. |
 | 4. External conformance, run not vendored | esctest2 (559 test functions) plus vttest (18 scenarios) | esctest2 is GPL 2 and is fetched at a pinned commit in CI. vttest is BSD and is fetched or built in CI. Use Contour's method: esctest gates after the first pass, vttest through reviewed goldens, with a ratchet file of known failures that fails on new entries. |
-| 5. Unicode | 700 | GraphemeBreakTest (Unicode licence, check the header of the file), plus an in house width table test (EastAsianWidth, emoji presentation, variation selectors, ZWJ sequences, regional indicator pairs, combining marks at line start, wide character at the last column), as the width behaviour is a Terminus decision. |
+| 5. Unicode | 700 | GraphemeBreakTest (Unicode licence, check the header of the file), plus an in house width table test (EastAsianWidth, emoji presentation, variation selectors, ZWJ sequences, regional indicator pairs, combining marks at line start, wide character at the last column), as the width behaviour is a Termoil decision. |
 | 6. Input encoding | 700 | In house tables: legacy xterm keys with modifiers, application modes, kitty keyboard flag combinations, mouse encodings, bracketed paste, focus events. Cases cross checked against kitty, Ghostty and libvterm behaviour. |
 | 7. Scrollback, resize, reflow, selection, search | 300 | In house. Resize with wrapped lines, shrink to one column and grow back, resize on the alternate screen, selection across wrapped lines and wide cells, scrollback limit, clear scrollback. |
 | 8. Graphics | 180 | In house kitty graphics tests (transmit, put, delete, animation, placeholders, limits, malformed), a sixel decoder test set built on the CC0 vt340test images, and a smaller inline image set. |
@@ -272,7 +272,7 @@ Counts are targets for the first release, chosen so each category can be written
 
 Copy into the repository (the licence allows it, keep the licence file beside the data):
 - vtebench scenario scripts: Apache 2.0 or MIT.
-- libvterm test files: MIT. Rewrite expectations as Terminus needs, and keep a note of origin.
+- libvterm test files: MIT. Rewrite expectations as Termoil needs, and keep a note of origin.
 - Alacritty recordings used as input bytes: Apache 2.0. Regenerate and review the expected grids.
 - hackerb9 vt340test sixel images: CC0.
 - Unicode data files (GraphemeBreakTest.txt, BidiTest.txt, BidiCharacterTest.txt, EastAsianWidth.txt, emoji-test.txt): the Unicode licence, which permits redistribution with the notice. Pin the Unicode version and update on a schedule.
@@ -288,7 +288,7 @@ Check the licence before use: libsixel sample images, any Windows Terminal data 
 ### What to build in house
 
 1. The text script format and its runner (category 2). It should use plain text files, one expected output per step, and a flag to rewrite expectations that must be passed explicitly, following Contour's rule that blessing is a deliberate act.
-2. The recording tool: a flag in the Terminus binary that saves the PTY bytes, size and the resulting grid, as Alacritty's `--ref-test` does, plus a replay tool that applies every chunking.
+2. The recording tool: a flag in the Termoil binary that saves the PTY bytes, size and the resulting grid, as Alacritty's `--ref-test` does, plus a replay tool that applies every chunking.
 3. The conformance harness: runs esctest2 and vttest against the headless core under a PTY, with Contour's rules (answer on markers, a separate silence timer, goldens only at the hold prompt, a ratchet file of known failures with a reason on each line).
 4. A cell dump format and a diff tool that prints row and column of each difference, and an image comparison tool with per test tolerance and a difference image.
 5. A latency probe in the application, as Contour has, with an echo child, key times read on the GUI thread and the frame swap time, and a benchmark runner that publishes p50, p90, p99 and max.

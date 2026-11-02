@@ -1,0 +1,26 @@
+[package]
+name = "termoil-render"
+description = "Termoil rendering: the Renderer trait, the frame builder, and the vello GPU and CPU renderers."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+termoil-vt.workspace = true
+termoil-font.workspace = true
+vello_cpu = "0.3"
+vello_gpu = "0.3"
+vello_common = "0.3"
+glifo = "0.4"
+wgpu = "30"
+pollster = "0.4"
+png.workspace = true
+
+[dev-dependencies]
+termoil-vt.workspace = true
+base64.workspace = true
+
+[lints]
+workspace = true

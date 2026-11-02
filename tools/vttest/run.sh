@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# The vttest goldens (docs/TEST-SUITE.md section 5): drives vttest through terminus-headless with
+# The vttest goldens (docs/TEST-SUITE.md section 5): drives vttest through termoil-headless with
 # corpus/vttest/vttest.vtscript and compares every saved screen with corpus/vttest/<name>.txt.
 #
 # vttest is fetched at a pinned commit into a cache folder and built there; none of it is copied
-# into this repository. The goldens are Terminus's screens, each reviewed against what the vttest
+# into this repository. The goldens are Termoil's screens, each reviewed against what the vttest
 # screen says it should show (corpus/vttest/README.md).
 #
 #   tools/vttest/run.sh            run and compare with the goldens
-#   tools/vttest/run.sh --bless    rewrite the goldens from this run (TERMINUS_BLESS=1 does the same)
+#   tools/vttest/run.sh --bless    rewrite the goldens from this run (TERMOIL_BLESS=1 does the same)
 #
 # Linux and macOS (vttest needs a Unix pty). On Windows run it inside WSL.
 set -euo pipefail
@@ -28,14 +28,14 @@ if [ "$(git -C "$CACHE" rev-parse --short=7 HEAD)" != "$COMMIT" ] || [ ! -x "$CA
   (cd "$CACHE" && ./configure --quiet > /dev/null && make --quiet > /dev/null)
 fi
 
-cargo build --release --quiet --manifest-path "$ROOT/Cargo.toml" -p terminus-headless --target-dir "$TARGET_DIR"
-HEADLESS="$TARGET_DIR/release/terminus-headless"
+cargo build --release --quiet --manifest-path "$ROOT/Cargo.toml" -p termoil-headless --target-dir "$TARGET_DIR"
+HEADLESS="$TARGET_DIR/release/termoil-headless"
 
 rm -rf "$OUT/snaps"
 mkdir -p "$OUT/snaps"
 "$HEADLESS" run --cols 80 --rows 24 --script "$GOLDEN/vttest.vtscript" --snaps "$OUT/snaps" -- "$CACHE/vttest"
 
-if [ "${1:-}" = "--bless" ] || [ "${TERMINUS_BLESS:-0}" = "1" ]; then
+if [ "${1:-}" = "--bless" ] || [ "${TERMOIL_BLESS:-0}" = "1" ]; then
   cp "$OUT"/snaps/*.txt "$GOLDEN/"
   echo "blessed $(ls "$OUT/snaps" | wc -l) vttest screens into corpus/vttest"
   exit 0

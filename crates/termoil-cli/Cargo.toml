@@ -1,0 +1,28 @@
+[package]
+name = "termoil-cli"
+description = "Termoil command line: termoil +command against a running instance, and the MCP tool list."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "termoil"
+path = "src/main.rs"
+
+[dependencies]
+termoil-protocol.workspace = true
+termoil-app = { path = "../termoil-app" }
+serde_json.workspace = true
+
+[build-dependencies]
+embed-resource = "3"
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+termoil-protocol.workspace = true
+serde_json.workspace = true
+termoil-pty.workspace = true

@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Generates installer/windows/terminus.ico: a dark rounded square with a light ">_" glyph.
+Generates installer/windows/termoil.ico: a dark rounded square with a light ">_" glyph.
 
 .DESCRIPTION
 Draws the icon at 16, 32, 48, 64, 128 and 256 pixels with System.Drawing and packs the PNG images
@@ -10,7 +10,7 @@ param([string] $Output)
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 $root = Split-Path -Parent $PSScriptRoot
-if (-not $Output) { $Output = Join-Path $root 'installer/windows/terminus.ico' }
+if (-not $Output) { $Output = Join-Path $root 'installer/windows/termoil.ico' }
 
 <#
 .SYNOPSIS

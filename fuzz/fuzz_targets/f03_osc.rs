@@ -1,7 +1,7 @@
 //! F3: OSC payloads with each of the three terminators.
 #![no_main]
 use libfuzzer_sys::fuzz_target;
-use terminus_vt::{Terminal, TerminalConfig};
+use termoil_vt::{Terminal, TerminalConfig};
 #[path = "common.rs"]
 mod common;
 

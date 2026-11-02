@@ -15,7 +15,7 @@ const EAW_W: u8 = 4;
 const EAW_F: u8 = 5;
 const GBP_REGIONAL_INDICATOR: u8 = 6;
 
-/// Terminal width of one code point: 0, 1 or 2, following the rules in the Terminus design document.
+/// Terminal width of one code point: 0, 1 or 2, following the rules in the Termoil design document.
 pub fn width_of(cp: usize, u: &Ucd) -> u8 {
     if cp < 0x20 || (0x7F..=0x9F).contains(&cp) {
         return 0;

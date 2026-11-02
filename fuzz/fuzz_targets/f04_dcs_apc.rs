@@ -1,7 +1,7 @@
 //! F4: DCS and APC payloads (DECRQSS, XTGETTCAP, tmux passthrough, kitty graphics, sixel).
 #![no_main]
 use libfuzzer_sys::fuzz_target;
-use terminus_vt::{Terminal, TerminalConfig};
+use termoil_vt::{Terminal, TerminalConfig};
 #[path = "common.rs"]
 mod common;
 

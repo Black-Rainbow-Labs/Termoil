@@ -1,4 +1,4 @@
-//! Unicode table generator. `generate` writes `crates/terminus-vt/src/unicode/tables.rs` from the vendored data
+//! Unicode table generator. `generate` writes `crates/termoil-vt/src/unicode/tables.rs` from the vendored data
 //! files in `corpus/unicode/<version>/`; `check` exits non zero when the checked in file is stale.
 
 mod trie;
@@ -17,7 +17,7 @@ fn workspace_root() -> PathBuf {
 
 /// Path of the generated tables file.
 fn output_path() -> PathBuf {
-    workspace_root().join("crates/terminus-vt/src/unicode/tables.rs")
+    workspace_root().join("crates/termoil-vt/src/unicode/tables.rs")
 }
 
 /// Generates the tables source text in memory from the vendored data files.
@@ -66,6 +66,6 @@ mod tests {
     /// The checked in tables.rs must equal what the generator produces from the vendored data files.
     #[test]
     fn checked_in_tables_are_current() {
-        assert!(super::is_current(), "crates/terminus-vt/src/unicode/tables.rs is stale");
+        assert!(super::is_current(), "crates/termoil-vt/src/unicode/tables.rs is stale");
     }
 }

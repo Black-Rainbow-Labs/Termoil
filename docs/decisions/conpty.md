@@ -1,6 +1,6 @@
 # ConPTY: graphics passthrough, flags and throughput (spike S2)
 
-Measured on 2026-11-01 on this machine by the tests in `crates/terminus-pty/tests/` (`s2_graphics_passthrough.rs`,
+Measured on 2026-11-01 on this machine by the tests in `crates/termoil-pty/tests/` (`s2_graphics_passthrough.rs`,
 `e2_size.rs`, `w3_conpty_pair.rs`). The S2 tests assert the behaviour below and fail if a Windows update or a new
 bundled pair changes it.
 
@@ -16,7 +16,7 @@ bundled pair changes it.
 
 The bundled `conpty.dll` exports `ConptyCreatePseudoConsole`, `ConptyResizePseudoConsole` and `ConptyClosePseudoConsole`
 (also `ConptyClearPseudoConsole`, `ConptyShowHidePseudoConsole`, `ConptyReparentPseudoConsole`, `ConptyReleasePseudoConsole`,
-`ConptyPackPseudoConsole`, `ConptyCreatePseudoConsoleAsUser`), not the unprefixed kernel32 names. `terminus-pty` looks up the
+`ConptyPackPseudoConsole`, `ConptyCreatePseudoConsoleAsUser`), not the unprefixed kernel32 names. `termoil-pty` looks up the
 prefixed names first and the unprefixed ones second.
 
 ## Sequences sent and what arrived at the terminal side
@@ -48,7 +48,7 @@ None changed which sequences arrived.
   `PSEUDOCONSOLE_PASSTHROUGH_MODE` does not match this header: 0x8 is the grapheme width mode here, and it did nothing for APC or DCS
   on the inbox ConPTY.
 - The bundled ConPTY needs no flag to pass APC, DCS, OSC 133 and OSC 8 through.
-- `terminus-pty` requests 0x08 (grapheme width) on the bundled ConPTY only. The inbox ConPTY does not get a flag. It does not request
+- `termoil-pty` requests 0x08 (grapheme width) on the bundled ConPTY only. The inbox ConPTY does not get a flag. It does not request
   `INHERIT_CURSOR`, `RESIZE_QUIRK` or `WIN32_INPUT_MODE`.
 
 ## Start up sequences each ConPTY sends to the terminal
@@ -89,7 +89,7 @@ the bundled pair and 3.8 MiB/s with the inbox one.
 ## Behaviour notes for the implementation
 
 - A child created without `STARTF_USESTDHANDLES` and with invalid standard handles inherits the parent's redirected stdio instead of the
-  pseudoconsole. `terminus-pty` sets all three standard handles to `INVALID_HANDLE_VALUE` and the flag.
+  pseudoconsole. `termoil-pty` sets all three standard handles to `INVALID_HANDLE_VALUE` and the flag.
 - The child is put in a kill on close job object through `PROC_THREAD_ATTRIBUTE_JOB_LIST`, so `kill()` and dropping the `Pty` end a
   grandchild too (tested with a ping started by the child).
 - `ClosePseudoConsole` is called on its own thread, because it can block until the output pipe is drained.

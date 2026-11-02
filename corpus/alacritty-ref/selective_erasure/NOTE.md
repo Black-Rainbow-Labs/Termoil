@@ -1,1 +1,1 @@
-Terminus differs from Alacritty here on purpose. DECSCA (CSI 1 " q) protects cells, and DECSED and DECSEL (CSI ? J, CSI ? K) erase only unprotected cells, as the VT220 and xterm define. Alacritty does not implement protection, so it erases nothing. Expected grid: terminus.txt.
+Termoil differs from Alacritty here on purpose. DECSCA (CSI 1 " q) protects cells, and DECSED and DECSEL (CSI ? J, CSI ? K) erase only unprotected cells, as the VT220 and xterm define. Alacritty does not implement protection, so it erases nothing. Expected grid: termoil.txt.

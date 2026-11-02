@@ -2,9 +2,9 @@
 //! compressed round trip.
 #![no_main]
 use libfuzzer_sys::fuzz_target;
-use terminus_vt::cell::Cell;
-use terminus_vt::page::Page;
-use terminus_vt::style::{Color, Style};
+use termoil_vt::cell::Cell;
+use termoil_vt::page::Page;
+use termoil_vt::style::{Color, Style};
 
 fuzz_target!(|data: &[u8]| {
     let mut page = Page::new(8, 6);

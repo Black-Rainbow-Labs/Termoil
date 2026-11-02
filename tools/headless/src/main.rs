@@ -1,15 +1,15 @@
-//! `terminus-headless`: a terminal with no window.
+//! `termoil-headless`: a terminal with no window.
 //!
 //! ```text
-//! terminus-headless run [--cols N] [--rows N] [--record FILE] [--dump] [--script FILE --snaps DIR] -- PROGRAM [ARGS...]
-//! terminus-headless replay FILE [--cols N] [--rows N]
+//! termoil-headless run [--cols N] [--rows N] [--record FILE] [--dump] [--script FILE --snaps DIR] -- PROGRAM [ARGS...]
+//! termoil-headless replay FILE [--cols N] [--rows N]
 //! ```
 //!
 //! `--script` drives the program with a script of waits, input and screen snapshots (see
 //! `script.rs`); the snapshots are written to `--snaps`. The run fails when a wait times out.
 //!
 //! `run` spawns the program under a pseudoterminal of the given size, feeds everything it prints
-//! into `terminus-vt`, and writes the terminal's replies (device attributes, cursor reports,
+//! into `termoil-vt`, and writes the terminal's replies (device attributes, cursor reports,
 //! DECRQCRA checksums) back to it, so programs that query the terminal (esctest2, vttest, vim) work.
 //! `--record` saves the program's output bytes; `--dump` prints the final screen. `replay` feeds a
 //! recording whole, one byte at a time and in seeded random chunks, checks the three screens are
@@ -19,8 +19,8 @@ use std::io::{Read, Write};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-use terminus_pty::{Pty, PtySize, SpawnOptions};
-use terminus_vt::{Event, Terminal, TerminalConfig, dump};
+use termoil_pty::{Pty, PtySize, SpawnOptions};
+use termoil_vt::{Event, Terminal, TerminalConfig, dump};
 
 mod script;
 
@@ -70,7 +70,7 @@ fn parse_options(args: &[String]) -> Options {
 /// program's exit code.
 fn run(o: &Options) -> i32 {
     let Some((program, args)) = o.rest.split_first() else {
-        eprintln!("usage: terminus-headless run [--cols N] [--rows N] [--record FILE] [--dump] -- PROGRAM [ARGS...]");
+        eprintln!("usage: termoil-headless run [--cols N] [--rows N] [--record FILE] [--dump] -- PROGRAM [ARGS...]");
         return 2;
     };
     let size = PtySize { cols: o.cols, rows: o.rows, pixel_width: 0, pixel_height: 0 };
@@ -85,7 +85,7 @@ fn run(o: &Options) -> i32 {
     let mut pty = match Pty::spawn(&opts) {
         Ok(p) => p,
         Err(e) => {
-            eprintln!("terminus-headless: cannot start {program}: {e}");
+            eprintln!("termoil-headless: cannot start {program}: {e}");
             return 127;
         }
     };
@@ -108,7 +108,7 @@ fn run(o: &Options) -> i32 {
     let mut runner = match load_script(o) {
         Ok(r) => r,
         Err(e) => {
-            eprintln!("terminus-headless: {e}");
+            eprintln!("termoil-headless: {e}");
             let _ = pty.kill();
             return 2;
         }
@@ -144,7 +144,7 @@ fn drive_script(runner: &mut Option<script::Runner>, chunk: &[u8], term: &Termin
     match r.drive(&|| snapshot(term), writer) {
         Ok(()) => true,
         Err(e) => {
-            eprintln!("terminus-headless: script failed at {e}; the screen:");
+            eprintln!("termoil-headless: script failed at {e}; the screen:");
             for line in dump::text_dump(term) {
                 eprintln!("|{line}");
             }
@@ -185,8 +185,8 @@ fn pump(
             && let Ok(Some(status)) = pty.try_wait()
         {
             let code = match status {
-                terminus_pty::ExitStatus::Code(c) => c,
-                terminus_pty::ExitStatus::Signal(s) => 128 + s,
+                termoil_pty::ExitStatus::Code(c) => c,
+                termoil_pty::ExitStatus::Signal(s) => 128 + s,
             };
             exited = Some((code, Instant::now()));
         }
@@ -203,7 +203,7 @@ fn pump(
 /// The exit code once the program has ended: 1 when a script still had steps to run.
 fn script_code(runner: &Option<script::Runner>, code: i32) -> i32 {
     if runner.as_ref().is_some_and(|r| !r.done()) {
-        eprintln!("terminus-headless: the program ended before the script did");
+        eprintln!("termoil-headless: the program ended before the script did");
         return 1;
     }
     code
@@ -241,7 +241,7 @@ fn finish(o: &Options, term: &Terminal, recording: &[u8]) {
     if let Some(path) = &o.record
         && let Err(e) = std::fs::write(path, recording)
     {
-        eprintln!("terminus-headless: cannot write {path}: {e}");
+        eprintln!("termoil-headless: cannot write {path}: {e}");
     }
     if o.dump {
         for line in dump::text_dump(term) {
@@ -253,13 +253,13 @@ fn finish(o: &Options, term: &Terminal, recording: &[u8]) {
 /// Replays a recording three ways and prints the screen; exits 1 when the ways disagree.
 fn replay(o: &Options) -> i32 {
     let Some(path) = o.rest.first() else {
-        eprintln!("usage: terminus-headless replay FILE [--cols N] [--rows N]");
+        eprintln!("usage: termoil-headless replay FILE [--cols N] [--rows N]");
         return 2;
     };
     let bytes = match std::fs::read(path) {
         Ok(b) => b,
         Err(e) => {
-            eprintln!("terminus-headless: cannot read {path}: {e}");
+            eprintln!("termoil-headless: cannot read {path}: {e}");
             return 2;
         }
     };
@@ -316,20 +316,20 @@ fn main() {
             replay(&o)
         }
         _ => {
-            eprintln!("usage: terminus-headless run|replay ...");
+            eprintln!("usage: termoil-headless run|replay ...");
             2
         }
     };
     std::process::exit(code);
 }
 
-/// Reads a shared memory object for the kitty graphics protocol through `terminus_pty::shm`.
+/// Reads a shared memory object for the kitty graphics protocol through `termoil_pty::shm`.
 pub fn read_shared_memory(
     name: &str, offset: u64, size: u64, max_bytes: usize,
-) -> Result<Vec<u8>, terminus_vt::graphics::ShmError> {
-    use terminus_pty::shm::ShmError as Pty;
-    use terminus_vt::graphics::ShmError as Vt;
-    terminus_pty::shm::read_shared_memory(name, offset, size, max_bytes).map_err(|e| match e {
+) -> Result<Vec<u8>, termoil_vt::graphics::ShmError> {
+    use termoil_pty::shm::ShmError as Pty;
+    use termoil_vt::graphics::ShmError as Vt;
+    termoil_pty::shm::read_shared_memory(name, offset, size, max_bytes).map_err(|e| match e {
         Pty::Unreadable => Vt::Unreadable,
         Pty::TooLarge => Vt::TooLarge,
         Pty::Unsupported => Vt::Unsupported,

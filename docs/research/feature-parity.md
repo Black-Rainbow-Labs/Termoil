@@ -1,6 +1,6 @@
-# Terminus feature parity research
+# Termoil feature parity research
 
-Date of research: 2026-11-01. Subject: what Terminus must match to reach parity with Ghostty, Alacritty, WezTerm, Kitty and Windows Terminal, with Rio added as a sixth reference.
+Date of research: 2026-11-01. Subject: what Termoil must match to reach parity with Ghostty, Alacritty, WezTerm, Kitty and Windows Terminal, with Rio added as a sixth reference.
 
 ## How to read this report
 
@@ -91,7 +91,7 @@ Best at: small footprint, stability, a TOML config and availability on every maj
 Best at: a built in multiplexer with SSH and TLS domains, Lua configuration and API, serial ports, iTerm2, Kitty and sixel images, and Windows support including ConPTY. Gaps: the last tagged release is dated 2024-02-03 and only nightly builds are visible after that, so maintenance risk is real. I found no 2026 announcement either way. Memory use is higher than Alacritty by third party measures. Sources: https://wezterm.org/features.html, https://wezterm.org/shell-integration.html, https://api.github.com/repos/wezterm/wezterm/releases, https://wezterm.org/changelog.html.
 
 ### Kitty
-Best at: its own graphics protocol with animation and Unicode placeholders, the keyboard protocol it originated, seven window layouts, the remote control socket, kittens (ssh, icat, themes, hints, command palette, quick access terminal, panel), sessions, OSC 99 notifications, OSC 9;4 progress, the text sizing protocol and, from 0.49.0, official custom shaders. Gaps: no native Windows build; configuration has hundreds of options; the GPL 3 licence (u) matters if Terminus code is shared with it. A fix for a heap underflow in OSC 133 parsing in 0.49.2 shows where parser attack surface sits. Sources: https://sw.kovidgoyal.net/kitty/overview/, https://sw.kovidgoyal.net/kitty/changelog/, https://sw.kovidgoyal.net/kitty/desktop-notifications/, https://sw.kovidgoyal.net/kitty/keyboard-protocol/.
+Best at: its own graphics protocol with animation and Unicode placeholders, the keyboard protocol it originated, seven window layouts, the remote control socket, kittens (ssh, icat, themes, hints, command palette, quick access terminal, panel), sessions, OSC 99 notifications, OSC 9;4 progress, the text sizing protocol and, from 0.49.0, official custom shaders. Gaps: no native Windows build; configuration has hundreds of options; the GPL 3 licence (u) matters if Termoil code is shared with it. A fix for a heap underflow in OSC 133 parsing in 0.49.2 shows where parser attack surface sits. Sources: https://sw.kovidgoyal.net/kitty/overview/, https://sw.kovidgoyal.net/kitty/changelog/, https://sw.kovidgoyal.net/kitty/desktop-notifications/, https://sw.kovidgoyal.net/kitty/keyboard-protocol/.
 
 ### Windows Terminal
 Best at: Windows integration, ConPTY, tabs and panes, a settings UI and actions editor, a command palette, sixel since preview 1.22, grapheme clusters, OSC 133 marks since 1.18, window persistence and the Kitty keyboard protocol in 1.25. Gaps: Windows only; no Kitty graphics (u); no multiplexer; shell integration needs prompt changes in the shell. Sources: https://github.com/microsoft/terminal/discussions/20758, https://devblogs.microsoft.com/commandline/windows-terminal-preview-1-22-release, https://learn.microsoft.com/en-us/windows/terminal/tutorials/shell-integration, https://www.techzine.eu/news/applications/139337/windows-terminal-1-24-focuses-on-extensions-and-search/.
@@ -114,9 +114,9 @@ This ranking is my synthesis. Evidence came from Hacker News threads, comparison
 9. SSH and terminfo compatibility on remote hosts. https://news.ycombinator.com/item?id=47207248, https://sw.kovidgoyal.net/kitty/overview/
 10. Ligatures and font rendering quality. https://www.pistack.xyz/posts/2026-08-10-ghostty-vs-alacritty-vs-wezterm-terminal-emulator-guide/
 
-Latency evidence: no current published millisecond comparison that includes Ghostty was found. The only Typometer style numbers are old (a macOS camera test from 2022: kitty 29.2 ms, Terminal.app 45.4 ms, WezTerm 45.8 ms, Alacritty 57.9 ms) at https://dev.to/lkhrs/measuring-terminal-latency-26m7, plus kitty's own claim at https://sw.kovidgoyal.net/kitty/performance/. Terminus should run its own measurement.
+Latency evidence: no current published millisecond comparison that includes Ghostty was found. The only Typometer style numbers are old (a macOS camera test from 2022: kitty 29.2 ms, Terminal.app 45.4 ms, WezTerm 45.8 ms, Alacritty 57.9 ms) at https://dev.to/lkhrs/measuring-terminal-latency-26m7, plus kitty's own claim at https://sw.kovidgoyal.net/kitty/performance/. Termoil should run its own measurement.
 
-## 4. Specifications Terminus must implement
+## 4. Specifications Termoil must implement
 
 URLs marked (f) were fetched in this session. The rest are the canonical locations as I know them and were not re-fetched. The freedesktop terminal working group site refused automated access, so check the OSC 133 URL by hand.
 
@@ -150,5 +150,5 @@ Notes for the PRD:
 
 - Kitty keyboard flags are 1 disambiguate, 2 event types, 4 alternate keys, 8 all keys as escapes, 16 associated text. Alacritty, Ghostty, Rio, WezTerm and Windows Terminal all implement the protocol, as do Vim, Neovim, Helix, Emacs, fish and nushell (f, kitty keyboard protocol page).
 - DEC 2026 must answer DECRQM: 0 or no reply means unsupported, 1 set, 2 reset, 4 permanently reset (f, Contour gist).
-- Parser security matters. Kitty fixed a heap underflow in OSC 133 parsing in 0.49.2. Alacritty fixed an unbounded Kitty keyboard mode stack and unbounded per cell memory for zero width cells in 0.18.0 development (changelog links above). Terminus needs fixed bounds on every stack and per cell store.
+- Parser security matters. Kitty fixed a heap underflow in OSC 133 parsing in 0.49.2. Alacritty fixed an unbounded Kitty keyboard mode stack and unbounded per cell memory for zero width cells in 0.18.0 development (changelog links above). Termoil needs fixed bounds on every stack and per cell store.
 - Windows Terminal 1.25 fixed a bug where DECSTR cleared an uploaded DRCS soft font. DRCS is a lower priority item.

@@ -1,7 +1,7 @@
 //! Shared checks for the fuzz targets: the invariants from docs/TEST-SUITE.md section 8.
 
-use terminus_vt::Terminal;
-use terminus_vt::cell::Wide;
+use termoil_vt::Terminal;
+use termoil_vt::cell::Wide;
 
 /// Panics if any invariant of the terminal's grid is broken.
 #[allow(dead_code)]

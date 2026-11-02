@@ -1,7 +1,7 @@
 //! F1: the parser alone, SIMD and scalar paths, which must agree.
 #![no_main]
 use libfuzzer_sys::fuzz_target;
-use terminus_vt::parser::{Action, Parser};
+use termoil_vt::parser::{Action, Parser};
 
 fuzz_target!(|data: &[u8]| {
     let run = |simd: bool| {

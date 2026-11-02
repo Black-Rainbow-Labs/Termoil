@@ -1,0 +1,18 @@
+[package]
+name = "termoil-font"
+description = "Termoil fonts: discovery, fallback, shaping, rasterising and procedurally drawn sprite glyphs."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+fontique = "0.12"
+harfrust = "0.12"
+skrifa = "0.44"
+kurbo = "0.13"
+unicode-script = "0.5"
+
+[lints]
+workspace = true

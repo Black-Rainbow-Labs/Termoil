@@ -20,7 +20,7 @@
         "required": [],
         "type": "object"
       },
-      "name": "terminus_new_window"
+      "name": "termoil_new_window"
     },
     {
       "description": "Opens a new tab in the focused window, in the given directory or the focused pane's.",
@@ -42,7 +42,7 @@
         "required": [],
         "type": "object"
       },
-      "name": "terminus_new_tab"
+      "name": "termoil_new_tab"
     },
     {
       "description": "Splits the pane, starting a new shell in the new half.",
@@ -70,7 +70,7 @@
         "required": [],
         "type": "object"
       },
-      "name": "terminus_split"
+      "name": "termoil_split"
     },
     {
       "description": "Closes a pane, ending its shell; the last pane closes its tab and window.",
@@ -84,7 +84,7 @@
         "required": [],
         "type": "object"
       },
-      "name": "terminus_close"
+      "name": "termoil_close"
     },
     {
       "description": "Focuses a pane, or the neighbouring pane in a direction.",
@@ -108,7 +108,7 @@
         "required": [],
         "type": "object"
       },
-      "name": "terminus_focus"
+      "name": "termoil_focus"
     },
     {
       "description": "Closes the tab holding a pane, ending every shell in it; the last tab closes its window.",
@@ -122,7 +122,7 @@
         "required": [],
         "type": "object"
       },
-      "name": "terminus_close_tab"
+      "name": "termoil_close_tab"
     },
     {
       "description": "Moves the tab holding a pane into a new window of its own.",
@@ -136,7 +136,7 @@
         "required": [],
         "type": "object"
       },
-      "name": "terminus_move_tab_to_window"
+      "name": "termoil_move_tab_to_window"
     },
     {
       "description": "Moves the divider next to a pane in a direction, growing or shrinking the pane.",
@@ -166,7 +166,7 @@
         ],
         "type": "object"
       },
-      "name": "terminus_resize_split"
+      "name": "termoil_resize_split"
     },
     {
       "description": "Types text into a pane's program, as if pasted without bracketing.",
@@ -186,7 +186,7 @@
         ],
         "type": "object"
       },
-      "name": "terminus_send_text"
+      "name": "termoil_send_text"
     },
     {
       "description": "Presses a key in a pane, encoded for the program's keyboard mode.",
@@ -206,7 +206,7 @@
         ],
         "type": "object"
       },
-      "name": "terminus_send_key"
+      "name": "termoil_send_key"
     },
     {
       "description": "Returns the visible screen of a pane as text, or as JSON cells with styles.",
@@ -224,7 +224,7 @@
         "required": [],
         "type": "object"
       },
-      "name": "terminus_screen"
+      "name": "termoil_screen"
     },
     {
       "description": "Returns the last lines of a pane's scrollback and screen as text.",
@@ -242,7 +242,7 @@
         "required": [],
         "type": "object"
       },
-      "name": "terminus_scrollback"
+      "name": "termoil_scrollback"
     },
     {
       "description": "Waits until the command running in a pane finishes and returns its exit code.",
@@ -260,7 +260,7 @@
         "required": [],
         "type": "object"
       },
-      "name": "terminus_wait_prompt"
+      "name": "termoil_wait_prompt"
     },
     {
       "description": "Lists windows, tabs and panes with their ids, titles and working directories.",
@@ -269,7 +269,7 @@
         "required": [],
         "type": "object"
       },
-      "name": "terminus_list"
+      "name": "termoil_list"
     },
     {
       "description": "Resizes a pane's window to a number of columns and rows.",
@@ -294,7 +294,7 @@
         ],
         "type": "object"
       },
-      "name": "terminus_resize"
+      "name": "termoil_resize"
     },
     {
       "description": "Sets the title of a pane's tab.",
@@ -314,7 +314,7 @@
         ],
         "type": "object"
       },
-      "name": "terminus_set_title"
+      "name": "termoil_set_title"
     },
     {
       "description": "Runs any action by name with JSON arguments, the way a keybinding does.",
@@ -334,7 +334,7 @@
         ],
         "type": "object"
       },
-      "name": "terminus_run_action"
+      "name": "termoil_run_action"
     },
     {
       "description": "Prints the effective configuration, or the documented default file.",
@@ -348,7 +348,7 @@
         "required": [],
         "type": "object"
       },
-      "name": "terminus_show_config"
+      "name": "termoil_show_config"
     },
     {
       "description": "Reads the configuration file again and applies it.",
@@ -357,7 +357,7 @@
         "required": [],
         "type": "object"
       },
-      "name": "terminus_reload_config"
+      "name": "termoil_reload_config"
     },
     {
       "description": "Switches to a bundled colour theme and writes it to the configuration file.",
@@ -373,7 +373,7 @@
         ],
         "type": "object"
       },
-      "name": "terminus_set_theme"
+      "name": "termoil_set_theme"
     },
     {
       "description": "Prints every bundled theme name, the themes Unluminous ships first, and the theme in effect.",
@@ -382,7 +382,7 @@
         "required": [],
         "type": "object"
       },
-      "name": "terminus_list_themes"
+      "name": "termoil_list_themes"
     },
     {
       "description": "Makes a key table active: keys are looked up in its bindings first until it is deactivated.",
@@ -402,7 +402,7 @@
         ],
         "type": "object"
       },
-      "name": "terminus_activate_key_table"
+      "name": "termoil_activate_key_table"
     },
     {
       "description": "Deactivates the key table that was activated last.",
@@ -411,7 +411,7 @@
         "required": [],
         "type": "object"
       },
-      "name": "terminus_deactivate_key_table"
+      "name": "termoil_deactivate_key_table"
     },
     {
       "description": "Deactivates every active key table.",
@@ -420,7 +420,7 @@
         "required": [],
         "type": "object"
       },
-      "name": "terminus_deactivate_all_key_tables"
+      "name": "termoil_deactivate_all_key_tables"
     },
     {
       "description": "Installs the shell integration scripts and hooks them into the named shells' startup files.",
@@ -438,7 +438,7 @@
         "required": [],
         "type": "object"
       },
-      "name": "terminus_install_shell_integration"
+      "name": "termoil_install_shell_integration"
     },
     {
       "description": "Prints the version and build date.",
@@ -447,7 +447,7 @@
         "required": [],
         "type": "object"
       },
-      "name": "terminus_version"
+      "name": "termoil_version"
     },
     {
       "description": "Erases the scrollback of the pane, keeping the screen.",
@@ -461,7 +461,7 @@
         "required": [],
         "type": "object"
       },
-      "name": "terminus_clear_scrollback"
+      "name": "termoil_clear_scrollback"
     },
     {
       "description": "Opens the search bar, or searches for a pattern and selects the first match.",
@@ -483,7 +483,7 @@
         "required": [],
         "type": "object"
       },
-      "name": "terminus_search"
+      "name": "termoil_search"
     },
     {
       "description": "Shows or hides the quick terminal that slides in from a screen edge.",
@@ -492,7 +492,7 @@
         "required": [],
         "type": "object"
       },
-      "name": "terminus_quick_terminal"
+      "name": "termoil_quick_terminal"
     },
     {
       "description": "Writes the open windows, tabs, splits, working directories and recent output to the session file now.",
@@ -506,7 +506,7 @@
         "required": [],
         "type": "object"
       },
-      "name": "terminus_save_session"
+      "name": "termoil_save_session"
     }
   ]
 }

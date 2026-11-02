@@ -1,7 +1,7 @@
 //! F5: the kitty graphics command parser and store.
 #![no_main]
 use libfuzzer_sys::fuzz_target;
-use terminus_vt::graphics::{GraphicsContext, GraphicsStore, parse_kitty_command};
+use termoil_vt::graphics::{GraphicsContext, GraphicsStore, parse_kitty_command};
 
 fuzz_target!(|data: &[u8]| {
     let _ = parse_kitty_command(data);

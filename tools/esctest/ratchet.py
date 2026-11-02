@@ -73,7 +73,7 @@ def gate_lines(pass_set, passed):
 
 def write_ratchet(path, failed, known):
     """Writes the ratchet file for `failed`, keeping existing reasons."""
-    header = "# esctest2 tests Terminus fails today, one per line with the reason. Maintained by\n# tools/esctest/run.sh: it may only shrink. Regenerate with TERMINUS_BLESS=1.\n"
+    header = "# esctest2 tests Termoil fails today, one per line with the reason. Maintained by\n# tools/esctest/run.sh: it may only shrink. Regenerate with TERMOIL_BLESS=1.\n"
     with open(path, "w", encoding="utf-8", newline="\n") as f:
         f.write(header)
         for name in sorted(failed):

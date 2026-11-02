@@ -1,8 +1,8 @@
 # vttest goldens
 
 vttest (Thomas Dickey, fetched from `vttest-snapshots` at commit 0229d71, label t20251205, vttest 2.7) is
-driven through `terminus-headless run --script` by `tools/vttest/run.sh`. None of vttest is copied here. This
-folder holds Terminus's own files:
+driven through `termoil-headless run --script` by `tools/vttest/run.sh`. None of vttest is copied here. This
+folder holds Termoil's own files:
 
 - `vttest.vtscript`: the driver. It enters menus 1, 2 and 8 from the main menu and saves every screen that
   stops at "Push <RETURN>".
@@ -11,7 +11,7 @@ folder holds Terminus's own files:
   compared too.
 
 The run fails when a screen differs from its golden, when a golden has no screen, and when a screen has no
-golden. Goldens change only with `TERMINUS_BLESS=1` (or `--bless`), and the commit says which screen changed
+golden. Goldens change only with `TERMOIL_BLESS=1` (or `--bless`), and the commit says which screen changed
 and why.
 
 ## Review
@@ -38,14 +38,14 @@ Every golden was read against what its vttest screen says it should show, on 202
 ## Not covered by goldens
 
 These vttest menus need a person or are documented as unsupported. Run them by hand with the installed build
-before a release (`vttest` inside Terminus) and record the result in the release notes.
+before a release (`vttest` inside Termoil) and record the result in the release notes.
 
 - Menu 3, character sets: the DEC special graphics line drawing appears in `screen-15`; the national
   replacement character sets are checked by hand.
-- Menu 4, double size characters (DECDHL, DECDWL): Terminus draws them at single size. Documented
+- Menu 4, double size characters (DECDHL, DECDWL): Termoil draws them at single size. Documented
   unsupported in 1.0.
 - Menu 5, keyboard: needs keys pressed by a person; the key encoding is covered by the input tables in
-  `crates/terminus-input`.
+  `crates/termoil-input`.
 - Menu 6, terminal reports: covered by `corpus/vt/reports.test` and esctest2.
 - Menu 7, VT52 mode: documented unsupported.
 - Menus 9 to 11: checked by hand; esctest2 covers most of what menu 11 tests.

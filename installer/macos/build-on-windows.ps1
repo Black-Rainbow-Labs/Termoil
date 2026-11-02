@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Builds, signs and notarises Terminus.app and packages it as a .dmg, all on the Windows machine.
+    Builds, signs and notarises Termoil.app and packages it as a .dmg, all on the Windows machine.
 
 .DESCRIPTION
     The same arrangement as Unluminous's installer/macos/build-on-windows.ps1, which this follows. Every
@@ -11,24 +11,24 @@
         notarytool  -> rcodesign notary-submit
         stapler     -> rcodesign staple
         hdiutil     -> installer/macos/make-dmg.sh in WSL (mkfs.hfsplus, hfsplus and dmg)
-        iconutil    -> not needed; installer/macos/terminus.icns is committed (tools/make-icns.ps1)
+        iconutil    -> not needed; installer/macos/termoil.icns is committed (tools/make-icns.ps1)
 
     The steps:
       1. cargo zigbuild for aarch64-apple-darwin and x86_64-apple-darwin, at the same time.
-      2. A universal binary for each of terminus-gui and terminus.
-      3. Terminus.app: terminus-gui is the main executable, terminus sits beside it in Contents/MacOS,
+      2. A universal binary for each of termoil-gui and termoil.
+      3. Termoil.app: termoil-gui is the main executable, termoil sits beside it in Contents/MacOS,
          the shell-integration folder is in Contents/Resources, and Info.plist has the version.
-      4. Sign `terminus`, then the bundle, with the Developer ID and the hardened runtime.
+      4. Sign `termoil`, then the bundle, with the Developer ID and the hardened runtime.
       5. Zip the bundle, submit the zip to Apple, wait, and staple the ticket to the bundle.
       6. Write the .dmg holding the stapled bundle, sign it, notarise it and staple it.
-      The result is installer/dist/terminus-<version>-macos-universal.dmg.
+      The result is installer/dist/termoil-<version>-macos-universal.dmg.
 
     WHERE THE INGREDIENTS ARE, all of them outside this repository and none of them printed:
       * rcodesign, cargo-zigbuild and zig: tools/cross/bin here when present, otherwise the copy
         Unluminous fetched at C:\jason\dev\unluminous\tools\cross\bin (override with
-        $env:TERMINUS_CROSS_BIN). tools/cross/fetch-toolchain.ps1 in the Unluminous checkout fetches them.
+        $env:TERMOIL_CROSS_BIN). tools/cross/fetch-toolchain.ps1 in the Unluminous checkout fetches them.
       * The Developer ID key, its certificate and the notary key: installer/macos/notarize.env here when
-        present, otherwise the one in the Unluminous checkout (override with $env:TERMINUS_MACOS_ENV_FILE).
+        present, otherwise the one in the Unluminous checkout (override with $env:TERMOIL_MACOS_ENV_FILE).
         It holds paths to files sealed with DPAPI under this Windows account, and SDKROOT.
       * The macOS SDK: -Sdk, then $env:SDKROOT (set by notarize.env), then tools/cross/sdk/MacOSX.sdk.
       * The dmg tools in WSL: installer/macos/fetch-dmg-tools.ps1 installs them once.
@@ -71,13 +71,13 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $dist = Join-Path $repo 'installer/dist'
 $stage = Join-Path $dist 'macos-stage'
-$app = Join-Path $stage 'Terminus.app'
+$app = Join-Path $stage 'Termoil.app'
 $unluminous = 'C:\jason\dev\unluminous'
 $appleTargets = @('aarch64-apple-darwin', 'x86_64-apple-darwin')
 # The two programs: the Cargo package, the binary name, and the file name inside Contents/MacOS.
 $programs = @(
-    @{ Package = 'terminus-app'; Bin = 'terminus-gui' },
-    @{ Package = 'terminus-cli'; Bin = 'terminus' }
+    @{ Package = 'termoil-app'; Bin = 'termoil-gui' },
+    @{ Package = 'termoil-cli'; Bin = 'termoil' }
 )
 
 <#
@@ -98,7 +98,7 @@ function Find-FirstPath([string[]] $Candidates) {
     The folder holding rcodesign.exe, cargo-zigbuild.exe and zig, or $null when none has them.
 #>
 function Find-CrossBin {
-    foreach ($folder in @($env:TERMINUS_CROSS_BIN, (Join-Path $repo 'tools/cross/bin'), (Join-Path $unluminous 'tools/cross/bin'))) {
+    foreach ($folder in @($env:TERMOIL_CROSS_BIN, (Join-Path $repo 'tools/cross/bin'), (Join-Path $unluminous 'tools/cross/bin'))) {
         if ($folder -and (Test-Path -LiteralPath (Join-Path $folder 'rcodesign.exe')) -and (Test-Path -LiteralPath (Join-Path $folder 'cargo-zigbuild.exe'))) { return $folder }
     }
     return $null
@@ -210,7 +210,7 @@ function Get-AppleTargetDir([string] $Target) {
 function Start-AppleBuild($Build, [string] $SdkRoot) {
     $target = $Build.Target
     $arguments = @('zigbuild', '--manifest-path', (Join-Path $repo 'Cargo.toml'), '--release', '--locked', '--target', $target,
-        '-p', 'terminus-app', '--bin', 'terminus-gui', '-p', 'terminus-cli', '--bin', 'terminus')
+        '-p', 'termoil-app', '--bin', 'termoil-gui', '-p', 'termoil-cli', '--bin', 'termoil')
     $line = '"' + (Join-Path $script:crossBin 'cargo-zigbuild.exe') + '" ' + (($arguments | ForEach-Object { '"' + $_ + '"' }) -join ' ') + ' > "' + $Build.Log + '" 2>&1'
     $start = [System.Diagnostics.ProcessStartInfo]::new($env:ComSpec)
     $start.Arguments = '/d /s /c "' + $line + '"'
@@ -307,7 +307,7 @@ function New-UniversalBinary([string] $Name, [string] $Into) {
 
 <#
 .SYNOPSIS
-    Assembles Terminus.app: the two programs, the icon, the shell integration scripts, Info.plist and PkgInfo.
+    Assembles Termoil.app: the two programs, the icon, the shell integration scripts, Info.plist and PkgInfo.
 .PARAMETER Version
     The version written into Info.plist.
 #>
@@ -318,7 +318,7 @@ function New-AppBundle([string] $Version) {
     New-Item -ItemType Directory -Force -Path $macos, $resources | Out-Null
     foreach ($program in $programs) { New-UniversalBinary -Name $program.Bin -Into $macos }
 
-    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'terminus.icns') -Destination (Join-Path $resources 'Terminus.icns') -Force
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'termoil.icns') -Destination (Join-Path $resources 'Termoil.icns') -Force
     # The app finds this folder at Resources/shell-integration (shell_integration::source_dir_from).
     Copy-Item -LiteralPath (Join-Path $repo 'shell-integration') -Destination (Join-Path $resources 'shell-integration') -Recurse -Force
 
@@ -348,7 +348,7 @@ function Unprotect-Secret([string] $Path) {
     Returns a folder for the short lived files that hold unsealed keys: the RAM disk when there is one.
 #>
 function Get-SecretScratch {
-    $scratch = if (Test-Path -LiteralPath 'R:\') { 'R:\terminus-release' } else { Join-Path $env:TEMP 'terminus-release' }
+    $scratch = if (Test-Path -LiteralPath 'R:\') { 'R:\termoil-release' } else { Join-Path $env:TEMP 'termoil-release' }
     New-Item -ItemType Directory -Force -Path $scratch | Out-Null
     return $scratch
 }
@@ -364,7 +364,7 @@ function New-SigningSession {
     if ($SelfSigned) {
         $pem = Join-Path $scratch "selfsigned-$stamp.pem"
         Invoke-Rcodesign -Quiet -Arguments @('generate-self-signed-certificate', '--algorithm', 'rsa', '--profile', 'developer-id-application',
-            '--team-id', 'SELFSIGNED', '--person-name', 'Terminus self-signed build', '--validity-days', '30', '--pem-unified-file', $pem)
+            '--team-id', 'SELFSIGNED', '--person-name', 'Termoil self-signed build', '--validity-days', '30', '--pem-unified-file', $pem)
         return [pscustomobject]@{ Arguments = @('--pem-file', $pem); Scratch = @($pem); Kind = 'self-signed' }
     }
     if ($env:CODESIGN_KEY_SEALED -and $env:CODESIGN_CERT) {
@@ -393,15 +393,15 @@ function Remove-SigningSession($Session) {
 
 <#
 .SYNOPSIS
-    Signs the nested terminus program, then the bundle, with the hardened runtime, and reads the results back.
+    Signs the nested termoil program, then the bundle, with the hardened runtime, and reads the results back.
 .PARAMETER Session
     The signing identity's rcodesign arguments.
 #>
 function Invoke-BundleSigning($Session) {
-    # terminus is signed first: a second Mach-O in Contents/MacOS is a nested entity, and an unsigned one
+    # termoil is signed first: a second Mach-O in Contents/MacOS is a nested entity, and an unsigned one
     # inside a signed bundle makes verification fail on a bundle that looked fine.
     Invoke-Rcodesign -Quiet -Arguments (@('sign') + $Session.Arguments + @(
-            '--binary-identifier', 'terminus', '--code-signature-flags', 'runtime', (Join-Path $app 'Contents/MacOS/terminus')))
+            '--binary-identifier', 'termoil', '--code-signature-flags', 'runtime', (Join-Path $app 'Contents/MacOS/termoil')))
     Invoke-Rcodesign -Quiet -Arguments (@('sign') + $Session.Arguments + @('--code-signature-flags', 'runtime', $app))
     $info = & $script:rcodesign print-signature-info $app 2>&1
     if ($LASTEXITCODE -ne 0) { throw 'the signed bundle has no readable signature' }
@@ -441,16 +441,16 @@ function Set-ZipUnixModes([string] $Path, [string] $ExecutablePrefix) {
 
 <#
 .SYNOPSIS
-    Zips the bundle, with Terminus.app as the top entry, for the notary, and returns the path.
+    Zips the bundle, with Termoil.app as the top entry, for the notary, and returns the path.
 .PARAMETER Version
     The version in the file's name.
 #>
 function New-BundleZip([string] $Version) {
-    $zip = Join-Path $dist "terminus-$Version-macos-bundle.zip"
+    $zip = Join-Path $dist "termoil-$Version-macos-bundle.zip"
     if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force -Confirm:$false }
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     [System.IO.Compression.ZipFile]::CreateFromDirectory($app, $zip, [System.IO.Compression.CompressionLevel]::Optimal, $true)
-    Set-ZipUnixModes -Path $zip -ExecutablePrefix 'Terminus.app/Contents/MacOS/'
+    Set-ZipUnixModes -Path $zip -ExecutablePrefix 'Termoil.app/Contents/MacOS/'
     return $zip
 }
 
@@ -509,8 +509,8 @@ function ConvertTo-WslPath([string] $Path) {
     The .dmg to write.
 #>
 function New-DiskImage([string] $Output) {
-    $arguments = @('-e', 'bash', (ConvertTo-WslPath (Join-Path $PSScriptRoot 'make-dmg.sh')), (ConvertTo-WslPath $stage), (ConvertTo-WslPath $Output), 'Terminus')
-    $arguments += $programs | ForEach-Object { "Terminus.app/Contents/MacOS/$($_.Bin)" }
+    $arguments = @('-e', 'bash', (ConvertTo-WslPath (Join-Path $PSScriptRoot 'make-dmg.sh')), (ConvertTo-WslPath $stage), (ConvertTo-WslPath $Output), 'Termoil')
+    $arguments += $programs | ForEach-Object { "Termoil.app/Contents/MacOS/$($_.Bin)" }
     & wsl.exe @arguments
     if ($LASTEXITCODE -ne 0) { throw "make-dmg.sh failed with $LASTEXITCODE" }
     if (-not (Test-Path -LiteralPath $Output)) { throw "make-dmg.sh did not write $Output" }
@@ -534,7 +534,7 @@ function Complete-BundleNotarisation([string] $Version) {
 # The build itself.
 # ---------------------------------------------------------------------------
 
-foreach ($file in @($env:TERMINUS_MACOS_ENV_FILE, (Join-Path $PSScriptRoot 'notarize.env'), (Join-Path $unluminous 'installer/macos/notarize.env'))) {
+foreach ($file in @($env:TERMOIL_MACOS_ENV_FILE, (Join-Path $PSScriptRoot 'notarize.env'), (Join-Path $unluminous 'installer/macos/notarize.env'))) {
     if ($file -and (Test-Path -LiteralPath $file)) { Import-EnvFile $file }
 }
 $script:crossBin = Find-CrossBin
@@ -553,11 +553,11 @@ if ($SelfSigned) { $problems = $problems | Where-Object { $_ -notmatch 'Develope
 if ($SkipBuild) { $problems = $problems | Where-Object { $_ -notmatch 'SDK' } }
 if (@($problems).Count -gt 0) { throw "a macOS build cannot run here: $(@($problems) -join '; ')" }
 $sdkRoot = if ($SkipBuild) { '' } else { Resolve-Sdk }
-Write-Host "Terminus $Version - macOS, built on Windows"
+Write-Host "Termoil $Version - macOS, built on Windows"
 if ($sdkRoot) { Write-Host "  SDK: $sdkRoot" }
 if (-not $SkipBuild) { Build-AppleTargets -SdkRoot $sdkRoot }
 
-Write-Host '==> Terminus.app'
+Write-Host '==> Termoil.app'
 New-AppBundle -Version $Version
 Write-Host "  $app"
 
@@ -570,7 +570,7 @@ try {
         if ($SelfSigned) { throw 'a self-signed certificate cannot be notarised' }
         Complete-BundleNotarisation -Version $Version
     }
-    $dmg = Join-Path $dist "terminus-$Version-macos-universal.dmg"
+    $dmg = Join-Path $dist "termoil-$Version-macos-universal.dmg"
     Write-Host '==> dmg'
     New-DiskImage -Output $dmg
     Invoke-Rcodesign -Quiet -Arguments (@('sign') + $session.Arguments + @($dmg))

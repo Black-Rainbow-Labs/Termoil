@@ -1,7 +1,7 @@
 # Renderer: vello_gpu with the glyph atlas, CPU first at start up (M2, TDD question 1)
 
-Measured on 2026-11-01 on this machine. Every number below is from `tools/bench` (R4, `terminus-bench render`),
-`terminus-gui --bench-latency` (P2) and the start up probe in `terminus-gui` (P4), on release builds. The JSON rows are in
+Measured on 2026-11-01 on this machine. Every number below is from `tools/bench` (R4, `termoil-bench render`),
+`termoil-gui --bench-latency` (P2) and the start up probe in `termoil-gui` (P4), on release builds. The JSON rows are in
 `_agent_output/bench/` (`r4.jsonl`, `p2-run*.json`, `p4-runs.jsonl`).
 
 ## Machine
@@ -40,11 +40,11 @@ a wide margin, so the atlas is always on. The margin is about one millisecond at
 the CPU, not on the GPU.
 
 **Gate: p99 under 16 ms on an integrated GPU passes** (10.0 to 10.4 ms). This was measured on the desktop CPU's integrated
-GPU with `TERMINUS_GPU_POWER=low`, not on a laptop; a laptop part is slower and remains to be measured on one.
+GPU with `TERMOIL_GPU_POWER=low`, not on a laptop; a laptop part is slower and remains to be measured on one.
 
 ## P2: input latency
 
-`terminus-gui --bench-latency <keys> <out.json>`: the pane runs `terminus --echo-child`, which prints a prompt line and
+`termoil-gui --bench-latency <keys> <out.json>`: the pane runs `termoil --echo-child`, which prints a prompt line and
 echoes every byte it reads, wrapping at 60 columns. Keys are injected on the UI thread 25 to 35 ms apart through the same
 path a typed key takes (normaliser, bindings, encoder, PTY). Each sample is the time from injection to the end of the first
 paint whose frame shows the echoed character. Presents are unpaced (immediate mode) for the benchmark.
@@ -71,7 +71,7 @@ P2 with the GPU renderer in use, the renderer named in each JSON row:
 | 1 | `vello_gpu` on the RTX 5090 (Vulkan) | 800 | 1.77 ms | 2.51 ms | 6.39 ms | 118.48 ms |
 | 2 | `vello_gpu` on the RTX 5090 (Vulkan) | 800 | 1.91 ms | 2.73 ms | 7.55 ms | 13.64 ms |
 | 3 | `vello_gpu` on the RTX 5090 (Vulkan) | 800 | 1.93 ms | 2.71 ms | 7.54 ms | 52.53 ms |
-| GL | `vello_gpu` on the RTX 5090 (OpenGL, `TERMINUS_GPU_BACKEND=gl`) | 200 | 3.83 ms | 6.22 ms | 31.71 ms | 576.35 ms |
+| GL | `vello_gpu` on the RTX 5090 (OpenGL, `TERMOIL_GPU_BACKEND=gl`) | 200 | 3.83 ms | 6.22 ms | 31.71 ms | 576.35 ms |
 
 The gate still passes on the primary backend. OpenGL is the fallback when no primary backend has an adapter
 (`GpuContext::for_display`), and its p99 is over the gate on this machine; it is there so a machine without Vulkan, DX12 or
@@ -79,7 +79,7 @@ Metal still gets a GPU renderer, not for speed.
 
 ## P4: start up
 
-`TERMINUS_STARTUP_PROBE=<file>` makes `terminus-gui` write the time from the start of `main` to the first frame that shows
+`TERMOIL_STARTUP_PROBE=<file>` makes `termoil-gui` write the time from the start of `main` to the first frame that shows
 the shell's output, with the start up phases. Twenty warm runs with `cmd.exe` as the shell:
 
 | Phase (median of 20, ms from the start of `main`) | Time |
@@ -106,7 +106,7 @@ starts the GPU device and builds `vello_gpu` for the window; the window switches
 Every later window shares the same device, so only the first pays for it. Before this change the first frame came at
 1.6 to 2.2 s.
 
-**Gate: under 100 ms warm on Windows does not pass as written.** Terminus paints a frame that shows the prompt at about
+**Gate: under 100 ms warm on Windows does not pass as written.** Termoil paints a frame that shows the prompt at about
 84 ms; Windows then takes about 60 ms to show the window, and that time is spent inside `ShowWindow`. Creating the window
 visible moves the same cost into window creation. Turning off the compositor's open animation made no measurable
 difference and was not kept. Allowing IME is moved after the window is shown. P4 ends at the first frame presented to a
@@ -134,7 +134,7 @@ the same font is a visual judgement on the installed release build and is not do
 ## Windows: window surfaces use DX12 (task-2468, 2026-11-02)
 
 Jason reported that a window made bigger kept its old contents: Claude Code did not fill the new space. The size reached
-the program (a Node program reading stdin in raw mode, as Ink does, redrew at the new size, and `terminus +screen` showed
+the program (a Node program reading stdin in raw mode, as Ink does, redrew at the new size, and `termoil +screen` showed
 the new frame), so the fault was in what reached the screen.
 
 What was measured, on the RTX 5090, by resizing and moving a window with `SetWindowPos` and capturing it with Windows
@@ -143,12 +143,12 @@ Graphics Capture (the API screen recorders use; a GDI screen copy cannot see a G
 | Window surface | Every present reported success | What the desktop showed after a resize or a move |
 |---|---|---|
 | Vulkan (the old default) | yes | the window's first frame, at its first size and first screen position, black elsewhere |
-| OpenGL (`TERMINUS_GPU_BACKEND=gl`) | yes | the same as Vulkan |
+| OpenGL (`TERMOIL_GPU_BACKEND=gl`) | yes | the same as Vulkan |
 | DX12 | yes | the new frame, filling the window, at every size tried (67 by 19 to 167 by 45 cells) |
 | CPU (`window.renderer = "cpu"`) | yes | the new frame |
 
 So on Windows `GpuContext::for_display` now tries DX12 first, then the other primary backends, then OpenGL.
-`TERMINUS_GPU_BACKEND` accepts `dx12`, `vulkan` and `gl` to measure each one. P2 on DX12, 800 keys, unpaced:
+`TERMOIL_GPU_BACKEND` accepts `dx12`, `vulkan` and `gl` to measure each one. P2 on DX12, 800 keys, unpaced:
 p50 1.73 ms, p99 5.34 ms, max 22.14 ms (Vulkan in the same session: p50 1.66 ms, p99 4.49 ms). The gate is p99 under 16 ms.
 
 Two smaller faults in the same path were fixed with it. A suboptimal surface texture was presented at the old size

@@ -1,20 +1,20 @@
 [package]
-name = "terminus-bench"
-description = "Terminus performance benchmarks: parser throughput and the comparison with vte, alacritty_terminal and Ghostty (P1), memory (P3), allocation counting (P5) and frame time (R4)."
+name = "termoil-bench"
+description = "Termoil performance benchmarks: parser throughput and the comparison with vte, alacritty_terminal and Ghostty (P1), memory (P3), allocation counting (P5) and frame time (R4)."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish = false
 
 [dependencies]
-terminus-vt.workspace = true
-terminus-font.workspace = true
-terminus-render.workspace = true
+termoil-vt.workspace = true
+termoil-font.workspace = true
+termoil-render.workspace = true
 serde_json.workspace = true
 wgpu = "30"
 vello_gpu = "0.3"
 pollster = "0.4"
-# The P1 comparison (`terminus-bench compare`) only. Never dependencies of terminus-vt, which CI builds for wasm.
+# The P1 comparison (`termoil-bench compare`) only. Never dependencies of termoil-vt, which CI builds for wasm.
 vte = "0.15"
 alacritty_terminal = "0.26"
 

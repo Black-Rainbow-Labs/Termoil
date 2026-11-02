@@ -1,7 +1,7 @@
 # Fonts: fontique fallback on Windows (TDD question 4)
 
 Measured on 2026-11-01 on this machine (Windows 11 24H2, build 26100.6584) by `system_fallback_matrix` in
-`crates/terminus-font/tests/font.rs`, which prints the face chosen for each sample and fails when any sample has no face.
+`crates/termoil-font/tests/font.rs`, which prints the face chosen for each sample and fails when any sample has no face.
 
 The primary font is the vendored JetBrains Mono 2.304. For a character the primary face lacks, `FontGrid::face_for` asks
 `fontique` for the system fallback of the character's script (from `unicode-script`), and for emoji the colour emoji family.

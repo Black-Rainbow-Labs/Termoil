@@ -1,7 +1,7 @@
 //! F2: parser plus screen on a small terminal through both paths, with the grid invariants.
 #![no_main]
 use libfuzzer_sys::fuzz_target;
-use terminus_vt::{Terminal, TerminalConfig};
+use termoil_vt::{Terminal, TerminalConfig};
 #[path = "common.rs"]
 mod common;
 

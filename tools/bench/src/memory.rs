@@ -3,8 +3,8 @@
 //! under 150 MB and under 400 MB. Each case runs in a child process of its own so one case's
 //! allocations do not count against the next.
 
-use terminus_vt::pagelist::ScrollbackLimit;
-use terminus_vt::{Terminal, TerminalConfig};
+use termoil_vt::pagelist::ScrollbackLimit;
+use termoil_vt::{Terminal, TerminalConfig};
 
 /// The cases: name, lines, dense attributes, terminals.
 const CASES: [(&str, usize, bool, usize); 5] = [

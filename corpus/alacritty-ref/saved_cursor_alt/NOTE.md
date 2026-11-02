@@ -1,1 +1,1 @@
-Terminus differs from Alacritty here on purpose. In the DEC Special Graphics set, 0x5F maps to U+00A0 (no break space), as in Ghostty. Alacritty maps it to U+0020. The saved cursor behaviour this case tests matches Alacritty. Expected grid: terminus.txt.
+Termoil differs from Alacritty here on purpose. In the DEC Special Graphics set, 0x5F maps to U+00A0 (no break space), as in Ghostty. Alacritty maps it to U+0020. The saved cursor behaviour this case tests matches Alacritty. Expected grid: termoil.txt.

@@ -1,4 +1,4 @@
-# Terminus CI (docs/TDD.md section 7, docs/TEST-SUITE.md). Performance numbers from shared runners
+# Termoil CI (docs/TDD.md section 7, docs/TEST-SUITE.md). Performance numbers from shared runners
 # are reported only; the gates are measured on the development machine before each release.
 name: ci
 
@@ -67,7 +67,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: rustup show
       - name: B1 headless crates build for wasm32
-        run: cargo build -p terminus-vt -p terminus-input -p terminus-protocol --target wasm32-unknown-unknown
+        run: cargo build -p termoil-vt -p termoil-input -p termoil-protocol --target wasm32-unknown-unknown
 
   fuzz:
     runs-on: ubuntu-latest
@@ -87,7 +87,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: rustup show
-      - name: vttest against terminus-headless
+      - name: vttest against termoil-headless
         run: bash tools/vttest/run.sh
       - uses: actions/upload-artifact@v4
         if: failure()
@@ -101,7 +101,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: rustup show
-      - name: esctest2 against terminus-headless
+      - name: esctest2 against termoil-headless
         run: bash tools/esctest/run.sh
       - uses: actions/upload-artifact@v4
         if: always()
@@ -119,5 +119,5 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev libfreetype-dev libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev pkg-config
       - run: rustup show
-      - run: cargo run --release -p terminus-bench -- throughput 1
-      - run: cargo run --release -p terminus-bench -- alloc
+      - run: cargo run --release -p termoil-bench -- throughput 1
+      - run: cargo run --release -p termoil-bench -- alloc

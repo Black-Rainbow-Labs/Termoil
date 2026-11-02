@@ -1,7 +1,7 @@
 //! F6: the sixel decoder.
 #![no_main]
 use libfuzzer_sys::fuzz_target;
-use terminus_vt::graphics::{GraphicsContext, GraphicsStore};
+use termoil_vt::graphics::{GraphicsContext, GraphicsStore};
 
 fuzz_target!(|data: &[u8]| {
     let Some((&first, rest)) = data.split_first() else { return };

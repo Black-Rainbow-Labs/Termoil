@@ -3,7 +3,7 @@
 #
 #   make-dmg.sh <source folder> <output.dmg> <volume name> [executable path inside the folder ...]
 #
-# The source folder's contents (for Terminus: Terminus.app) become the volume's root. The steps:
+# The source folder's contents (for Termoil: Termoil.app) become the volume's root. The steps:
 #   1. mkfs.hfsplus makes an empty HFS+ filesystem in a file sized to the folder plus headroom.
 #   2. hfsplus (libdmg-hfsplus, planetbeing) copies the folder in with addall, then chmod sets the
 #      executable bit on each path given after the volume name, because addall writes mode 644.
@@ -29,7 +29,7 @@ for tool in mkfs.hfsplus fsck.hfsplus "$HFSPLUS" "$DMG"; do
 done
 [ -d "$SOURCE" ] || die "$SOURCE is not a folder"
 
-WORK=$(mktemp -d /tmp/terminus-dmg.XXXXXX)
+WORK=$(mktemp -d /tmp/termoil-dmg.XXXXXX)
 trap 'rm -f "$WORK/volume.img"; rmdir "$WORK" 2>/dev/null || true' EXIT
 IMAGE="$WORK/volume.img"
 

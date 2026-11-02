@@ -2,7 +2,7 @@
 #![no_main]
 use base64::Engine;
 use libfuzzer_sys::fuzz_target;
-use terminus_vt::graphics::{GraphicsContext, GraphicsStore};
+use termoil_vt::graphics::{GraphicsContext, GraphicsStore};
 
 fuzz_target!(|data: &[u8]| {
     let mut store = GraphicsStore::new(8 << 20);

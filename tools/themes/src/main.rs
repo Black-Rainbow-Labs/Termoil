@@ -1,9 +1,9 @@
 //! Converts a folder of iTerm2 colour schemes (`.itermcolors`, XML plist) into
-//! `crates/terminus-app/themes/themes.txt`, one theme per line:
+//! `crates/termoil-app/themes/themes.txt`, one theme per line:
 //! `name|fg|bg|cursor|selection_bg|selection_fg|c0|...|c15` with colours as `rrggbb`.
 //!
-//! Usage: `cargo run -p terminus-themes -- <scheme folder> [output folder]`
-//! The output folder defaults to `crates/terminus-app/themes` relative to the current directory.
+//! Usage: `cargo run -p termoil-themes -- <scheme folder> [output folder]`
+//! The output folder defaults to `crates/termoil-app/themes` relative to the current directory.
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -149,10 +149,10 @@ fn pal(list: [&str; 16]) -> [Rgb; 16] {
     list.map(rgb)
 }
 
-/// The two themes Terminus ships itself. Every Terminus Dark colour except black meets 4.5:1 against its background.
+/// The two themes Termoil ships itself. Every Termoil Dark colour except black meets 4.5:1 against its background.
 fn builtin_schemes() -> Vec<Scheme> {
     let dark = Scheme {
-        name: "Terminus Dark".into(),
+        name: "Termoil Dark".into(),
         foreground: rgb("#dcdcdc"),
         background: rgb("#1e1e1e"),
         cursor: rgb("#f5f5f5"),
@@ -164,7 +164,7 @@ fn builtin_schemes() -> Vec<Scheme> {
         ]),
     };
     let light = Scheme {
-        name: "Terminus Light".into(),
+        name: "Termoil Light".into(),
         foreground: rgb("#2b2b2b"),
         background: rgb("#fafafa"),
         cursor: rgb("#2b2b2b"),
@@ -199,7 +199,7 @@ fn scheme_from_line(line: &str) -> Scheme {
 /// The themes Unluminous ships (task-2468). Ground, text, cursor and selection are Unluminous's `editor`, `text`,
 /// `accent` and `text_selection`; Unluminous Dark and Light use Unluminous's own sixteen terminal colours
 /// (`unluminous-terminal/src/palette.rs`), the others their scheme's published terminal colours. Their tab bar
-/// colours are in `crates/terminus-app/themes/chrome.txt`.
+/// colours are in `crates/termoil-app/themes/chrome.txt`.
 fn unluminous_schemes() -> Vec<Scheme> {
     [
         "Unluminous Dark|e8ebf1|1a1f26|489ff8|304361||242a33|e04a4a|5cc87a|febc2e|489ff8|c37cf0|4fc1c4|c8cedb|535c6b|ff6e6e|7ee79b|ffd566|7cbbff|da9eff|74e0e3|ffffff",
@@ -248,7 +248,7 @@ fn write_output(schemes: &[Scheme], out: &Path, commit: &str, license: Option<St
     let body: Vec<String> = schemes.iter().map(to_line).collect();
     fs::write(out.join("themes.txt"), body.join("\n") + "\n").expect("write themes.txt");
     let readme = format!(
-        "Colour schemes converted from https://github.com/mbadolato/iTerm2-Color-Schemes at commit {commit} (MIT licence, see LICENSE). Regenerate with `cargo run -p terminus-themes -- <scheme folder>`. Terminus Dark and Terminus Light are written by the Terminus authors; Unluminous Dark, Unluminous Light, Islands Dracula Colorful, Material Palenight, Material Deep Ocean and One Dark are the themes Unluminous ships, and chrome.txt holds their tab bar colours.\n"
+        "Colour schemes converted from https://github.com/mbadolato/iTerm2-Color-Schemes at commit {commit} (MIT licence, see LICENSE). Regenerate with `cargo run -p termoil-themes -- <scheme folder>`. Termoil Dark and Termoil Light are written by the Termoil authors; Unluminous Dark, Unluminous Light, Islands Dracula Colorful, Material Palenight, Material Deep Ocean and One Dark are the themes Unluminous ships, and chrome.txt holds their tab bar colours.\n"
     );
     fs::write(out.join("README"), readme).expect("write README");
     if let Some(text) = license {
@@ -260,11 +260,11 @@ fn write_output(schemes: &[Scheme], out: &Path, commit: &str, license: Option<St
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let Some(dir) = args.first() else {
-        eprintln!("usage: terminus-themes <scheme folder> [output folder]");
+        eprintln!("usage: termoil-themes <scheme folder> [output folder]");
         std::process::exit(2);
     };
     let dir = PathBuf::from(dir);
-    let out = args.get(1).map(PathBuf::from).unwrap_or_else(|| PathBuf::from("crates/terminus-app/themes"));
+    let out = args.get(1).map(PathBuf::from).unwrap_or_else(|| PathBuf::from("crates/termoil-app/themes"));
     let ours: Vec<Scheme> = builtin_schemes().into_iter().chain(unluminous_schemes()).collect();
     let taken = |name: &str| ours.iter().any(|o| o.name.eq_ignore_ascii_case(name));
     let mut schemes: Vec<Scheme> = read_folder(&dir).into_iter().filter(|s| !taken(&s.name)).collect();

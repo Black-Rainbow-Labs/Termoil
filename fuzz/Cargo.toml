@@ -1,6 +1,6 @@
 [package]
-name = "terminus-fuzz"
-description = "cargo fuzz targets F1 to F11 for the Terminus core (docs/TEST-SUITE.md section 12)."
+name = "termoil-fuzz"
+description = "cargo fuzz targets F1 to F11 for the Termoil core (docs/TEST-SUITE.md section 12)."
 version = "0.0.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
@@ -10,10 +10,10 @@ publish = false
 cargo-fuzz = true
 
 [dependencies]
-terminus-app = { path = "../crates/terminus-app" }
+termoil-app = { path = "../crates/termoil-app" }
 libfuzzer-sys = "0.4"
-terminus-vt = { path = "../crates/terminus-vt" }
-terminus-input = { path = "../crates/terminus-input" }
+termoil-vt = { path = "../crates/termoil-vt" }
+termoil-input = { path = "../crates/termoil-input" }
 base64 = "0.22"
 
 [workspace]

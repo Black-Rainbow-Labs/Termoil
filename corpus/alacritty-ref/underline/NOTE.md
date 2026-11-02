@@ -1,1 +1,1 @@
-Terminus differs from Alacritty here on purpose. SGR 21 is double underline (ECMA-48, xterm, Ghostty, kitty). Alacritty ignores it, so CSI 4:3;21 m stays curly there and is double in Terminus. Expected grid: terminus.txt.
+Termoil differs from Alacritty here on purpose. SGR 21 is double underline (ECMA-48, xterm, Ghostty, kitty). Alacritty ignores it, so CSI 4:3;21 m stays curly there and is double in Termoil. Expected grid: termoil.txt.

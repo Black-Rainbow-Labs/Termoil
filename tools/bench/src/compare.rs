@@ -1,14 +1,14 @@
-//! `terminus-bench compare`: the P1 comparison from `docs/decisions/throughput.md`, repeated with
+//! `termoil-bench compare`: the P1 comparison from `docs/decisions/throughput.md`, repeated with
 //! every release (`docs/TEST-SUITE.md` section 13).
 //!
 //! The identical bytes go through vte 0.15 (parser only, counting `Perform` calls),
 //! alacritty_terminal 0.26 (a `Term` at 200 by 60 with 100,000 lines of history, through
-//! `vte::ansi::Processor`), and terminus-vt parser only and full (`Terminal` at 200 by 60 with the
+//! `vte::ansi::Processor`), and termoil-vt parser only and full (`Terminal` at 200 by 60 with the
 //! default scrollback). Ghostty 1.4 is measured by `tools/bench-ghostty.ps1` in WSL, which appends
 //! a row to `_agent_output/bench/ghostty.jsonl`; the latest row is shown beside `mixed`.
 //!
 //! This harness was copied from task-2459's comparison (`_agent_output/task-2459-throughput/harness`).
-//! vte and alacritty_terminal are dependencies of tools/bench only, never of terminus-vt, which CI
+//! vte and alacritty_terminal are dependencies of tools/bench only, never of termoil-vt, which CI
 //! builds for wasm.
 
 use std::time::Instant;
@@ -130,14 +130,14 @@ fn run_alacritty(data: &[u8], repeat: usize) -> f64 {
     s
 }
 
-/// Feeds `data` `repeat` times through the terminus-vt parser with a counting handler; returns seconds.
+/// Feeds `data` `repeat` times through the termoil-vt parser with a counting handler; returns seconds.
 fn run_tvt_parser(data: &[u8], repeat: usize) -> f64 {
-    let mut parser = terminus_vt::parser::Parser::default();
+    let mut parser = termoil_vt::parser::Parser::default();
     let mut count = 0u64;
     let start = Instant::now();
     for _ in 0..repeat {
         for chunk in data.chunks(SLICE) {
-            parser.advance(chunk, &mut |_a: terminus_vt::parser::Action<'_>| count += 1);
+            parser.advance(chunk, &mut |_a: termoil_vt::parser::Action<'_>| count += 1);
         }
     }
     let s = start.elapsed().as_secs_f64();
@@ -145,9 +145,9 @@ fn run_tvt_parser(data: &[u8], repeat: usize) -> f64 {
     s
 }
 
-/// Feeds `data` `repeat` times through a terminus-vt `Terminal` with the default configuration; returns seconds.
+/// Feeds `data` `repeat` times through a termoil-vt `Terminal` with the default configuration; returns seconds.
 fn run_tvt_full(data: &[u8], repeat: usize) -> f64 {
-    let mut term = terminus_vt::Terminal::new(COLS as u16, ROWS as u16, terminus_vt::TerminalConfig::default());
+    let mut term = termoil_vt::Terminal::new(COLS as u16, ROWS as u16, termoil_vt::TerminalConfig::default());
     let start = Instant::now();
     for _ in 0..repeat {
         for chunk in data.chunks(SLICE) {
@@ -234,7 +234,7 @@ fn line(r: &Row) -> String {
 pub fn table(rows: &[Row], samples: usize) -> String {
     let mut t = format!(
         "MB/s, bytes / seconds / 1e6, median of {samples}. Full engines at {COLS} by {ROWS}.\n\n\
-         | stream | vte 0.15 parser only | alacritty_terminal 0.26 full, {ALACRITTY_HISTORY} lines | Ghostty 1.4 full | terminus-vt parser only | terminus-vt full, default scrollback |\n\
+         | stream | vte 0.15 parser only | alacritty_terminal 0.26 full, {ALACRITTY_HISTORY} lines | Ghostty 1.4 full | termoil-vt parser only | termoil-vt full, default scrollback |\n\
          |---|---|---|---|---|---|\n"
     );
     for r in rows {
@@ -250,8 +250,8 @@ pub fn json(r: &Row) -> serde_json::Value {
         "vte_0_15_parser": r.vte_parser,
         "alacritty_terminal_0_26_full_100k_lines": r.alacritty_full,
         "ghostty_1_4_full": r.ghostty_full,
-        "terminus_vt_parser": r.tvt_parser,
-        "terminus_vt_full": r.tvt_full,
+        "termoil_vt_parser": r.tvt_parser,
+        "termoil_vt_full": r.tvt_full,
     })
 }
 

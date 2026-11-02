@@ -20,9 +20,9 @@ REPLY "\e[?3;7;1R"
 PUSH "\e[?15n\e[?25n\e[?26n"
 REPLY "\e[?13n\e[?21n\e[?27;1;0;0n"
 PUSH "\e[>q"
-REPLY "\eP>|Terminus({version})\e\\"
+REPLY "\eP>|Termoil({version})\e\\"
 PUSH "\e[>0q"
-REPLY "\eP>|Terminus({version})\e\\"
+REPLY "\eP>|Termoil({version})\e\\"
 
 # CPR after a pending wrap reports the last column.
 SIZE 5 3
@@ -52,7 +52,7 @@ REPLY "\eP1$r24t\e\\"
 
 # XTGETTCAP: known names, several at once, an unknown name.
 PUSH "\eP+q544e\e\\"
-REPLY "\eP1+r544E=787465726D2D7465726D696E7573\e\\"
+REPLY "\eP1+r544E=787465726D2D7465726D6F696C\e\\"
 PUSH "\eP+q436f;524742\e\\"
 REPLY "\eP1+r436F=323536\e\\\eP1+r524742=382F382F38\e\\"
 PUSH "\eP+q5463\e\\"

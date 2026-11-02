@@ -1,14 +1,14 @@
 [workspace]
 resolver = "3"
 members = [
-    "crates/terminus-vt",
-    "crates/terminus-input",
-    "crates/terminus-pty",
-    "crates/terminus-protocol",
-    "crates/terminus-font",
-    "crates/terminus-render",
-    "crates/terminus-app",
-    "crates/terminus-cli",
+    "crates/termoil-vt",
+    "crates/termoil-input",
+    "crates/termoil-pty",
+    "crates/termoil-protocol",
+    "crates/termoil-font",
+    "crates/termoil-render",
+    "crates/termoil-app",
+    "crates/termoil-cli",
     "tools/unicode-tables",
     "tools/bench",
     "tools/headless",
@@ -21,15 +21,15 @@ version = "1.1.0"
 edition = "2024"
 rust-version = "1.95"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/Black-Rainbow-Labs/Terminus"
+repository = "https://github.com/Black-Rainbow-Labs/Termoil"
 
 [workspace.dependencies]
-terminus-vt = { path = "crates/terminus-vt" }
-terminus-input = { path = "crates/terminus-input" }
-terminus-pty = { path = "crates/terminus-pty" }
-terminus-protocol = { path = "crates/terminus-protocol" }
-terminus-font = { path = "crates/terminus-font" }
-terminus-render = { path = "crates/terminus-render" }
+termoil-vt = { path = "crates/termoil-vt" }
+termoil-input = { path = "crates/termoil-input" }
+termoil-pty = { path = "crates/termoil-pty" }
+termoil-protocol = { path = "crates/termoil-protocol" }
+termoil-font = { path = "crates/termoil-font" }
+termoil-render = { path = "crates/termoil-render" }
 memchr = "2.8"
 simdutf8 = "0.1.5"
 lz4_flex = { version = "0.11", default-features = false, features = ["safe-encode", "safe-decode"] }

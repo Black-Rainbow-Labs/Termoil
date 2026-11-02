@@ -1,7 +1,7 @@
 //! F8: the key encoder over every mode combination a few bytes can select.
 #![no_main]
 use libfuzzer_sys::fuzz_target;
-use terminus_input::{Key, KeyEvent, KeyEventKind, KeyboardModes, Modifiers, NamedKey, encode_key};
+use termoil_input::{Key, KeyEvent, KeyEventKind, KeyboardModes, Modifiers, NamedKey, encode_key};
 
 fuzz_target!(|data: &[u8]| {
     if data.len() < 6 {

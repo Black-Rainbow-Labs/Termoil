@@ -1,7 +1,7 @@
 //! F9: the mouse encoder over every tracking mode and encoding.
 #![no_main]
 use libfuzzer_sys::fuzz_target;
-use terminus_input::{Modifiers, MouseButton, MouseEncoding, MouseEvent, MouseEventKind, MouseModes, MouseTracking, encode_mouse};
+use termoil_input::{Modifiers, MouseButton, MouseEncoding, MouseEvent, MouseEventKind, MouseModes, MouseTracking, encode_mouse};
 
 fuzz_target!(|data: &[u8]| {
     if data.len() < 12 {

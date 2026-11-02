@@ -23,6 +23,8 @@ impl Rng {
     }
 }
 
+/// The words the generated streams are made of. "terminus" is the project's name before it became Termoil, and it
+/// stays: the gate stream is pinned by length and checksum and every published throughput number was measured on it.
 const WORDS: &[&str] = &[
     "the",
     "compiling",

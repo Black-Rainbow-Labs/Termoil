@@ -1,7 +1,7 @@
-# Terminus commands
+# Termoil commands
 
-Generated from the action catalogue in `crates/terminus-protocol`; do not edit by hand.
-Every action runs through `App::run_action`, whether a keybinding, the command palette, `terminus +<command>`
+Generated from the action catalogue in `crates/termoil-protocol`; do not edit by hand.
+Every action runs through `App::run_action`, whether a keybinding, the command palette, `termoil +<command>`
 or the IPC socket asked for it.
 
 | Action | Command line | Palette | Needs | Summary |
@@ -77,10 +77,10 @@ or the IPC socket asked for it.
 Opens a new window with one tab.
 
 ```
-terminus +new-window [--cwd <path>] [--command <text>] [--separate <true|false>]
+termoil +new-window [--cwd <path>] [--command <text>] [--separate <true|false>]
 ```
 
-Over IPC: `{"id":1,"action":"new-window","args":{...}}`. MCP tool: `terminus_new_window`.
+Over IPC: `{"id":1,"action":"new-window","args":{...}}`. MCP tool: `termoil_new_window`.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
@@ -93,10 +93,10 @@ Over IPC: `{"id":1,"action":"new-window","args":{...}}`. MCP tool: `terminus_new
 Opens a new tab in the focused window, in the given directory or the focused pane's.
 
 ```
-terminus +new-tab [--cwd <path>] [--name <text>] [--command <text>]
+termoil +new-tab [--cwd <path>] [--name <text>] [--command <text>]
 ```
 
-Over IPC: `{"id":1,"action":"new-tab","args":{...}}`. MCP tool: `terminus_new_tab`.
+Over IPC: `{"id":1,"action":"new-tab","args":{...}}`. MCP tool: `termoil_new_tab`.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
@@ -109,10 +109,10 @@ Over IPC: `{"id":1,"action":"new-tab","args":{...}}`. MCP tool: `terminus_new_ta
 Splits the pane, starting a new shell in the new half.
 
 ```
-terminus +split [--pane <pane id>] [--direction <left|right|up|down>] [--cwd <path>]
+termoil +split [--pane <pane id>] [--direction <left|right|up|down>] [--cwd <path>]
 ```
 
-Over IPC: `{"id":1,"action":"split","args":{...}}`. MCP tool: `terminus_split`.
+Over IPC: `{"id":1,"action":"split","args":{...}}`. MCP tool: `termoil_split`.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
@@ -137,10 +137,10 @@ No parameters.
 Closes a pane, ending its shell; the last pane closes its tab and window.
 
 ```
-terminus +close [--pane <pane id>]
+termoil +close [--pane <pane id>]
 ```
 
-Over IPC: `{"id":1,"action":"close","args":{...}}`. MCP tool: `terminus_close`.
+Over IPC: `{"id":1,"action":"close","args":{...}}`. MCP tool: `termoil_close`.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
@@ -151,10 +151,10 @@ Over IPC: `{"id":1,"action":"close","args":{...}}`. MCP tool: `terminus_close`.
 Focuses a pane, or the neighbouring pane in a direction.
 
 ```
-terminus +focus [--pane <pane id>] [--direction <left|right|up|down>]
+termoil +focus [--pane <pane id>] [--direction <left|right|up|down>]
 ```
 
-Over IPC: `{"id":1,"action":"focus","args":{...}}`. MCP tool: `terminus_focus`.
+Over IPC: `{"id":1,"action":"focus","args":{...}}`. MCP tool: `termoil_focus`.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
@@ -190,10 +190,10 @@ No parameters.
 Closes the tab holding a pane, ending every shell in it; the last tab closes its window.
 
 ```
-terminus +close-tab [--pane <pane id>]
+termoil +close-tab [--pane <pane id>]
 ```
 
-Over IPC: `{"id":1,"action":"close-tab","args":{...}}`. MCP tool: `terminus_close_tab`.
+Over IPC: `{"id":1,"action":"close-tab","args":{...}}`. MCP tool: `termoil_close_tab`.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
@@ -210,10 +210,10 @@ No parameters.
 Moves the tab holding a pane into a new window of its own.
 
 ```
-terminus +move-tab-to-window [--pane <pane id>]
+termoil +move-tab-to-window [--pane <pane id>]
 ```
 
-Over IPC: `{"id":1,"action":"move-tab-to-window","args":{...}}`. MCP tool: `terminus_move_tab_to_window`.
+Over IPC: `{"id":1,"action":"move-tab-to-window","args":{...}}`. MCP tool: `termoil_move_tab_to_window`.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
@@ -236,10 +236,10 @@ No parameters.
 Moves the divider next to a pane in a direction, growing or shrinking the pane.
 
 ```
-terminus +resize-split [--pane <pane id>] --direction <left|right|up|down> [--percent <integer>]
+termoil +resize-split [--pane <pane id>] --direction <left|right|up|down> [--percent <integer>]
 ```
 
-Over IPC: `{"id":1,"action":"resize-split","args":{...}}`. MCP tool: `terminus_resize_split`.
+Over IPC: `{"id":1,"action":"resize-split","args":{...}}`. MCP tool: `termoil_resize_split`.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
@@ -260,10 +260,10 @@ Labels every link on the screen of a pane; typing a label opens that link.
 Types text into a pane's program, as if pasted without bracketing.
 
 ```
-terminus +send-text [--pane <pane id>] --text <text>
+termoil +send-text [--pane <pane id>] --text <text>
 ```
 
-Over IPC: `{"id":1,"action":"send-text","args":{...}}`. MCP tool: `terminus_send_text`.
+Over IPC: `{"id":1,"action":"send-text","args":{...}}`. MCP tool: `termoil_send_text`.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
@@ -275,10 +275,10 @@ Over IPC: `{"id":1,"action":"send-text","args":{...}}`. MCP tool: `terminus_send
 Presses a key in a pane, encoded for the program's keyboard mode.
 
 ```
-terminus +send-key [--pane <pane id>] --key <key>
+termoil +send-key [--pane <pane id>] --key <key>
 ```
 
-Over IPC: `{"id":1,"action":"send-key","args":{...}}`. MCP tool: `terminus_send_key`.
+Over IPC: `{"id":1,"action":"send-key","args":{...}}`. MCP tool: `termoil_send_key`.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
@@ -290,10 +290,10 @@ Over IPC: `{"id":1,"action":"send-key","args":{...}}`. MCP tool: `terminus_send_
 Returns the visible screen of a pane as text, or as JSON cells with styles.
 
 ```
-terminus +screen [--pane <pane id>] [--json <true|false>]
+termoil +screen [--pane <pane id>] [--json <true|false>]
 ```
 
-Over IPC: `{"id":1,"action":"screen","args":{...}}`. MCP tool: `terminus_screen`.
+Over IPC: `{"id":1,"action":"screen","args":{...}}`. MCP tool: `termoil_screen`.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
@@ -305,10 +305,10 @@ Over IPC: `{"id":1,"action":"screen","args":{...}}`. MCP tool: `terminus_screen`
 Returns the last lines of a pane's scrollback and screen as text.
 
 ```
-terminus +scrollback [--pane <pane id>] [--lines <integer>]
+termoil +scrollback [--pane <pane id>] [--lines <integer>]
 ```
 
-Over IPC: `{"id":1,"action":"scrollback","args":{...}}`. MCP tool: `terminus_scrollback`.
+Over IPC: `{"id":1,"action":"scrollback","args":{...}}`. MCP tool: `termoil_scrollback`.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
@@ -320,10 +320,10 @@ Over IPC: `{"id":1,"action":"scrollback","args":{...}}`. MCP tool: `terminus_scr
 Waits until the command running in a pane finishes and returns its exit code.
 
 ```
-terminus +wait-prompt [--pane <pane id>] [--timeout <integer>]
+termoil +wait-prompt [--pane <pane id>] [--timeout <integer>]
 ```
 
-Over IPC: `{"id":1,"action":"wait-prompt","args":{...}}`. MCP tool: `terminus_wait_prompt`.
+Over IPC: `{"id":1,"action":"wait-prompt","args":{...}}`. MCP tool: `termoil_wait_prompt`.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
@@ -335,10 +335,10 @@ Over IPC: `{"id":1,"action":"wait-prompt","args":{...}}`. MCP tool: `terminus_wa
 Lists windows, tabs and panes with their ids, titles and working directories.
 
 ```
-terminus +list
+termoil +list
 ```
 
-Over IPC: `{"id":1,"action":"list","args":{...}}`. MCP tool: `terminus_list`.
+Over IPC: `{"id":1,"action":"list","args":{...}}`. MCP tool: `termoil_list`.
 
 No parameters.
 
@@ -347,10 +347,10 @@ No parameters.
 Resizes a pane's window to a number of columns and rows.
 
 ```
-terminus +resize [--pane <pane id>] --cols <integer> --rows <integer>
+termoil +resize [--pane <pane id>] --cols <integer> --rows <integer>
 ```
 
-Over IPC: `{"id":1,"action":"resize","args":{...}}`. MCP tool: `terminus_resize`.
+Over IPC: `{"id":1,"action":"resize","args":{...}}`. MCP tool: `termoil_resize`.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
@@ -363,10 +363,10 @@ Over IPC: `{"id":1,"action":"resize","args":{...}}`. MCP tool: `terminus_resize`
 Sets the title of a pane's tab.
 
 ```
-terminus +set-title [--pane <pane id>] --title <text>
+termoil +set-title [--pane <pane id>] --title <text>
 ```
 
-Over IPC: `{"id":1,"action":"set-title","args":{...}}`. MCP tool: `terminus_set_title`.
+Over IPC: `{"id":1,"action":"set-title","args":{...}}`. MCP tool: `termoil_set_title`.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
@@ -378,10 +378,10 @@ Over IPC: `{"id":1,"action":"set-title","args":{...}}`. MCP tool: `terminus_set_
 Runs any action by name with JSON arguments, the way a keybinding does.
 
 ```
-terminus +run-action --name <action> [--args <text>]
+termoil +run-action --name <action> [--args <text>]
 ```
 
-Over IPC: `{"id":1,"action":"run-action","args":{...}}`. MCP tool: `terminus_run_action`.
+Over IPC: `{"id":1,"action":"run-action","args":{...}}`. MCP tool: `termoil_run_action`.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
@@ -393,10 +393,10 @@ Over IPC: `{"id":1,"action":"run-action","args":{...}}`. MCP tool: `terminus_run
 Prints the effective configuration, or the documented default file.
 
 ```
-terminus +show-config [--default <true|false>]
+termoil +show-config [--default <true|false>]
 ```
 
-Over IPC: `{"id":1,"action":"show-config","args":{...}}`. MCP tool: `terminus_show_config`.
+Over IPC: `{"id":1,"action":"show-config","args":{...}}`. MCP tool: `termoil_show_config`.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
@@ -407,10 +407,10 @@ Over IPC: `{"id":1,"action":"show-config","args":{...}}`. MCP tool: `terminus_sh
 Reads the configuration file again and applies it.
 
 ```
-terminus +reload-config
+termoil +reload-config
 ```
 
-Over IPC: `{"id":1,"action":"reload-config","args":{...}}`. MCP tool: `terminus_reload_config`.
+Over IPC: `{"id":1,"action":"reload-config","args":{...}}`. MCP tool: `termoil_reload_config`.
 
 No parameters.
 
@@ -419,10 +419,10 @@ No parameters.
 Switches to a bundled colour theme and writes it to the configuration file.
 
 ```
-terminus +set-theme --name <text>
+termoil +set-theme --name <text>
 ```
 
-Over IPC: `{"id":1,"action":"set-theme","args":{...}}`. MCP tool: `terminus_set_theme`.
+Over IPC: `{"id":1,"action":"set-theme","args":{...}}`. MCP tool: `termoil_set_theme`.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
@@ -433,10 +433,10 @@ Over IPC: `{"id":1,"action":"set-theme","args":{...}}`. MCP tool: `terminus_set_
 Prints every bundled theme name, the themes Unluminous ships first, and the theme in effect.
 
 ```
-terminus +list-themes
+termoil +list-themes
 ```
 
-Over IPC: `{"id":1,"action":"list-themes","args":{...}}`. MCP tool: `terminus_list_themes`.
+Over IPC: `{"id":1,"action":"list-themes","args":{...}}`. MCP tool: `termoil_list_themes`.
 
 No parameters.
 
@@ -463,10 +463,10 @@ No parameters.
 Makes a key table active: keys are looked up in its bindings first until it is deactivated.
 
 ```
-terminus +activate-key-table --name <text> [--once <true|false>]
+termoil +activate-key-table --name <text> [--once <true|false>]
 ```
 
-Over IPC: `{"id":1,"action":"activate-key-table","args":{...}}`. MCP tool: `terminus_activate_key_table`.
+Over IPC: `{"id":1,"action":"activate-key-table","args":{...}}`. MCP tool: `termoil_activate_key_table`.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
@@ -478,10 +478,10 @@ Over IPC: `{"id":1,"action":"activate-key-table","args":{...}}`. MCP tool: `term
 Deactivates the key table that was activated last.
 
 ```
-terminus +deactivate-key-table
+termoil +deactivate-key-table
 ```
 
-Over IPC: `{"id":1,"action":"deactivate-key-table","args":{...}}`. MCP tool: `terminus_deactivate_key_table`.
+Over IPC: `{"id":1,"action":"deactivate-key-table","args":{...}}`. MCP tool: `termoil_deactivate_key_table`.
 
 No parameters.
 
@@ -490,10 +490,10 @@ No parameters.
 Deactivates every active key table.
 
 ```
-terminus +deactivate-all-key-tables
+termoil +deactivate-all-key-tables
 ```
 
-Over IPC: `{"id":1,"action":"deactivate-all-key-tables","args":{...}}`. MCP tool: `terminus_deactivate_all_key_tables`.
+Over IPC: `{"id":1,"action":"deactivate-all-key-tables","args":{...}}`. MCP tool: `termoil_deactivate_all_key_tables`.
 
 No parameters.
 
@@ -502,10 +502,10 @@ No parameters.
 Installs the shell integration scripts and hooks them into the named shells' startup files.
 
 ```
-terminus +install-shell-integration [--shells <text>] [--dry-run <true|false>]
+termoil +install-shell-integration [--shells <text>] [--dry-run <true|false>]
 ```
 
-Over IPC: `{"id":1,"action":"install-shell-integration","args":{...}}`. MCP tool: `terminus_install_shell_integration`.
+Over IPC: `{"id":1,"action":"install-shell-integration","args":{...}}`. MCP tool: `termoil_install_shell_integration`.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
@@ -517,10 +517,10 @@ Over IPC: `{"id":1,"action":"install-shell-integration","args":{...}}`. MCP tool
 Prints the version and build date.
 
 ```
-terminus +version
+termoil +version
 ```
 
-Over IPC: `{"id":1,"action":"version","args":{...}}`. MCP tool: `terminus_version`.
+Over IPC: `{"id":1,"action":"version","args":{...}}`. MCP tool: `termoil_version`.
 
 No parameters.
 
@@ -609,10 +609,10 @@ Scrolls the view back to the live screen.
 Erases the scrollback of the pane, keeping the screen.
 
 ```
-terminus +clear-scrollback [--pane <pane id>]
+termoil +clear-scrollback [--pane <pane id>]
 ```
 
-Over IPC: `{"id":1,"action":"clear-scrollback","args":{...}}`. MCP tool: `terminus_clear_scrollback`.
+Over IPC: `{"id":1,"action":"clear-scrollback","args":{...}}`. MCP tool: `termoil_clear_scrollback`.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
@@ -647,10 +647,10 @@ Selects the output of the last command that finished.
 Opens the search bar, or searches for a pattern and selects the first match.
 
 ```
-terminus +search [--pane <pane id>] [--pattern <text>] [--case-sensitive <true|false>]
+termoil +search [--pane <pane id>] [--pattern <text>] [--case-sensitive <true|false>]
 ```
 
-Over IPC: `{"id":1,"action":"search","args":{...}}`. MCP tool: `terminus_search`.
+Over IPC: `{"id":1,"action":"search","args":{...}}`. MCP tool: `termoil_search`.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
@@ -709,10 +709,10 @@ No parameters.
 Shows or hides the quick terminal that slides in from a screen edge.
 
 ```
-terminus +quick-terminal
+termoil +quick-terminal
 ```
 
-Over IPC: `{"id":1,"action":"quick-terminal","args":{...}}`. MCP tool: `terminus_quick_terminal`.
+Over IPC: `{"id":1,"action":"quick-terminal","args":{...}}`. MCP tool: `termoil_quick_terminal`.
 
 No parameters.
 
@@ -729,10 +729,10 @@ Resets the pane's terminal state (RIS), keeping the shell running.
 Writes the open windows, tabs, splits, working directories and recent output to the session file now.
 
 ```
-terminus +save-session [--path <path>]
+termoil +save-session [--path <path>]
 ```
 
-Over IPC: `{"id":1,"action":"save-session","args":{...}}`. MCP tool: `terminus_save_session`.
+Over IPC: `{"id":1,"action":"save-session","args":{...}}`. MCP tool: `termoil_save_session`.
 
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|

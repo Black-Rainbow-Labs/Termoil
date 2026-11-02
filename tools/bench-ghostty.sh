@@ -24,7 +24,7 @@ GHOSTTY_REPO="https://github.com/ghostty-org/ghostty"
 COLS=200
 ROWS=60
 
-SCRATCH="$(mktemp -d "$HOME/terminus-bench-ghostty.XXXXXX")"
+SCRATCH="$(mktemp -d "$HOME/termoil-bench-ghostty.XXXXXX")"
 # Removes the scratch folder this script created.
 cleanup() {
   rm -rf -- "$SCRATCH"

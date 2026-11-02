@@ -1,4 +1,4 @@
-# The toolchain Terminus is built and checked with, the same one Unluminous pins, so `cargo fmt --check`
+# The toolchain Termoil is built and checked with, the same one Unluminous pins, so `cargo fmt --check`
 # and `cargo clippy` mean the same thing on every machine. rustup installs it from this file.
 [toolchain]
 channel = "1.95.0"

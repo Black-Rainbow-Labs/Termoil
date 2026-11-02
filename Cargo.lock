@@ -3274,7 +3274,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "terminus-app"
+name = "termoil-app"
 version = "1.1.0"
 dependencies = [
  "accesskit",
@@ -3291,12 +3291,12 @@ dependencies = [
  "serde",
  "serde_json",
  "softbuffer",
- "terminus-font",
- "terminus-input",
- "terminus-protocol",
- "terminus-pty",
- "terminus-render",
- "terminus-vt",
+ "termoil-font",
+ "termoil-input",
+ "termoil-protocol",
+ "termoil-pty",
+ "termoil-render",
+ "termoil-vt",
  "toml",
  "toml_edit",
  "wayland-client",
@@ -3309,15 +3309,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "terminus-bench"
+name = "termoil-bench"
 version = "1.1.0"
 dependencies = [
  "alacritty_terminal",
  "pollster",
  "serde_json",
- "terminus-font",
- "terminus-render",
- "terminus-vt",
+ "termoil-font",
+ "termoil-render",
+ "termoil-vt",
  "vello_gpu",
  "vte",
  "wgpu",
@@ -3325,18 +3325,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "terminus-cli"
+name = "termoil-cli"
 version = "1.1.0"
 dependencies = [
  "embed-resource",
  "serde_json",
- "terminus-app",
- "terminus-protocol",
- "terminus-pty",
+ "termoil-app",
+ "termoil-protocol",
+ "termoil-pty",
 ]
 
 [[package]]
-name = "terminus-font"
+name = "termoil-font"
 version = "1.1.0"
 dependencies = [
  "fontique",
@@ -3347,19 +3347,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "terminus-headless"
+name = "termoil-headless"
 version = "1.1.0"
 dependencies = [
- "terminus-pty",
- "terminus-vt",
+ "termoil-pty",
+ "termoil-vt",
 ]
 
 [[package]]
-name = "terminus-input"
+name = "termoil-input"
 version = "1.1.0"
 
 [[package]]
-name = "terminus-protocol"
+name = "termoil-protocol"
 version = "1.1.0"
 dependencies = [
  "serde",
@@ -3367,7 +3367,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "terminus-pty"
+name = "termoil-pty"
 version = "1.1.0"
 dependencies = [
  "libc",
@@ -3377,15 +3377,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "terminus-render"
+name = "termoil-render"
 version = "1.1.0"
 dependencies = [
  "base64",
  "glifo",
  "png 0.17.16",
  "pollster",
- "terminus-font",
- "terminus-vt",
+ "termoil-font",
+ "termoil-vt",
  "vello_common",
  "vello_cpu",
  "vello_gpu",
@@ -3393,11 +3393,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "terminus-themes"
+name = "termoil-themes"
 version = "0.1.0"
 
 [[package]]
-name = "terminus-vt"
+name = "termoil-vt"
 version = "1.1.0"
 dependencies = [
  "base64",
@@ -3410,7 +3410,7 @@ dependencies = [
  "regex",
  "serde_json",
  "simdutf8",
- "terminus-pty",
+ "termoil-pty",
  "windows",
 ]
 

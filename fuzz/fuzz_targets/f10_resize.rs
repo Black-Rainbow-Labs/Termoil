@@ -1,8 +1,8 @@
 //! F10: resize and reflow under a random sequence of output and size changes.
 #![no_main]
 use libfuzzer_sys::fuzz_target;
-use terminus_vt::pagelist::ScrollbackLimit;
-use terminus_vt::{Terminal, TerminalConfig};
+use termoil_vt::pagelist::ScrollbackLimit;
+use termoil_vt::{Terminal, TerminalConfig};
 #[path = "common.rs"]
 mod common;
 

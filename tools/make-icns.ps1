@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Generates installer/macos/terminus.icns from the PNG images inside installer/windows/terminus.ico.
+Generates installer/macos/termoil.icns from the PNG images inside installer/windows/termoil.ico.
 
 .DESCRIPTION
 An .icns file is a header followed by chunks, each a four letter type, a big endian length and the
@@ -11,8 +11,8 @@ pwsh -NoProfile -File tools/make-icns.ps1
 param([string] $Source, [string] $Output)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-if (-not $Source) { $Source = Join-Path $root 'installer/windows/terminus.ico' }
-if (-not $Output) { $Output = Join-Path $root 'installer/macos/terminus.icns' }
+if (-not $Source) { $Source = Join-Path $root 'installer/windows/termoil.ico' }
+if (-not $Output) { $Output = Join-Path $root 'installer/macos/termoil.icns' }
 
 <#
 .SYNOPSIS

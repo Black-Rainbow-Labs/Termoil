@@ -1,6 +1,6 @@
 [package]
 name = "unicode-tables"
-description = "Generates the Terminus Unicode width and grapheme break tables from the Unicode data files."
+description = "Generates the Termoil Unicode width and grapheme break tables from the Unicode data files."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

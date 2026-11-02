@@ -1,6 +1,6 @@
-# Terminus
+# Termoil
 
-Terminus is a terminal emulator written from scratch in Rust for Windows, macOS and Linux. Its core is a headless library with no window, GPU or font dependency, so the same core serves the Terminus window, an IDE's terminal tile and an agent's scripted terminal. Rendering goes through vello behind one renderer trait. The target is parity with Ghostty, Alacritty, WezTerm, Kitty and Windows Terminal on features and performance.
+Termoil is a terminal emulator written from scratch in Rust for Windows, macOS and Linux. Its core is a headless library with no window, GPU or font dependency, so the same core serves the Termoil window, an IDE's terminal tile and an agent's scripted terminal. Rendering goes through vello behind one renderer trait. The target is parity with Ghostty, Alacritty, WezTerm, Kitty and Windows Terminal on features and performance.
 
 ## Documents
 
@@ -20,16 +20,16 @@ Design only. No code yet; the implementation is tracked as a ticket on the AI Se
 ## Planned layout
 
 ```
-terminus/
+termoil/
   crates/
-    terminus-vt         parser, pages, screen, modes, selection, search, graphics, unicode
-    terminus-input      key and mouse encoders
-    terminus-pty        openpty, ConPTY, spawn, exit
-    terminus-protocol   IPC messages, catalogue
-    terminus-font       discovery, fallback, shaping, raster, sprites
-    terminus-render     Renderer trait, frame builder, vello_gpu, vello_cpu, atlas
-    terminus-app        windows, tabs, splits, config, IPC server
-    terminus-cli        terminus +command, terminus ssh, MCP tool list
+    termoil-vt         parser, pages, screen, modes, selection, search, graphics, unicode
+    termoil-input      key and mouse encoders
+    termoil-pty        openpty, ConPTY, spawn, exit
+    termoil-protocol   IPC messages, catalogue
+    termoil-font       discovery, fallback, shaping, raster, sprites
+    termoil-render     Renderer trait, frame builder, vello_gpu, vello_cpu, atlas
+    termoil-app        windows, tabs, splits, config, IPC server
+    termoil-cli        termoil +command, termoil ssh, MCP tool list
   shell-integration/    per shell scripts, terminfo source
   corpus/               vendored test corpora with licences, conformance cases, accepted images
   tools/                unicode-tables, release.ps1, bench runners, latency harness

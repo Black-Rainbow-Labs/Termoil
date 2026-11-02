@@ -7,9 +7,9 @@
 
 use std::time::{Duration, Instant};
 
-use terminus_font::{FontConfig, FontGrid};
-use terminus_render::{BuildOptions, Colors, FrameBuilder, RenderState, Renderer, VelloCpuRenderer, VelloGpuRenderer};
-use terminus_vt::{Terminal, TerminalConfig};
+use termoil_font::{FontConfig, FontGrid};
+use termoil_render::{BuildOptions, Colors, FrameBuilder, RenderState, Renderer, VelloCpuRenderer, VelloGpuRenderer};
+use termoil_vt::{Terminal, TerminalConfig};
 
 /// One renderer's frame times.
 pub struct RenderResult {
@@ -112,7 +112,7 @@ pub fn measure(frames: usize) -> Vec<RenderResult> {
         m.height,
         w,
         h,
-        grid.face(grid.primary(terminus_font::FontStyle::Regular)).family,
+        grid.face(grid.primary(termoil_font::FontStyle::Regular)).family,
         grid.size_px()
     );
     let mut results = Vec::new();

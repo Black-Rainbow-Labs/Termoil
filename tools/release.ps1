@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Releases Terminus: test, bump the version, build, package, install on this machine, tag, push, and
+  Releases Termoil: test, bump the version, build, package, install on this machine, tag, push, and
   publish a GitHub release with the installers attached.
 
 .DESCRIPTION
@@ -10,11 +10,11 @@
     1. Refuses to run on a dirty checkout.
     2. Runs `cargo test --workspace --release`.
     3. Bumps `version` under `[workspace.package]` in Cargo.toml, the one place the version is written.
-    4. Builds terminus.exe and terminus-gui.exe in release mode. TERMINUS_BUILD_DATE is set for the build
-       so `terminus +version` and the About dialog can print the build date.
+    4. Builds termoil.exe and termoil-gui.exe in release mode. TERMOIL_BUILD_DATE is set for the build
+       so `termoil +version` and the About dialog can print the build date.
     5. Fetches the bundled ConPTY pair when installer/windows/conpty is missing.
     6. Compiles the Inno Setup installer into installer/dist/.
-    7. Installs it silently on this machine and checks that the installed `terminus.exe +version`
+    7. Installs it silently on this machine and checks that the installed `termoil.exe +version`
        prints the new version.
     8. Builds the Linux AppImage and .deb in WSL (the macOS dmg comes from installer/macos/build-on-windows.ps1 when its preflight passes).
     9. Commits Cargo.toml and Cargo.lock as `Release v<version>`, tags `v<version>`, and pushes the
@@ -77,7 +77,7 @@ $InstallerDir = Join-Path $Repo 'installer/windows'
 $DistDir = Join-Path $Repo 'installer/dist'
 $ConptyDir = Join-Path $InstallerDir 'conpty'
 $ScratchDir = Join-Path $Repo '_agent_output/task-2458-installer'
-$InstallDir = Join-Path $env:LOCALAPPDATA 'Programs/Terminus'
+$InstallDir = Join-Path $env:LOCALAPPDATA 'Programs/Termoil'
 
 $script:Writing = $false
 
@@ -205,7 +205,7 @@ function Get-GitHubToken {
     # The request goes in through a file: a piped string does not reach git credential in a form it
     # accepts from every PowerShell. The file holds the protocol and host only; the answer, which holds
     # the secret, is only ever in memory.
-    $ask = Join-Path ([System.IO.Path]::GetTempPath()) ('terminus-credential-' + [guid]::NewGuid().ToString('N') + '.txt')
+    $ask = Join-Path ([System.IO.Path]::GetTempPath()) ('termoil-credential-' + [guid]::NewGuid().ToString('N') + '.txt')
     try {
         Set-Content -Path $ask -Value "protocol=https`nhost=github.com`n" -NoNewline -Encoding ascii
         $answer = & cmd /c "git credential fill < `"$ask`"" 2>$null
@@ -241,17 +241,17 @@ function Invoke-TestSuite {
 
 <#
 .SYNOPSIS
-  Builds terminus.exe and terminus-gui.exe in release mode with the build date in the environment.
+  Builds termoil.exe and termoil-gui.exe in release mode with the build date in the environment.
 .PARAMETER BuildDate
-  The date text that build.rs reads from TERMINUS_BUILD_DATE.
+  The date text that build.rs reads from TERMOIL_BUILD_DATE.
 #>
 function Build-WindowsBinaries([string] $BuildDate) {
-    Write-Step 'Building terminus.exe and terminus-gui.exe'
-    $env:TERMINUS_BUILD_DATE = $BuildDate
+    Write-Step 'Building termoil.exe and termoil-gui.exe'
+    $env:TERMOIL_BUILD_DATE = $BuildDate
     Invoke-WithoutCc {
-        Invoke-Checked 'cargo build' { & cargo build --release -p terminus-cli -p terminus-app --manifest-path $Manifest }
+        Invoke-Checked 'cargo build' { & cargo build --release -p termoil-cli -p termoil-app --manifest-path $Manifest }
     }
-    foreach ($name in 'terminus.exe', 'terminus-gui.exe') {
+    foreach ($name in 'termoil.exe', 'termoil-gui.exe') {
         if (-not (Test-Path -LiteralPath (Join-Path (Get-BinDir) $name))) { throw "The build did not produce $name in $(Get-BinDir)." }
     }
 }
@@ -291,31 +291,31 @@ function Build-WindowsInstaller([string] $Version) {
     Ensure-Conpty
     $iscc = Get-InnoCompiler
     New-Item -ItemType Directory -Force -Path $DistDir | Out-Null
-    Invoke-Checked 'ISCC' { & $iscc "/DAppVersion=$Version" "/DOutDir=$DistDir" "/DBinDir=$(Get-BinDir)" (Join-Path $InstallerDir 'terminus.iss') }
-    $installer = Join-Path $DistDir "TerminusSetup-$Version-x64.exe"
+    Invoke-Checked 'ISCC' { & $iscc "/DAppVersion=$Version" "/DOutDir=$DistDir" "/DBinDir=$(Get-BinDir)" (Join-Path $InstallerDir 'termoil.iss') }
+    $installer = Join-Path $DistDir "TermoilSetup-$Version-x64.exe"
     if (-not (Test-Path -LiteralPath $installer)) { throw "ISCC did not produce $installer." }
     return $installer
 }
 
 <#
 .SYNOPSIS
-  Installs the installer silently for the current user and checks the installed terminus.exe prints
+  Installs the installer silently for the current user and checks the installed termoil.exe prints
   the new version.
 .PARAMETER Installer
   Path of the installer.
 .PARAMETER Version
-  The version terminus.exe +version must print.
+  The version termoil.exe +version must print.
 #>
 function Install-OnThisMachine([string] $Installer, [string] $Version) {
     Write-Step 'Installing on this machine'
     # Setup hands the work to a second process and returns at once, so wait for the whole tree.
     $proc = Start-Process -FilePath $Installer -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER' -Wait -PassThru
     if ($proc.ExitCode -ne 0) { throw "The installer exited with code $($proc.ExitCode)." }
-    $exe = Join-Path $InstallDir 'terminus.exe'
+    $exe = Join-Path $InstallDir 'termoil.exe'
     if (-not (Test-Path -LiteralPath $exe)) { throw "$exe is not there after the install." }
     $printed = (& $exe +version) -join "`n"
-    Write-Host "terminus.exe +version: $printed"
-    if ($printed -notmatch [regex]::Escape($Version)) { throw "The installed terminus.exe printed '$printed', which does not contain $Version." }
+    Write-Host "termoil.exe +version: $printed"
+    if ($printed -notmatch [regex]::Escape($Version)) { throw "The installed termoil.exe printed '$printed', which does not contain $Version." }
 }
 
 <#
@@ -367,7 +367,7 @@ function ConvertTo-WslPath([string] $Path) {
 .PARAMETER Version
   The version being released, which names the two packages.
 .PARAMETER BuildDate
-  The date text the About box shows, passed to the build as TERMINUS_BUILD_DATE.
+  The date text the About box shows, passed to the build as TERMOIL_BUILD_DATE.
 #>
 function Build-LinuxPackages([string] $Version, [string] $BuildDate) {
     if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) {
@@ -376,11 +376,11 @@ function Build-LinuxPackages([string] $Version, [string] $BuildDate) {
     }
     Write-Step 'Building the Linux AppImage and .deb in WSL'
     $script = ConvertTo-WslPath (Join-Path $Repo 'installer/linux/build.sh')
-    $env:TERMINUS_BUILD_DATE = $BuildDate
-    $env:TERMINUS_VERSION = $Version
-    $env:WSLENV = 'TERMINUS_BUILD_DATE:TERMINUS_VERSION'
+    $env:TERMOIL_BUILD_DATE = $BuildDate
+    $env:TERMOIL_VERSION = $Version
+    $env:WSLENV = 'TERMOIL_BUILD_DATE:TERMOIL_VERSION'
     Invoke-Checked 'installer/linux/build.sh' { & wsl.exe -e bash $script }
-    $packages = @("terminus-$Version-x86_64.AppImage", "terminus_${Version}_amd64.deb") | ForEach-Object { Join-Path $DistDir $_ }
+    $packages = @("termoil-$Version-x86_64.AppImage", "termoil_${Version}_amd64.deb") | ForEach-Object { Join-Path $DistDir $_ }
     foreach ($p in $packages) { if (-not (Test-Path -LiteralPath $p)) { throw "The Linux build did not produce $p." } }
     return $packages
 }
@@ -417,11 +417,11 @@ function Publish-GitHubRelease([string] $Gh, [string] $Version, [string[]] $Asse
     Write-Step "Creating the GitHub release v$Version"
     # Not named $body: inside Invoke-Checked that name is its own scriptblock parameter, which
     # PowerShell would pass to gh as an encoded command.
-    $releaseNotes = if ($Notes) { $Notes } else { "Terminus $Version" }
+    $releaseNotes = if ($Notes) { $Notes } else { "Termoil $Version" }
     # @() around the if: an if expression unrolls a one item array to a string, and splatting a
     # string passes it one character at a time.
     $releaseFlags = @(if (-not $Stable) { '--prerelease' })
-    Invoke-Checked 'gh release create' { & $Gh release create "v$Version" @Assets --title "Terminus $Version" --notes $releaseNotes @releaseFlags }
+    Invoke-Checked 'gh release create' { & $Gh release create "v$Version" @Assets --title "Termoil $Version" --notes $releaseNotes @releaseFlags }
     Test-DownloadedAssets $Gh $Version $Assets
 }
 
@@ -452,11 +452,11 @@ function Test-DownloadedAssets([string] $Gh, [string] $Version, [string[]] $Asse
 <#
 .SYNOPSIS
   Writes the winget multi file manifest (version, default locale and installer files) for a release
-  into installer/winget/manifests/t/Terminus/Terminus/<version>/ and returns that folder.
+  into installer/winget/manifests/t/Termoil/Termoil/<version>/ and returns that folder.
 .DESCRIPTION
-  The package identifier Terminus.Terminus matches the AppUserModelID in installer/windows/terminus.iss.
-  The scope is user because terminus.iss sets PrivilegesRequired=lowest. winget adds the Inno silent
-  switches itself, so none are written here. ProductCode is the AppId from terminus.iss followed by _is1,
+  The package identifier Termoil.Termoil matches the AppUserModelID in installer/windows/termoil.iss.
+  The scope is user because termoil.iss sets PrivilegesRequired=lowest. winget adds the Inno silent
+  switches itself, so none are written here. ProductCode is the AppId from termoil.iss followed by _is1,
   which is the key Inno Setup writes under Uninstall.
 .PARAMETER Version
   The released version, x.y.z.
@@ -468,14 +468,14 @@ function Test-DownloadedAssets([string] $Gh, [string] $Version, [string[]] $Asse
   The manifests folder to write under. Defaults to installer/winget/manifests in the checkout.
 #>
 function Write-WingetManifest([string] $Version, [string] $InstallerUrl, [string] $Sha256, [string] $OutRoot = (Join-Path $Repo 'installer/winget/manifests')) {
-    $id = 'Terminus.Terminus'
+    $id = 'Termoil.Termoil'
     $schema = '1.10.0'
     $schemaBase = 'https://aka.ms/winget-manifest'
-    $folder = Join-Path $OutRoot "t/Terminus/Terminus/$Version"
+    $folder = Join-Path $OutRoot "t/Termoil/Termoil/$Version"
     New-Item -ItemType Directory -Force -Path $folder | Out-Null
     $hash = $Sha256.ToUpper()
     $date = (Get-Date).ToUniversalTime().ToString('yyyy-MM-dd')
-    $repoUrl = 'https://github.com/Black-Rainbow-Labs/Terminus'
+    $repoUrl = 'https://github.com/Black-Rainbow-Labs/Termoil'
     $versionYaml = @"
 # yaml-language-server: `$schema=$schemaBase.version.$schema.schema.json
 PackageIdentifier: $id
@@ -489,15 +489,15 @@ ManifestVersion: $schema
 PackageIdentifier: $id
 PackageVersion: $Version
 PackageLocale: en-US
-Publisher: Terminus
+Publisher: Termoil
 PublisherUrl: $repoUrl
 PublisherSupportUrl: $repoUrl/issues
-PackageName: Terminus
+PackageName: Termoil
 PackageUrl: $repoUrl
 License: MIT OR Apache-2.0
 LicenseUrl: $repoUrl/blob/main/LICENSE-MIT
 ShortDescription: A GPU accelerated terminal emulator written in Rust.
-Moniker: terminus
+Moniker: termoil
 Tags:
 - terminal
 - terminal-emulator
@@ -518,7 +518,7 @@ InstallModes:
 - silentWithProgress
 UpgradeBehavior: install
 Commands:
-- terminus
+- termoil
 ReleaseDate: $date
 Installers:
 - Architecture: x64
@@ -542,10 +542,10 @@ $buildDate = (Get-Date).ToUniversalTime().ToString('yyyy-MM-dd')
 $kind = if ($Stable) { 'stable release' } else { 'prerelease' }
 
 if ($WhatIf) {
-    Write-Host "Terminus release plan (nothing will be changed)" -ForegroundColor Yellow
+    Write-Host "Termoil release plan (nothing will be changed)" -ForegroundColor Yellow
     Write-Host "  Version:      $current -> $next ($Part)"
     Write-Host "  GitHub:       v$next as a $kind"
-    Write-Host "  Build date:   $buildDate (passed to cargo as TERMINUS_BUILD_DATE)"
+    Write-Host "  Build date:   $buildDate (passed to cargo as TERMOIL_BUILD_DATE)"
     $dirty = Get-DirtyPaths
     if ($dirty.Count -gt 0) { Write-Host "  Checkout:     DIRTY ($($dirty.Count) changed paths), a real run would refuse" -ForegroundColor Red } else { Write-Host '  Checkout:     clean' }
     $iscc = @(
@@ -560,12 +560,12 @@ if ($WhatIf) {
     Write-Host '    1. refuse a dirty checkout'
     Write-Host "    2. $(if ($SkipTests) { 'skip' } else { 'run' }) cargo test --workspace --release"
     Write-Host "    3. bump [workspace.package].version to $next in Cargo.toml"
-    Write-Host '    4. cargo build --release -p terminus-cli -p terminus-app'
-    Write-Host '    5. fetch ConPTY if missing, compile installer/windows/terminus.iss with ISCC'
-    Write-Host "    6. $(if ($SkipInstall) { 'skip the install on this machine' } else { "install silently into $InstallDir and check terminus.exe +version prints $next" })"
+    Write-Host '    4. cargo build --release -p termoil-cli -p termoil-app'
+    Write-Host '    5. fetch ConPTY if missing, compile installer/windows/termoil.iss with ISCC'
+    Write-Host "    6. $(if ($SkipInstall) { 'skip the install on this machine' } else { "install silently into $InstallDir and check termoil.exe +version prints $next" })"
     Write-Host '    7. macOS dmg: installer/macos/build-on-windows.ps1 -Notarize when its -Preflight passes, otherwise skipped with the reason; Linux AppImage and .deb: built in WSL by installer/linux/build.sh when wsl.exe exists'
     Write-Host "    8. commit 'Release v$next', tag v$next, push the branch and the tag"
-    Write-Host "    9. gh release create v$next with $(Join-Path $DistDir "TerminusSetup-$next-x64.exe") ($kind)"
+    Write-Host "    9. gh release create v$next with $(Join-Path $DistDir "TermoilSetup-$next-x64.exe") ($kind)"
     Write-Host '   10. download each asset back and compare SHA256 with the local file'
     Write-Host '   11. write the winget manifest into installer/winget/manifests'
     exit 0
@@ -607,7 +607,7 @@ Publish-Tag $next
 if ($SkipPublish) { Write-Host "Tagged v$next locally. Skipped the push and GitHub because of -SkipPublish."; exit 0 }
 Publish-GitHubRelease $gh $next $assets
 Write-Step 'Writing the winget manifest'
-$installerUrl = "https://github.com/Black-Rainbow-Labs/Terminus/releases/download/v$next/$(Split-Path -Leaf $installer)"
+$installerUrl = "https://github.com/Black-Rainbow-Labs/Termoil/releases/download/v$next/$(Split-Path -Leaf $installer)"
 Write-WingetManifest $next $installerUrl (Get-FileHash -Algorithm SHA256 -LiteralPath $installer).Hash | Out-Null
 Write-Host ''
-Write-Host "Released Terminus v$next ($kind)." -ForegroundColor Green
+Write-Host "Released Termoil v$next ($kind)." -ForegroundColor Green

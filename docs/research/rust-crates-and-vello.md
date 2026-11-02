@@ -1,4 +1,4 @@
-# Terminus: Rust crates and the vello question
+# Termoil: Rust crates and the vello question
 
 Research date: 2026-11-01. Version numbers, release dates and licences come from the crates.io API queried on that date. Open issue counts come from the GitHub API and include open pull requests. Where a fact could not be confirmed from a primary source, the text says so. Statements marked "recommendation" are judgement, not sourced fact.
 
@@ -44,7 +44,7 @@ Consequence for a terminal: the CPU work per frame scales with the number of dis
 - wgpu backends per its README: Vulkan on Windows and Linux/Android, Metal on macOS and iOS, DX12 on Windows, OpenGL (GL 3.3+, or GLES 3.0) as a lower tier, MoltenVK on Apple as an option, WebGL2 and WebGPU on wasm. https://github.com/gfx-rs/wgpu
 - `vello_gpu` also has a separate `webgl` feature with GLSL shaders for browsers that lack WebGPU. https://docs.rs/vello_gpu
 - The compute renderer needs compute shaders. For the web it relies on WebGPU only. https://github.com/linebender/vello/blob/main/research/vello_research/README.md
-- A vello dependency pins the whole application to a wgpu major version. wgpu 30 is the version every vello crate here uses, so any other wgpu user in Terminus must also be on 30.
+- A vello dependency pins the whole application to a wgpu major version. wgpu 30 is the version every vello crate here uses, so any other wgpu user in Termoil must also be on 30.
 
 ### 1.4 Text path and glyph caching
 
@@ -90,7 +90,7 @@ No source I found measures vello on a terminal sized grid at 120 Hz. The points 
 | `swash` | 0.2.10 (2026-07-17), Apache-2.0 OR MIT | Shaping, introspection, scaling. | Glyph rasteriser used by cosmic-text and sugarloaf. |
 | Rio `sugarloaf` | 0.5.29 (2026-11-01), MIT, 91,950 downloads | Rio's renderer. Manifest shows `skrifa 0.37`, `swash 0.2.10`, `zeno`, `tiny-skia`, `guillotiere`, native Metal on macOS (`baremetal` crate), optional wgpu enabled for Windows and wasm, and its own `rio-fonts` and `rio-unicode`. https://github.com/raphamorim/rio | Built for a terminal, but tied to Rio's internals and changing quickly. Useful as a reference, not an obvious dependency. |
 | Alacritty's OpenGL renderer | `crossfont` 0.9.0 (Apache-2.0), `glutin` 0.32.3, `winit` 0.30 | Texture atlas, instanced draws, GL 3.3 or GLES 2. https://github.com/alacritty/alacritty | The proven fast and minimal design. Alacritty 0.17.0 released 2026-04-06. OpenGL on macOS is deprecated by Apple but still works. Alacritty's changelog lists a crash on OpenGL context reset fixed in 0.17.0. |
-| Zed GPUI | not published as a standalone stable crate | GPUI renders with Metal, DirectX and wgpu. | Not a reusable dependency for Terminus. |
+| Zed GPUI | not published as a standalone stable crate | GPUI renders with Metal, DirectX and wgpu. | Not a reusable dependency for Termoil. |
 | WezTerm renderer | repository only | OpenGL through `glium` in the `window` crate, and a wgpu front end (`wezterm-gui` depends on `wgpu`). Fonts: freetype, harfbuzz, fontconfig, `dwrote`, `core-text`. https://github.com/wezterm/wezterm | A reference. Not a reusable library. |
 | Skia via `skia-safe` | 0.156.0 (2026-10-26), MIT, 56 open | Full 2D library with GPU backends. https://github.com/rust-skia/rust-skia | Large native build and binary, and the same problem as vello: a general engine used for a grid. |
 | `tiny-skia` | 0.12.0 (2026-02-02), BSD 3 Clause | CPU rasteriser, no GPU. https://github.com/linebender/tiny-skia | Adequate CPU fallback, single threaded, now a Linebender project. `vello_cpu` is the faster option. |
@@ -101,14 +101,14 @@ No source I found measures vello on a terminal sized grid at 120 Hz. The points 
 **Vello is the wrong primary renderer for the cell grid in November 2026, and is a suitable choice for a secondary role.** Reasons:
 
 1. The grid is a texture atlas problem. Nothing else in the surveyed set beats instanced atlas quads for a monospace grid, and Alacritty, Rio, WezTerm and Kitty all use that approach.
-2. The component Terminus would depend on, the vello glyph cache, is labelled experimental in two places (the `vello_gpu` docs and the `glifo` README), and `vello_gpu` itself is "in early stages" per its release notes.
+2. The component Termoil would depend on, the vello glyph cache, is labelled experimental in two places (the `vello_gpu` docs and the `glifo` README), and `vello_gpu` itself is "in early stages" per its release notes.
 3. The only terminal on vello (CuTTY) uses the older compute renderer (0.7.0), which the vello project has moved to `research/` and calls experimental. The project's stated direction is `vello_gpu`, which has no terminal in the wild.
 4. Every vello release in 2026 has broken the API (rename, wgpu major bump, `u16` sizes, glyph API changes). A terminal that has to follow wgpu upgrades on every vello release takes on maintenance cost.
 
 **Recommended layering:**
 
-- Define a `Renderer` trait in Terminus (cells, cursor, selection, images, damage rectangles).
-- Primary implementation: wgpu 30 with a Terminus owned glyph atlas and instanced quads. Glyph rasterisation by `skrifa` (outlines and hinting) or `swash`, shaping by `harfrust`, through parley or directly.
+- Define a `Renderer` trait in Termoil (cells, cursor, selection, images, damage rectangles).
+- Primary implementation: wgpu 30 with a Termoil owned glyph atlas and instanced quads. Glyph rasterisation by `skrifa` (outlines and hinting) or `swash`, shaping by `harfrust`, through parley or directly.
 - CPU fallback implementation: `vello_cpu` with `softbuffer`, drawing glyphs through glifo's atlas. This is the most mature vello component, it needs no GPU, and it gives remote desktop, VM and driver bug cases a working path.
 - Optional experiment: a `vello_gpu` backend behind the same trait, to decide with measurements whether to replace the custom atlas later. Gate on p99 frame time at 120 Hz for a full screen scroll of a 200 by 60 grid, LCD text availability, and memory.
 - If the TDD keeps vello as the primary against this recommendation, choose `vello_gpu` (not the compute `vello`) because it is the project's declared future and works without compute shaders, and keep the custom atlas renderer as the fallback in place of `vello_cpu`.
@@ -143,7 +143,7 @@ Capability summary:
 - **Subpixel positioning:** swash, and skrifa based glifo, quantise a fractional offset. A terminal on integer cell advances does not need it.
 - **Platform state:** fontique has native DirectWrite, Core Text and fontconfig backends. cosmic-text on Windows and macOS uses fontdb to scan system font directories, with its own fallback tables.
 
-Recommendation: `fontique` + `harfrust` + `skrifa`, used directly or through parley, because they are one maintained family with consistent versions. If Terminus avoids parley, those three crates work without it. If a lower risk integrated stack is preferred, `cosmic-text` 0.19 is the alternative, and it is what cosmic-term ships.
+Recommendation: `fontique` + `harfrust` + `skrifa`, used directly or through parley, because they are one maintained family with consistent versions. If Termoil avoids parley, those three crates work without it. If a lower risk integrated stack is preferred, `cosmic-text` 0.19 is the alternative, and it is what cosmic-term ships.
 
 ## 3. Terminal core
 
@@ -163,9 +163,9 @@ C libraries for comparison (from general knowledge, not re-verified in this sess
 
 ### 3.2 Build or reuse?
 
-Recommendation: reuse `vte` as the byte level parser and write the screen and grid layer in Terminus, with `alacritty_terminal` as the first reference. Reasons:
+Recommendation: reuse `vte` as the byte level parser and write the screen and grid layer in Termoil, with `alacritty_terminal` as the first reference. Reasons:
 
-- `alacritty_terminal` is the most proven reusable core (Alacritty 0.17.0, Zed, cosmic-term). Its limits: it has no kitty graphics or sixel in its dependency list (no image crates appear in its manifest), and grapheme handling is a `char` per cell plus zero width extras (hence the changelog fix for "unbounded per cell memory usage for zero width cells"). If Terminus wants kitty graphics, mode 2027 grapheme clusters or its own scrollback format, those are changes to the core grid, which is cheaper in your own code than in a fork.
+- `alacritty_terminal` is the most proven reusable core (Alacritty 0.17.0, Zed, cosmic-term). Its limits: it has no kitty graphics or sixel in its dependency list (no image crates appear in its manifest), and grapheme handling is a `char` per cell plus zero width extras (hence the changelog fix for "unbounded per cell memory usage for zero width cells"). If Termoil wants kitty graphics, mode 2027 grapheme clusters or its own scrollback format, those are changes to the core grid, which is cheaper in your own code than in a fork.
 - The VT parser is the smallest and best understood part: `vte` 0.15 is MIT or Apache and used by Alacritty and Zed.
 - `rio-vt` already ships kitty graphics and sixel, but it is new and its API is unstable. `libghostty-vt` has the most modern feature set but pulls Zig into the build.
 - The cost of writing the grid, scrollback, reflow on resize, alt screen, scroll regions, tab stops, charsets and the long tail of xterm sequences is roughly the size of the Alacritty `term` module, plus conformance testing (vttest, esctest, kitty's tests). That is weeks of work.
@@ -204,17 +204,17 @@ Recommendation: own a thin `Pty` trait. On Unix use `rustix-openpty` (or `nix`) 
 ### 4.2 ConPTY facts
 
 - `CreatePseudoConsole` needs Windows 10 1809 or later. The documented flag in Microsoft's reference page is `PSEUDOCONSOLE_INHERIT_CURSOR` only. https://learn.microsoft.com/en-us/windows/console/createpseudoconsole
-- Current `winconpty.h` in microsoft/terminal main defines `PSEUDOCONSOLE_INHERIT_CURSOR` (0x1), glyph width mode flags (mask 0x18) and `PSEUDOCONSOLE_AMBIGUOUS_IS_WIDE` (0x20). It does not define a passthrough flag. Third party projects claim a `PSEUDOCONSOLE_PASSTHROUGH_MODE` flag with value 0x8 on Windows 11 22H2 and later; that value would collide with `PSEUDOCONSOLE_GLYPH_WIDTH_GRAPHEMES` in the current header, so I could not confirm it and Terminus should not rely on it. https://github.com/wudream813/super-termux/releases/tag/v2.3.6 (third party claim)
+- Current `winconpty.h` in microsoft/terminal main defines `PSEUDOCONSOLE_INHERIT_CURSOR` (0x1), glyph width mode flags (mask 0x18) and `PSEUDOCONSOLE_AMBIGUOUS_IS_WIDE` (0x20). It does not define a passthrough flag. Third party projects claim a `PSEUDOCONSOLE_PASSTHROUGH_MODE` flag with value 0x8 on Windows 11 22H2 and later; that value would collide with `PSEUDOCONSOLE_GLYPH_WIDTH_GRAPHEMES` in the current header, so I could not confirm it and Termoil should not rely on it. https://github.com/wudream813/super-termux/releases/tag/v2.3.6 (third party claim)
 - The inbox ConPTY (kernel32 and conhost) renders child output into its own virtual screen buffer and re-emits it as VT. Several projects report that sixel (DCS) and kitty graphics (APC) sequences are stripped before the terminal sees them, including on Windows 11 build 10.0.26100.x (the 24H2 line). Reports: https://github.com/openwong2kim/wmux/pull/1964, https://github.com/flotilla-org/cleat/pull/235, and an unresolved case at https://github.com/D0n9X1n/SonicTerm/issues/1561. I found no Microsoft statement that 24H2 changed this.
 - Microsoft ships updated ConPTY as the NuGet package `Microsoft.Windows.Console.ConPTY`, latest listed 1.25.260930003, which contains `conpty.dll` plus `OpenConsole.exe`, works on Windows 10.0.17763 and later, and silently falls back to the system conhost if `OpenConsole.exe` is missing beside the DLL. https://www.nuget.org/packages/Microsoft.Windows.Console.ConPTY
 - Alacritty tries `LoadLibraryW("conpty.dll")` and falls back to kernel32 (`alacritty_terminal/src/tty/windows/conpty.rs`). WezTerm ships the pair beside `wezterm.exe`, and its changelog says the DLL and EXE must be the matched pair. WezTerm's tracker shows version drift and a crash fixed by updating both files to 1.24. https://github.com/wezterm/wezterm/issues/7774
-- Resize: since ConPTY 1.22, ConPTY no longer repaints the screen after a resize, and the host terminal must reflow its own buffer to match ConPTY's reflow. https://github.com/microsoft/terminal/issues/16911 and https://github.com/yeroo/agwinterm/issues/351 (third party summary). Terminus on Windows has to implement reflow identical to Windows Terminal's, or pin an older ConPTY.
+- Resize: since ConPTY 1.22, ConPTY no longer repaints the screen after a resize, and the host terminal must reflow its own buffer to match ConPTY's reflow. https://github.com/microsoft/terminal/issues/16911 and https://github.com/yeroo/agwinterm/issues/351 (third party summary). Termoil on Windows has to implement reflow identical to Windows Terminal's, or pin an older ConPTY.
 - Windows Terminal itself is adding the kitty graphics protocol (PR #20872, seen open), and the PR says conhost passes APC replies back through ConPTY. https://github.com/microsoft/terminal/pull/20872
 - ConPTY's pipes are synchronous only, so use a dedicated reader thread and writer thread per session.
 
 ### 4.3 Shell spawn
 
-- Unix: allocate the PTY pair, call `setsid`, set the controlling terminal, set the initial window size with `TIOCSWINSZ`, and `exec` the shell. Set `TERM`, `COLORTERM=truecolor`, `TERM_PROGRAM` and `PWD`, and clean up variables inherited from the launcher. For a login shell, Alacritty on macOS runs the shell through `login` (its changelog notes passing `-q` when `~/.hushlogin` exists). On Linux the usual convention is argv[0] prefixed with `-`. Terminus must decide whether it launches login shells by default. These details come from knowledge of those programs and were not re-fetched.
+- Unix: allocate the PTY pair, call `setsid`, set the controlling terminal, set the initial window size with `TIOCSWINSZ`, and `exec` the shell. Set `TERM`, `COLORTERM=truecolor`, `TERM_PROGRAM` and `PWD`, and clean up variables inherited from the launcher. For a login shell, Alacritty on macOS runs the shell through `login` (its changelog notes passing `-q` when `~/.hushlogin` exists). On Linux the usual convention is argv[0] prefixed with `-`. Termoil must decide whether it launches login shells by default. These details come from knowledge of those programs and were not re-fetched.
 - Windows: `CreateProcessW` with `PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE`, `EXTENDED_STARTUPINFO_PRESENT` and careful command line quoting. `alacritty_terminal` 0.26 added `escape_args` in `tty::Options` for shell argument escaping control.
 - Working directory: pass it explicitly. Tracking the shell's current directory needs OSC 7 or process inspection.
 - Exit codes: on Unix `waitpid` returns an `ExitStatus` that distinguishes exit codes from signals, which is why `alacritty_terminal` 0.26 changed its events to carry `ExitStatus`. On Windows `GetExitCodeProcess` returns a u32 (NTSTATUS values such as 0xC000013A for Ctrl+C).
@@ -283,7 +283,7 @@ Tokio against a thread per PTY: Alacritty and `alacritty_terminal` use a dedicat
 
 Other terminals mentioned for reference but not studied: Ghostty (Zig; its VT core is available to Rust as `libghostty-vt`), Kitty (C and Python, the reference for kitty protocols), Contour (C++).
 
-## 8. Recommended crate list for Terminus
+## 8. Recommended crate list for Termoil
 
 Versions as of 2026-11-01. "Pin" means pin an exact version because the crate is pre 1.0 and makes breaking changes in minor releases.
 
@@ -305,7 +305,7 @@ Versions as of 2026-11-01. "Pin" means pin an exact version because the crate is
 - `arboard` 3.7.0 with the `wayland-data-control` feature, or the winit 0.31 clipboard API.
 
 **Rendering**
-- `wgpu` 30.0.1 with a Terminus glyph atlas (instanced quads). Primary.
+- `wgpu` 30.0.1 with a Termoil glyph atlas (instanced quads). Primary.
 - `softbuffer` 0.4.8 plus `vello_cpu` 0.3.0 and `glifo` 0.4.0 for the CPU fallback. Pin.
 - Optional spike: `vello_gpu` 0.3.0 behind the same renderer trait. Pin.
 
@@ -317,15 +317,15 @@ Versions as of 2026-11-01. "Pin" means pin an exact version because the crate is
 1. **Vello API instability.** `vello_gpu` was renamed in October 2026, bumped wgpu majors, and changed glyph and atlas APIs. `glifo` is experimental and `vello_gpu` glyph caching is flagged experimental. Mitigation: a renderer trait, exact pins, and the atlas renderer as primary.
 2. **No evidence for vello at terminal scale.** The only vello terminal (CuTTY) is beta, has one maintainer, runs on the older compute renderer, and has self reported benchmarks only. Mitigation: the spike in section 1.8 before committing.
 3. **wgpu major version churn.** vello and wgpu move together. Every wgpu major release (30 now) can force vello and surface changes. Mitigation: isolate wgpu use in the renderer crate.
-4. **wgpu memory and startup.** One report measured about 10 times the memory of a native renderer for an empty window on Windows. Mitigation: measure in a Terminus prototype and offer the CPU path.
+4. **wgpu memory and startup.** One report measured about 10 times the memory of a native renderer for an empty window on Windows. Mitigation: measure in a Termoil prototype and offer the CPU path.
 5. **ConPTY on Windows.** The inbox ConPTY drops sixel and kitty graphics sequences and re-renders output. Resize needs host side reflow matching ConPTY since 1.22. The bundled `conpty.dll` and `OpenConsole.exe` must be a matched pair and must be updated deliberately; WezTerm shipped old pairs and crashed. The passthrough flag claim is unverified. This is the largest platform risk.
 6. **winit 0.31 is still beta.** Staying on 0.30 means the older IME and key APIs. Moving to 0.31 means API changes at the end of the beta. IME correctness across Windows, macOS, X11 and Wayland needs a test matrix.
 7. **Terminal core choice.** `alacritty_terminal` has no kitty graphics or sixel and no grapheme cluster cells, and it breaks its API between minor versions. Writing the grid yourself costs weeks and needs a conformance suite. `rio-vt` and `libghostty-vt` are new with no stability promise, and the latter needs Zig.
-8. **Terminal width disagreements.** Terminus, applications and ConPTY can disagree on cluster width (emoji, ZWJ sequences, ambiguous width). `unicode-width` 0.2.3 already has Unicode 18 data, and other crates update at different times.
+8. **Terminal width disagreements.** Termoil, applications and ConPTY can disagree on cluster width (emoji, ZWJ sequences, ambiguous width). `unicode-width` 0.2.3 already has Unicode 18 data, and other crates update at different times.
 9. **Font features.** Ligature to cell mapping, COLRv1 and SVG emoji, LCD subpixel text and fallback performance are not solved by any single crate. Fontique's Windows and macOS fallback behaviour needs testing on real machines.
 10. **Stale or unmaintained crates.** `rustybuzz` (archived), `font-kit` (last release 2025-05), `portable-pty` (last release 2025-02), `ttf-parser` (superseded), `glutin` (last release 2025-04), `copypasta` (2025-04). Mitigation: avoid or wrap.
 11. **Small maintainer teams.** WezTerm has had no tagged release since 2024-02, Rio and CuTTY are mostly one person, and `vte` has few maintainers. Reference code is fine, dependence needs vendoring or forking plans.
-12. **Licence.** Warp's client is AGPL 3.0 and cannot be copied into a permissive project. Alacritty is Apache-2.0, WezTerm and Rio are MIT, skia-safe is MIT, tiny-skia is BSD 3 Clause, `dwrote` is MPL-2.0 and `notify` is CC0. Terminus can stay Apache or MIT with the recommended choices, but check `dwrote` before using it.
+12. **Licence.** Warp's client is AGPL 3.0 and cannot be copied into a permissive project. Alacritty is Apache-2.0, WezTerm and Rio are MIT, skia-safe is MIT, tiny-skia is BSD 3 Clause, `dwrote` is MPL-2.0 and `notify` is CC0. Termoil can stay Apache or MIT with the recommended choices, but check `dwrote` before using it.
 13. **MSRV.** vello needs Rust 1.89, parley and fontique 1.88, wgpu 1.87, glyphon 1.92, and Rio's workspace declares 1.99.1. Pick a toolchain policy early.
 14. **Facts I could not confirm.** Android and iOS status of `vello_gpu`, memory figures for vello, LCD text in glifo, the Unicode version of `unicode-segmentation` and `icu_properties` 2.4.0, current Windows 11 24H2 ConPTY behaviour from a Microsoft source, SVG in OpenType support, and Warp's current renderer. These belong on the spike list.
 

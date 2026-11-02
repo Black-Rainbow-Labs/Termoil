@@ -1,12 +1,12 @@
-//! Terminus benchmarks: P1 parser throughput and P5 allocation counting
+//! Termoil benchmarks: P1 parser throughput and P5 allocation counting
 //! (`docs/TEST-SUITE.md` section 13).
 //!
-//! `terminus-bench throughput` feeds generated streams through `terminus-vt` alone on one thread
+//! `termoil-bench throughput` feeds generated streams through `termoil-vt` alone on one thread
 //! and prints MB/s per scenario; the gate scenario is `mixed`, a 1 GB stream of build log style
-//! text with colours, progress bars and some UTF-8. `terminus-bench alloc` counts heap
+//! text with colours, progress bars and some UTF-8. `termoil-bench alloc` counts heap
 //! allocations while the same stream is applied, split into the warm up (until the scrollback
-//! reaches its limit) and the steady state. `terminus-bench compare` runs the same bytes through
-//! vte, alacritty_terminal and terminus-vt and prints one table in MB/s; `terminus-bench
+//! reaches its limit) and the steady state. `termoil-bench compare` runs the same bytes through
+//! vte, alacritty_terminal and termoil-vt and prints one table in MB/s; `termoil-bench
 //! write-stream mixed <path>` writes the 1 GiB gate file for `tools/bench-ghostty.ps1`. Every run
 //! appends JSON rows to `_agent_output/bench/` with the machine, build and commit.
 
@@ -20,7 +20,7 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
-use terminus_vt::{Terminal, TerminalConfig};
+use termoil_vt::{Terminal, TerminalConfig};
 
 /// A global allocator that counts calls, for P5.
 struct Counting;
@@ -84,10 +84,10 @@ fn run(data: &[u8], repeat: usize) -> f64 {
 }
 
 /// The terminal settings for a run: the defaults, with the scrollback budget overridable through
-/// `TERMINUS_BENCH_SCROLLBACK` (bytes) to see how much of the cost is the cold scrollback pages.
+/// `TERMOIL_BENCH_SCROLLBACK` (bytes) to see how much of the cost is the cold scrollback pages.
 fn bench_config() -> TerminalConfig {
     let mut c = TerminalConfig::default();
-    if let Some(b) = std::env::var("TERMINUS_BENCH_SCROLLBACK").ok().and_then(|v| v.parse().ok()) {
+    if let Some(b) = std::env::var("TERMOIL_BENCH_SCROLLBACK").ok().and_then(|v| v.parse().ok()) {
         c.scrollback.bytes = b;
     }
     c
@@ -194,13 +194,13 @@ fn machine() -> serde_json::Value {
 /// Parses the streams with a handler that does nothing, to separate parsing from applying.
 fn parse_only() {
     for (name, data) in streams::scenarios() {
-        let mut parser = terminus_vt::parser::Parser::default();
+        let mut parser = termoil_vt::parser::Parser::default();
         let mut count = 0u64;
         let repeat = ((256u64 << 20) / data.len() as u64).max(1);
         let start = Instant::now();
         for _ in 0..repeat {
             for chunk in data.chunks(SLICE) {
-                parser.advance(chunk, &mut |_a: terminus_vt::parser::Action<'_>| count += 1);
+                parser.advance(chunk, &mut |_a: termoil_vt::parser::Action<'_>| count += 1);
             }
         }
         let secs = start.elapsed().as_secs_f64();
@@ -220,7 +220,7 @@ fn p1_gate_line(mixed: f64) -> String {
     format!("P1 gate (mixed >= {gate} MB/s, Terminal 200x60, default scrollback): {mixed:.0} MB/s {verdict}")
 }
 
-/// `throughput [samples] [scenario]`: terminus-vt full on every scenario, rows to p1.jsonl, the gate line.
+/// `throughput [samples] [scenario]`: termoil-vt full on every scenario, rows to p1.jsonl, the gate line.
 fn throughput_command(args: &[String]) {
     let samples = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(3);
     let results = throughput(samples, args.get(3).map(String::as_str));
@@ -232,7 +232,7 @@ fn throughput_command(args: &[String]) {
 }
 
 /// `compare [samples] [scenario|all]`: the comparison table, p1.jsonl rows carrying the
-/// comparison numbers, and the gate line from the terminus-vt full `mixed` row.
+/// comparison numbers, and the gate line from the termoil-vt full `mixed` row.
 fn compare_command(args: &[String]) {
     let samples = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(3);
     let ghostty = compare::latest_ghostty(&bench_dir());
@@ -266,7 +266,7 @@ fn composition_line(name: &str, block: &[u8]) -> String {
 fn write_stream_command(args: &[String]) {
     use std::io::Write;
     let (Some(name), Some(path)) = (args.get(2), args.get(3)) else {
-        eprintln!("usage: terminus-bench write-stream <scenario> <path>");
+        eprintln!("usage: termoil-bench write-stream <scenario> <path>");
         std::process::exit(2);
     };
     let Some((_, block)) = streams::scenarios().into_iter().find(|(n, _)| n == name) else {

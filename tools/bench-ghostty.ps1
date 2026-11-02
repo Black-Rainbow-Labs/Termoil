@@ -1,13 +1,13 @@
 <#
 .SYNOPSIS
-Measures Ghostty 1.4 on the P1 gate file in WSL and records the median for `terminus-bench compare`.
+Measures Ghostty 1.4 on the P1 gate file in WSL and records the median for `termoil-bench compare`.
 
 .DESCRIPTION
-Builds terminus-bench, writes the 1 GiB `mixed` gate file with `terminus-bench write-stream mixed`,
+Builds termoil-bench, writes the 1 GiB `mixed` gate file with `termoil-bench write-stream mixed`,
 runs tools/bench-ghostty.sh inside WSL on it (which fetches zig 0.17.0 and Ghostty v1.4.0 into a
 scratch folder, builds ghostty-bench, runs it, and deletes the scratch folder), and appends the
 JSON row it prints to _agent_output/bench/ghostty.jsonl with the machine and the date. Run it before
-`cargo run --release -p terminus-bench -- compare`, which shows the newest row beside `mixed`.
+`cargo run --release -p termoil-bench -- compare`, which shows the newest row beside `mixed`.
 The gate file is deleted when the script finishes.
 
 .PARAMETER Runs
@@ -20,11 +20,11 @@ $repo = Split-Path -Parent $PSScriptRoot
 
 <#
 .SYNOPSIS
-Builds terminus-bench in release and writes the mixed gate file to `$Path`.
+Builds termoil-bench in release and writes the mixed gate file to `$Path`.
 #>
 function Write-GateFile([string] $Path) {
-    & cargo run --release -q -p terminus-bench --manifest-path (Join-Path $repo 'Cargo.toml') -- write-stream mixed $Path
-    if ($LASTEXITCODE -ne 0) { throw "terminus-bench write-stream failed ($LASTEXITCODE)" }
+    & cargo run --release -q -p termoil-bench --manifest-path (Join-Path $repo 'Cargo.toml') -- write-stream mixed $Path
+    if ($LASTEXITCODE -ne 0) { throw "termoil-bench write-stream failed ($LASTEXITCODE)" }
 }
 
 <#
@@ -63,7 +63,7 @@ function Add-GhosttyRow([string] $Json) {
     $row
 }
 
-$scratch = Join-Path ([IO.Path]::GetTempPath()) "terminus-bench-ghostty-$PID"
+$scratch = Join-Path ([IO.Path]::GetTempPath()) "termoil-bench-ghostty-$PID"
 New-Item -ItemType Directory -Force -Path $scratch | Out-Null
 $gate = Join-Path $scratch 'mixed-1gib.bin'
 try {

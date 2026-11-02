@@ -37,7 +37,7 @@ cmake --build src/build --target dmg-bin -j4
 chmod -R a+rX /opt/libdmg
 ls -l /opt/libdmg/pb/build/hfs/hfsplus /opt/libdmg/src/build/dmg/dmg
 "@
-$file = Join-Path $env:TEMP 'terminus-fetch-dmg-tools.sh'
+$file = Join-Path $env:TEMP 'termoil-fetch-dmg-tools.sh'
 [System.IO.File]::WriteAllText($file, $script.Replace("`r`n", "`n"))
 $wslPath = '/mnt/' + $file.Substring(0, 1).ToLower() + $file.Substring(2).Replace('\', '/')
 & wsl.exe -d $Distribution -u root -e bash $wslPath
