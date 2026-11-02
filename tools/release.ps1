@@ -351,9 +351,11 @@ function Publish-Tag([string] $Version) {
 #>
 function Publish-GitHubRelease([string] $Gh, [string] $Version, [string[]] $Assets) {
     Write-Step "Creating the GitHub release v$Version"
-    $body = if ($Notes) { $Notes } else { "Terminus $Version" }
-    $flag = if ($Stable) { @() } else { @('--prerelease') }
-    Invoke-Checked 'gh release create' { & $Gh release create "v$Version" @Assets --title "Terminus $Version" --notes $body @flag }
+    # Not named $body: inside Invoke-Checked that name is its own scriptblock parameter, which
+    # PowerShell would pass to gh as an encoded command.
+    $releaseNotes = if ($Notes) { $Notes } else { "Terminus $Version" }
+    $releaseFlags = if ($Stable) { @() } else { @('--prerelease') }
+    Invoke-Checked 'gh release create' { & $Gh release create "v$Version" @Assets --title "Terminus $Version" --notes $releaseNotes @releaseFlags }
     Test-DownloadedAssets $Gh $Version $Assets
 }
 
