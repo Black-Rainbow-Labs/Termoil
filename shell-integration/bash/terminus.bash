@@ -150,3 +150,11 @@ __terminus_install_ps1() {
 __terminus_install_prompt_command
 if __terminus_has_ps0; then __terminus_install_ps0; else __terminus_install_debug_trap; fi
 __terminus_install_ps1
+
+# A remote host has no xterm-terminus entry, so ssh gets TERM=xterm-256color, which every host
+# knows. Only when TERM is xterm-terminus and the person has no ssh function or alias of their own.
+if ! declare -F ssh >/dev/null && ! alias ssh >/dev/null 2>&1; then
+    ssh() {
+        if [ "${TERM:-}" = "xterm-terminus" ]; then TERM=xterm-256color command ssh "$@"; else command ssh "$@"; fi
+    }
+fi

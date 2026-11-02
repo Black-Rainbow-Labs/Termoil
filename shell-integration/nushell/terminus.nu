@@ -11,8 +11,15 @@ if (($env.TERMINUS_SHELL_INTEGRATION? | default "") == "1") and (($env.__TERMINU
     $env.__TERMINUS_CMD_RAN = ""
     $env.__TERMINUS_LAST_PWD = ""
 
-    # Nushell can emit OSC 133 and OSC 7 itself. Turn that off so the marks are not sent twice.
-    try { $env.config = ($env.config | upsert shell_integration.osc133 false | upsert shell_integration.osc7 false) }
+    # Nushell can emit OSC 133, OSC 7, OSC 9;9 (the directory as a bare path, on Windows) and
+    # OSC 633 itself. Turn them off so the marks and the directory are not sent twice.
+    try {
+        $env.config = ($env.config
+            | upsert shell_integration.osc133 false
+            | upsert shell_integration.osc7 false
+            | upsert shell_integration.osc9_9 false
+            | upsert shell_integration.osc633 false)
+    }
 
     # Before each prompt: D for the command that ended, OSC 7 when the directory changed, then A.
     let pre_prompt = {||
@@ -51,4 +58,15 @@ if (($env.TERMINUS_SHELL_INTEGRATION? | default "") == "1") and (($env.__TERMINU
     let prompt_hooks = ($hooks.pre_prompt? | default [] | append $pre_prompt)
     let exec_hooks = ($hooks.pre_execution? | default [] | append $pre_execution)
     $env.config = ($env.config | upsert hooks.pre_prompt $prompt_hooks | upsert hooks.pre_execution $exec_hooks)
+}
+
+# A remote host has no xterm-terminus entry, so ssh gets TERM=xterm-256color, which every host
+# knows. A command defined inside the block above would not be visible after it, so this one is
+# defined here; it runs ssh unchanged unless TERM is xterm-terminus.
+def --wrapped ssh [...rest] {
+    if ($env.TERM? | default "") == "xterm-terminus" {
+        with-env { TERM: "xterm-256color" } { ^ssh ...$rest }
+    } else {
+        ^ssh ...$rest
+    }
 }

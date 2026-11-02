@@ -21,6 +21,7 @@ pub mod paths;
 pub mod platform;
 pub mod session;
 pub mod shell_integration;
+pub mod terminfo;
 pub mod themes;
 pub mod view;
 

@@ -58,3 +58,11 @@ __terminus_preexec() {
 autoload -Uz add-zsh-hook
 add-zsh-hook precmd __terminus_precmd
 add-zsh-hook preexec __terminus_preexec
+
+# A remote host has no xterm-terminus entry, so ssh gets TERM=xterm-256color, which every host
+# knows. Only when TERM is xterm-terminus and the person has no ssh function or alias of their own.
+if (( ! ${+functions[ssh]} && ! ${+aliases[ssh]} )); then
+    ssh() {
+        if [[ ${TERM:-} == xterm-terminus ]]; then TERM=xterm-256color command ssh "$@"; else command ssh "$@"; fi
+    }
+fi

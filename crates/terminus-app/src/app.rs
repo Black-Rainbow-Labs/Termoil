@@ -263,6 +263,12 @@ impl App {
             opts.spawn.args = shell.args.clone();
         }
         opts.spawn.cwd = cwd.or_else(|| shell.cwd.as_ref().map(PathBuf::from)).filter(|p| p.is_dir()).or_else(home_dir);
+        if cfg!(unix) {
+            // xterm-terminus only when its terminfo entry can be found (crate::terminfo).
+            opts.spawn.env.retain(|(k, _)| k != "TERM");
+            let existing = std::env::var("TERMINFO_DIRS").ok();
+            opts.spawn.env.extend(crate::terminfo::child_env(crate::terminfo::choice(), existing.as_deref()));
+        }
         opts.spawn.env.extend(shell.env.iter().map(|(k, v)| (k.clone(), v.clone())));
         // Sessions of a separate instance are told its socket, so `terminus +...` inside them
         // reaches the instance that owns them; the primary's sessions find it by default.

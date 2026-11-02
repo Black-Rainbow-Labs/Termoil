@@ -17,6 +17,18 @@ if status is-interactive; and test "$TERMINUS_SHELL_INTEGRATION" = 1; and not se
         set -gx TERM_PROGRAM terminus
     end
 
+    # A remote host has no xterm-terminus entry, so ssh gets TERM=xterm-256color, which every
+    # host knows. Only when TERM is xterm-terminus and the person has no ssh function of their own.
+    if not functions -q ssh
+        function ssh --wraps ssh --description 'ssh with a TERM the remote host knows'
+            if test "$TERM" = xterm-terminus
+                TERM=xterm-256color command ssh $argv
+            else
+                command ssh $argv
+            end
+        end
+    end
+
     # Sends OSC 7 with the working directory when it differs from the last one sent.
     function __terminus_report_cwd
         test "$PWD" = "$__terminus_last_pwd"; and return

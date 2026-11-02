@@ -579,3 +579,72 @@ fn bash_in_wsl() {
         env: Vec::new(),
     });
 }
+
+/// A folder holding a stand in `ssh` that prints the TERM it was given, and the PATH with that
+/// folder first.
+fn fake_ssh() -> (PathBuf, String) {
+    let dir = unique_dir("fake-ssh");
+    std::fs::write(dir.join("ssh"), "#!/bin/sh\necho \"TERM=$TERM\"\n").unwrap();
+    std::fs::write(dir.join("ssh.cmd"), "@echo TERM=%TERM%\r\n").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(dir.join("ssh"), std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let sep = if cfg!(windows) { ";" } else { ":" };
+    let path = format!("{}{sep}{}", dir.display(), std::env::var("PATH").unwrap_or_default());
+    (dir, path)
+}
+
+/// Runs `program` with `args` as an integrated shell with TERM=xterm-terminus and the stand in
+/// ssh first on PATH, and returns what it printed. The callers start each shell without the
+/// person's startup files, which can put another ssh first on PATH.
+fn run_with_fake_ssh(program: &str, args: &[&str], path: &str) -> String {
+    let out = run_locked(
+        std::process::Command::new(program)
+            .args(args)
+            .env("TERMINUS_SHELL_INTEGRATION", "1")
+            .env("TERM", "xterm-terminus")
+            .env("PATH", path),
+    );
+    String::from_utf8_lossy(&out.stdout).into_owned()
+}
+
+/// ssh started from an integrated shell gets TERM=xterm-256color, because the remote host has no
+/// xterm-terminus entry (PRD 5.3, the right terminfo on SSH).
+#[test]
+fn ssh_gets_a_term_the_remote_host_knows() {
+    let dir = scripts_dir();
+    let (fake, path) = fake_ssh();
+    let bash = if cfg!(windows) { "C:/Program Files/Git/bin/bash.exe" } else { "bash" };
+    if available(bash, &["-c", "exit 0"]) {
+        // Git Bash's launcher puts its own folders first on PATH, so the stand in goes first
+        // inside the script, written the way Git Bash writes a Windows path (/c/...).
+        let unix = |p: &Path| {
+            let s = p.display().to_string().replace('\\', "/");
+            match s.split_once(":/") {
+                Some((drive, rest)) if cfg!(windows) => format!("/{}/{rest}", drive.to_lowercase()),
+                _ => s,
+            }
+        };
+        let script = format!(". '{}/bash/terminus.bash'; PATH='{}':\"$PATH\"; ssh", unix(&dir), unix(&fake));
+        let out = run_with_fake_ssh(bash, &["--norc", "-i", "-c", &script], &path);
+        assert!(out.contains("TERM=xterm-256color"), "bash: {out}");
+    }
+    if !cfg!(windows) && available("zsh", &["-c", "exit 0"]) {
+        let script = format!(". '{}/zsh/terminus.zsh'; ssh", dir.display());
+        let out = run_with_fake_ssh("zsh", &["-f", "-i", "-c", &script], &path);
+        assert!(out.contains("TERM=xterm-256color"), "zsh: {out}");
+    }
+    if !cfg!(windows) && available("fish", &["-c", "exit 0"]) {
+        let script = format!("source '{}/fish/vendor_conf.d/terminus.fish'; ssh", dir.display());
+        let out = run_with_fake_ssh("fish", &["--no-config", "-i", "-c", &script], &path);
+        assert!(out.contains("TERM=xterm-256color"), "fish: {out}");
+    }
+    if available("nu", &["-c", "exit 0"]) {
+        let script = format!("source '{}/nushell/terminus.nu'; ssh", dir.display().to_string().replace('\\', "/"));
+        let out = run_with_fake_ssh("nu", &["-c", &script], &path);
+        assert!(out.contains("TERM=xterm-256color"), "nushell: {out}");
+    }
+    let _ = std::fs::remove_dir_all(&fake);
+}
