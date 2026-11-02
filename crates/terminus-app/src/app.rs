@@ -292,6 +292,7 @@ impl App {
         let sb = &self.config.scrollback;
         t.scrollback = ScrollbackLimit { bytes: sb.limit_bytes as usize, lines: sb.limit_lines.map(|l| l as usize) };
         t.allow_osc52_read = self.config.clipboard.allow_osc52_read;
+        t.shared_memory = Some(read_shared_memory);
         t
     }
 
@@ -450,6 +451,19 @@ fn percent_decode(s: &str) -> String {
         i += 1;
     }
     String::from_utf8_lossy(&out).into_owned()
+}
+
+/// Reads a shared memory object for the kitty graphics protocol through `terminus_pty::shm`.
+pub fn read_shared_memory(
+    name: &str, offset: u64, size: u64, max_bytes: usize,
+) -> Result<Vec<u8>, terminus_vt::graphics::ShmError> {
+    use terminus_pty::shm::ShmError as Pty;
+    use terminus_vt::graphics::ShmError as Vt;
+    terminus_pty::shm::read_shared_memory(name, offset, size, max_bytes).map_err(|e| match e {
+        Pty::Unreadable => Vt::Unreadable,
+        Pty::TooLarge => Vt::TooLarge,
+        Pty::Unsupported => Vt::Unsupported,
+    })
 }
 
 #[cfg(test)]

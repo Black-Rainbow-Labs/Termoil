@@ -54,6 +54,9 @@ pub struct TerminalConfig {
     pub max_title: usize,
     /// Prompt marks kept before the oldest are dropped.
     pub max_marks: usize,
+    /// How the kitty graphics protocol reads a shared memory object (`t=s`); the host supplies it
+    /// (`terminus_pty::shm`). None answers `t=s` with an error.
+    pub shared_memory: Option<crate::graphics::SharedMemoryReader>,
 }
 
 impl Default for TerminalConfig {
@@ -73,6 +76,7 @@ impl Default for TerminalConfig {
             max_hyperlink_uri: 4096,
             max_title: 4096,
             max_marks: 100_000,
+            shared_memory: None,
         }
     }
 }

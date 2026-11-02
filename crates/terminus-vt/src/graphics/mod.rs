@@ -3,8 +3,9 @@
 //!
 //! Row positions are serials: a `u64` per grid row that never changes while the row exists. A placement
 //! anchors at (serial, column) and covers `rows` rows with consecutive serials starting at its anchor.
-//! This module depends on nothing else in the crate, has no `unsafe`, and builds for wasm (file and shared
-//! memory transmission are compiled out there and answer with an error).
+//! This module depends on nothing else in the crate, has no `unsafe`, and builds for wasm (file transmission
+//! is compiled out there and answers with an error). Shared memory is read by the host's
+//! `SharedMemoryReader`, so the crate itself never opens an operating system object.
 
 mod anim;
 mod command;
@@ -46,7 +47,24 @@ pub struct GraphicsContext {
     pub cell_px: (u16, u16),
     /// Whether file, temporary file and shared memory transmission are allowed.
     pub allow_file_transfer: bool,
+    /// How to read a shared memory object, from the host; None answers `t=s` with EINVAL.
+    pub shared_memory: Option<SharedMemoryReader>,
 }
+
+/// Why a shared memory read failed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ShmError {
+    /// The name is invalid, the object does not exist, or the offset and size lie outside it.
+    Unreadable,
+    /// The requested size is over the quota.
+    TooLarge,
+    /// The host cannot read shared memory on this platform.
+    Unsupported,
+}
+
+/// Reads `size` bytes (the rest of the object when 0) from `offset` of the shared memory object
+/// `name`, at most `max_bytes`. The host supplies it (`TerminalConfig::shared_memory`).
+pub type SharedMemoryReader = fn(name: &str, offset: u64, size: u64, max_bytes: usize) -> Result<Vec<u8>, ShmError>;
 
 /// What the terminal must do after a graphics command.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

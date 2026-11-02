@@ -51,6 +51,7 @@ impl Terminal {
             rows: s.rows(),
             cell_px: self.cell_pixel,
             allow_file_transfer: true,
+            shared_memory: self.config.shared_memory,
         }
     }
 

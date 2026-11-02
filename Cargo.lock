@@ -3104,6 +3104,7 @@ dependencies = [
 name = "terminus-pty"
 version = "0.1.1"
 dependencies = [
+ "libc",
  "rustix 1.1.6",
  "rustix-openpty",
  "windows",
@@ -3135,6 +3136,7 @@ version = "0.1.1"
 dependencies = [
  "base64",
  "flate2",
+ "libc",
  "lz4_flex",
  "memchr",
  "png 0.17.16",
@@ -3142,6 +3144,8 @@ dependencies = [
  "regex",
  "serde_json",
  "simdutf8",
+ "terminus-pty",
+ "windows",
 ]
 
 [[package]]

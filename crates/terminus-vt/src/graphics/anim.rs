@@ -54,7 +54,7 @@ impl GraphicsStore {
     fn add_frame(&mut self, cmd: &KittyCommand, ctx: &GraphicsContext) -> Result<u32, KErr> {
         let index = self.find_target(cmd)?;
         let (id, width, height) = (self.images[index].id, self.images[index].width, self.images[index].height);
-        let data = self.load_pixels(cmd, Some((width, height)), ctx.allow_file_transfer)?;
+        let data = self.load_pixels(cmd, Some((width, height)), ctx)?;
         let at = (cmd.uint(b'x'), cmd.uint(b'y'));
         check_inside(at.0, at.1, data.width, data.height, width, height)?;
         let edit = cmd.uint(b'r');

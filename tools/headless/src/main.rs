@@ -100,7 +100,8 @@ fn run(o: &Options) -> i32 {
         }
     });
     let mut writer = pty.take_writer().expect("writer");
-    let config = TerminalConfig { allow_osc52_read: true, ..TerminalConfig::default() };
+    let config =
+        TerminalConfig { allow_osc52_read: true, shared_memory: Some(read_shared_memory), ..TerminalConfig::default() };
     let mut term = Terminal::new(o.cols, o.rows, config);
     term.set_apply_resize_requests(true);
     let mut recording = Vec::new();
@@ -320,4 +321,17 @@ fn main() {
         }
     };
     std::process::exit(code);
+}
+
+/// Reads a shared memory object for the kitty graphics protocol through `terminus_pty::shm`.
+pub fn read_shared_memory(
+    name: &str, offset: u64, size: u64, max_bytes: usize,
+) -> Result<Vec<u8>, terminus_vt::graphics::ShmError> {
+    use terminus_pty::shm::ShmError as Pty;
+    use terminus_vt::graphics::ShmError as Vt;
+    terminus_pty::shm::read_shared_memory(name, offset, size, max_bytes).map_err(|e| match e {
+        Pty::Unreadable => Vt::Unreadable,
+        Pty::TooLarge => Vt::TooLarge,
+        Pty::Unsupported => Vt::Unsupported,
+    })
 }

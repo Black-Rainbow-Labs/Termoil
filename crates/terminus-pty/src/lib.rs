@@ -16,6 +16,7 @@ mod windows;
 use windows as imp;
 
 mod options;
+pub mod shm;
 
 pub use options::{PtySize, SpawnOptions};
 

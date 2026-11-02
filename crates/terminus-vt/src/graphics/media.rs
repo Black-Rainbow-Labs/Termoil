@@ -20,6 +20,8 @@ pub(crate) struct MediaRequest {
     pub allowed: bool,
     /// Most bytes that may be read.
     pub max_bytes: usize,
+    /// The host's shared memory reader.
+    pub shared_memory: Option<super::SharedMemoryReader>,
 }
 
 /// The one error every read failure maps to.
@@ -97,24 +99,18 @@ fn read_range(request: &MediaRequest, name: &str) -> Result<Vec<u8>, KErr> {
     Ok(out)
 }
 
-/// POSIX shared memory: the object is `/dev/shm/<name>`, read as a file and then unlinked.
-#[cfg(all(unix, not(target_arch = "wasm32")))]
+/// Shared memory: the host's reader opens the named object and copies the requested range.
+#[cfg(not(target_arch = "wasm32"))]
 fn read_shared_memory(request: &MediaRequest, name: &str) -> Result<Vec<u8>, KErr> {
-    let object = name.strip_prefix('/').ok_or_else(unreadable)?;
-    if object.is_empty() || object.contains('/') || object.contains('\0') {
-        return Err(unreadable());
-    }
-    let path = format!("/dev/shm/{}", object);
-    let data = read_file(request, &path)?;
-    let _ = std::fs::remove_file(&path);
-    Ok(data)
-}
-
-/// Named shared memory on Windows needs `unsafe` Win32 calls, which this crate does not use, so it answers
-/// with an error the client can tell apart from a missing file and fall back to a file or direct transfer.
-#[cfg(all(not(unix), not(target_arch = "wasm32")))]
-fn read_shared_memory(_request: &MediaRequest, _name: &str) -> Result<Vec<u8>, KErr> {
-    Err(KErr::new("EINVAL", "Shared memory transmission is not supported on this platform"))
+    use super::ShmError;
+    let Some(read_object) = request.shared_memory else {
+        return Err(KErr::new("EINVAL", "This terminal cannot read shared memory"));
+    };
+    read_object(name, request.offset as u64, request.size as u64, request.max_bytes).map_err(|e| match e {
+        ShmError::Unreadable => unreadable(),
+        ShmError::TooLarge => KErr::new("EFBIG", "Image data is too large"),
+        ShmError::Unsupported => KErr::new("EINVAL", "Shared memory transmission is not supported on this platform"),
+    })
 }
 
 /// Deletes a `t=t` file, but only inside a known temporary directory and only when the path contains

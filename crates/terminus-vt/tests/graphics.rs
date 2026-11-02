@@ -23,7 +23,21 @@ fn ctx() -> GraphicsContext {
         rows: 24,
         cell_px: (10, 20),
         allow_file_transfer: true,
+        shared_memory: Some(read_shared_memory),
     }
+}
+
+/// The shared memory reader the app gives the terminal (`terminus_pty::shm`).
+fn read_shared_memory(
+    name: &str, offset: u64, size: u64, max_bytes: usize,
+) -> Result<Vec<u8>, terminus_vt::graphics::ShmError> {
+    use terminus_pty::shm::ShmError as Pty;
+    use terminus_vt::graphics::ShmError as Vt;
+    terminus_pty::shm::read_shared_memory(name, offset, size, max_bytes).map_err(|e| match e {
+        Pty::Unreadable => Vt::Unreadable,
+        Pty::TooLarge => Vt::TooLarge,
+        Pty::Unsupported => Vt::Unsupported,
+    })
 }
 
 /// A context with the cursor somewhere else.
@@ -577,23 +591,163 @@ fn medium_disallowed_is_eperm() {
     std::fs::remove_file(&path).unwrap();
 }
 
-#[test]
-fn medium_shared_memory() {
-    let mut s = store();
-    if cfg!(unix) && std::path::Path::new("/dev/shm").is_dir() {
-        let name = "terminus-test-shm";
-        std::fs::write(format!("/dev/shm/{}", name), solid(1, 1, [4, 3, 2, 1])).unwrap();
-        let r = send(&mut s, "a=t,i=1,t=s,f=32,s=1,v=1", format!("/{}", name).as_bytes());
-        assert_eq!(body(&r), "i=1;OK");
-        assert!(!std::path::Path::new(&format!("/dev/shm/{}", name)).exists());
-        let r = send(&mut s, "a=t,i=2,t=s,f=32,s=1,v=1", b"/a/b");
-        assert!(body(&r).contains("EBADF"));
-        let r = send(&mut s, "a=t,i=3,t=s,f=32,s=1,v=1", b"noslash");
-        assert!(body(&r).contains("EBADF"));
-    } else {
-        let r = send(&mut s, "a=t,i=1,t=s,f=32,s=1,v=1", b"/name");
-        assert!(body(&r).contains("EINVAL") || body(&r).contains("EBADF"), "{}", body(&r));
+/// A shared memory object the test created, released when dropped.
+#[cfg(any(unix, windows))]
+struct ShmObject {
+    /// The name to send in the payload.
+    name: String,
+    #[cfg(windows)]
+    handle: windows::Win32::Foundation::HANDLE,
+}
+
+#[cfg(any(unix, windows))]
+impl Drop for ShmObject {
+    /// Closes the mapping (Windows) or unlinks the object if the terminal did not (Unix).
+    fn drop(&mut self) {
+        #[cfg(windows)]
+        // SAFETY: `handle` came from `CreateFileMappingW` and is closed once.
+        unsafe {
+            let _ = windows::Win32::Foundation::CloseHandle(self.handle);
+        }
+        #[cfg(unix)]
+        if let Ok(c) = std::ffi::CString::new(self.name.clone()) {
+            // SAFETY: `c` is a valid NUL terminated string.
+            unsafe { libc::shm_unlink(c.as_ptr()) };
+        }
     }
+}
+
+/// Creates a shared memory object named after `tag` and this process holding `data`.
+#[cfg(unix)]
+fn create_shm(tag: &str, data: &[u8]) -> ShmObject {
+    let name = format!("/tsm{}{}", std::process::id(), tag);
+    let c = std::ffi::CString::new(name.clone()).unwrap();
+    // SAFETY: `c` is a valid string; the descriptor is checked, written through `write` with a valid
+    // buffer and closed once.
+    unsafe {
+        let fd = libc::shm_open(c.as_ptr(), libc::O_CREAT | libc::O_RDWR, 0o600);
+        assert!(fd >= 0, "shm_open failed");
+        assert_eq!(libc::ftruncate(fd, data.len() as libc::off_t), 0);
+        assert_eq!(libc::write(fd, data.as_ptr() as *const libc::c_void, data.len()), data.len() as isize);
+        libc::close(fd);
+    }
+    ShmObject { name }
+}
+
+/// Creates a named file mapping named after `tag` and this process holding `data`.
+#[cfg(windows)]
+fn create_shm(tag: &str, data: &[u8]) -> ShmObject {
+    use windows::Win32::Foundation::INVALID_HANDLE_VALUE;
+    use windows::Win32::System::Memory::{
+        CreateFileMappingW, FILE_MAP_WRITE, MapViewOfFile, PAGE_READWRITE, UnmapViewOfFile,
+    };
+    use windows::core::PCWSTR;
+    let name = format!("tsm{}{}", std::process::id(), tag);
+    let wide: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
+    // SAFETY: `wide` is NUL terminated; the mapping is `data.len()` bytes, so the copy stays inside the view.
+    let handle = unsafe {
+        let handle =
+            CreateFileMappingW(INVALID_HANDLE_VALUE, None, PAGE_READWRITE, 0, data.len() as u32, PCWSTR(wide.as_ptr()))
+                .unwrap();
+        let view = MapViewOfFile(handle, FILE_MAP_WRITE, 0, 0, 0);
+        assert!(!view.Value.is_null());
+        std::ptr::copy_nonoverlapping(data.as_ptr(), view.Value as *mut u8, data.len());
+        let _ = UnmapViewOfFile(view);
+        handle
+    };
+    ShmObject { name, handle }
+}
+
+/// Whether the object named `name` still exists (Unix only: the terminal unlinks it after reading).
+#[cfg(unix)]
+fn shm_exists(name: &str) -> bool {
+    let c = std::ffi::CString::new(name).unwrap();
+    // SAFETY: `c` is a valid string and a descriptor that opens is closed at once.
+    unsafe {
+        let fd = libc::shm_open(c.as_ptr(), libc::O_RDONLY, 0);
+        if fd >= 0 {
+            libc::close(fd);
+        }
+        fd >= 0
+    }
+}
+
+#[cfg(any(unix, windows))]
+#[test]
+fn medium_shared_memory_displays_image() {
+    let obj = create_shm("a", &solid(2, 2, [4, 3, 2, 1]));
+    let mut s = store();
+    let r = send(&mut s, "a=T,i=1,t=s,f=32,s=2,v=2", obj.name.as_bytes());
+    assert_eq!(body(&r), "i=1;OK");
+    assert_eq!(&s.image(1).unwrap().rgba[..], &solid(2, 2, [4, 3, 2, 1])[..]);
+    assert_eq!(s.placements().count(), 1);
+    #[cfg(unix)]
+    assert!(!shm_exists(&obj.name), "t=s must unlink the object on Unix");
+}
+
+#[cfg(any(unix, windows))]
+#[test]
+fn medium_shared_memory_size_and_offset() {
+    let mut data = vec![0u8; 5];
+    data.extend(solid(1, 2, [3, 4, 5, 6]));
+    data.extend([9u8; 7]);
+    let obj = create_shm("b", &data);
+    let mut s = store();
+    let r = send(&mut s, "a=t,i=1,t=s,f=32,s=1,v=2,S=8,O=5", obj.name.as_bytes());
+    assert_eq!(body(&r), "i=1;OK");
+    assert_eq!(&s.image(1).unwrap().rgba[..], &solid(1, 2, [3, 4, 5, 6])[..]);
+}
+
+#[cfg(any(unix, windows))]
+#[test]
+fn medium_shared_memory_offset_beyond_size() {
+    let obj = create_shm("c", &solid(1, 1, [1, 2, 3, 4]));
+    let mut s = store();
+    let r = send(&mut s, "a=t,i=1,t=s,f=32,s=1,v=1,O=1000000", obj.name.as_bytes());
+    assert!(body(&r).starts_with("i=1;EBADF"), "{}", body(&r));
+    let r = send(&mut s, "a=t,i=2,t=s,f=32,s=1,v=1,S=1048576,O=0", obj.name.as_bytes());
+    assert!(body(&r).starts_with("i=2;EBADF"), "{}", body(&r));
+    assert_eq!(s.images().count(), 0);
+}
+
+#[cfg(any(unix, windows))]
+#[test]
+fn medium_shared_memory_over_quota_is_efbig() {
+    let obj = create_shm("d", &solid(1, 1, [1, 2, 3, 4]));
+    let mut s = store();
+    let r = send(&mut s, "a=t,i=1,t=s,f=32,s=1,v=1,S=4294967295", obj.name.as_bytes());
+    assert!(body(&r).starts_with("i=1;EFBIG"), "{}", body(&r));
+}
+
+#[test]
+fn medium_shared_memory_bad_names() {
+    let mut s = store();
+    for (i, name) in ["/does-not-exist-tsm", "does-not-exist-tsm", "/a/b", "a/b", "a\\b", "/", ""].iter().enumerate() {
+        let r = send(&mut s, &format!("a=t,i={},t=s,f=32,s=1,v=1", i + 1), name.as_bytes());
+        assert!(body(&r).contains("EBADF") || body(&r).contains("EINVAL"), "{}: {}", name, body(&r));
+    }
+    // Missing payload entirely.
+    let r = cmd(&mut s, "a=t,i=9,t=s,f=32,s=1,v=1");
+    assert!(body(&r).contains("E"), "{}", body(&r));
+    assert_eq!(s.images().count(), 0);
+}
+
+#[test]
+fn medium_shared_memory_disallowed_is_eperm() {
+    let mut s = store();
+    let c = GraphicsContext { allow_file_transfer: false, ..ctx() };
+    let r = send_at(&mut s, "a=t,i=1,t=s,f=32,s=1,v=1", b"/name", &c);
+    assert!(body(&r).contains("EPERM"), "{}", body(&r));
+}
+
+/// A host that gives the terminal no shared memory reader gets EINVAL for `t=s`; terminus-vt
+/// opens no operating system object itself.
+#[test]
+fn medium_shared_memory_without_a_reader_is_einval() {
+    let mut s = store();
+    let c = GraphicsContext { shared_memory: None, ..ctx() };
+    let r = send_at(&mut s, "a=t,i=1,t=s,f=32,s=1,v=1", b"/name", &c);
+    assert!(body(&r).contains("EINVAL"), "{}", body(&r));
 }
 
 // ---------------------------------------------------------------- chunking

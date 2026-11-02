@@ -133,7 +133,7 @@ impl GraphicsStore {
 
     /// Decodes the pixels a command transmits, from the payload or from the medium it names.
     pub(super) fn load_pixels(
-        &self, cmd: &KittyCommand, default_size: Option<(u32, u32)>, allow_files: bool,
+        &self, cmd: &KittyCommand, default_size: Option<(u32, u32)>, ctx: &GraphicsContext,
     ) -> Result<Decoded, KErr> {
         let format = if cmd.has(b'f') { cmd.uint(b'f') } else { 32 };
         let (dw, dh) = default_size.unwrap_or((0, 0));
@@ -156,10 +156,15 @@ impl GraphicsStore {
                     medium: m,
                     size: cmd.uint(b'S'),
                     offset: cmd.uint(b'O'),
-                    allowed: allow_files,
+                    allowed: ctx.allow_file_transfer,
                     max_bytes,
+                    shared_memory: ctx.shared_memory,
                 };
-                read_media(&request, &cmd.payload)?
+                let mut bytes = read_media(&request, &cmd.payload)?;
+                if m == b's' && request.size == 0 {
+                    trim_to_raw_size(&mut bytes, &spec);
+                }
+                bytes
             }
             _ => return Err(KErr::new("EINVAL", "Unsupported transmission medium")),
         };
@@ -171,7 +176,7 @@ impl GraphicsStore {
         if cmd.uint(b'i') != 0 && cmd.uint(b'I') != 0 {
             return self.finish(cmd, 0, Err(KErr::new("EINVAL", "Cannot specify both i and I")), None);
         }
-        let stored = self.load_pixels(cmd, None, ctx.allow_file_transfer).and_then(|d| self.store_decoded(cmd, d));
+        let stored = self.load_pixels(cmd, None, ctx).and_then(|d| self.store_decoded(cmd, d));
         let id = match stored {
             Ok(id) => id,
             Err(e) => return self.finish(cmd, 0, Err(e), None),
@@ -205,7 +210,7 @@ impl GraphicsStore {
 
     /// Validates a transmission and answers without storing anything (`a=q`).
     fn run_query(&mut self, cmd: &KittyCommand, ctx: &GraphicsContext) -> GraphicsResult {
-        let outcome = self.load_pixels(cmd, None, ctx.allow_file_transfer).and_then(|d| self.check_fits(&d));
+        let outcome = self.load_pixels(cmd, None, ctx).and_then(|d| self.check_fits(&d));
         let assigned = cmd.uint(b'i');
         self.finish(cmd, assigned, outcome, None)
     }
@@ -279,4 +284,21 @@ fn put_ids(cmd: &KittyCommand, placed: &super::place::Placed) -> ReplyIds {
     let number = cmd.uint(b'I');
     let id = if cmd.uint(b'i') != 0 || number != 0 { placed.image_id } else { 0 };
     ReplyIds { id, number, placement: placed.placement_id }
+}
+
+/// Shared memory objects can be rounded up to a whole page when no `S` is given. For uncompressed raw
+/// pixels with known dimensions the extra trailing bytes are dropped so the size check sees the real data.
+fn trim_to_raw_size(bytes: &mut Vec<u8>, spec: &PixelSpec) {
+    let per_pixel = match spec.format {
+        24 => 3u64,
+        32 => 4u64,
+        _ => return,
+    };
+    if spec.compressed || spec.width == 0 || spec.height == 0 {
+        return;
+    }
+    let expected = spec.width as u64 * spec.height as u64 * per_pixel;
+    if (bytes.len() as u64) > expected {
+        bytes.truncate(expected as usize);
+    }
 }
