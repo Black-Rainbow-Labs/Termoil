@@ -37,8 +37,11 @@ pub fn coalescing_wakers<M: Send + 'static>(tx: Sender<M>, make: fn(PaneId, Arc<
 }
 
 /// Runs the headless instance on this thread until a `quit` action. Errors when another instance
-/// already serves the socket.
-pub fn run(config: Config, config_path: PathBuf, socket: &str) -> Result<(), String> {
+/// already serves the socket. `first_window` opens a window at start (a separate instance does,
+/// with its cwd and command); the primary headless instance starts with none.
+pub fn run(
+    config: Config, config_path: PathBuf, socket: &str, first_window: Option<(Option<PathBuf>, Option<String>)>,
+) -> Result<(), String> {
     let (tx, rx) = unbounded::<Msg>();
     let wakers = coalescing_wakers(tx.clone(), Msg::Wake);
     let mut app = App::new(config, config_path, Box::new(MemoryClipboard::default()), wakers);
@@ -50,6 +53,10 @@ pub fn run(config: Config, config_path: PathBuf, socket: &str) -> Result<(), Str
         Err(ServeError::Io(e)) => return Err(format!("could not serve {socket}: {e}")),
     }
     drop(tx);
+    if let Some((cwd, command)) = first_window {
+        crate::actions::new_window(&mut app, cwd, command.as_deref()).map_err(|e| e.to_string())?;
+        let _ = app.take_effects();
+    }
     serve(&mut app, &rx);
     for id in app.panes.keys().copied().collect::<Vec<_>>() {
         app.close_pane(id);

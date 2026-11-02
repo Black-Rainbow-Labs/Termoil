@@ -18,7 +18,12 @@ use terminus_protocol::{Client, Response};
 
 /// Entry point.
 fn main() -> ExitCode {
-    let argv: Vec<String> = std::env::args().skip(1).collect();
+    let mut argv: Vec<String> = std::env::args().skip(1).collect();
+    if argv.first().is_some_and(|a| a == "--socket") && argv.len() >= 2 {
+        // SAFETY: set before any other thread starts; the client reads it to find the instance.
+        unsafe { std::env::set_var("TERMINUS_SOCKET", &argv[1]) };
+        argv.drain(..2);
+    }
     match argv.first().map(String::as_str) {
         Some("+mcp") => mcp::serve(),
         // The P2 latency benchmark's child: a console program, which terminus-gui is not.

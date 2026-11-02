@@ -252,7 +252,8 @@ fn palette_enter(p: &mut PaletteUi, app: &mut App) -> After {
             return After::Open;
         }
     }
-    let _ = app.run_action(&ActionCall { action: e.action.to_string(), args: Map::new() });
+    let args = e.preset.and_then(|p| serde_json::from_str(p).ok()).unwrap_or_default();
+    let _ = app.run_action(&ActionCall { action: e.action.to_string(), args });
     After::Close
 }
 

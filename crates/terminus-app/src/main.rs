@@ -1,6 +1,7 @@
 //! `terminus-gui`: the Terminus window (`docs/TDD.md` section 4.8).
 //!
-//! `terminus-gui [--cwd DIR] [--command CMD] [--socket NAME] [--headless]`. With `--headless` it
+//! `terminus-gui [--cwd DIR] [--command CMD] [--socket NAME] [--headless] [--separate]`. `--separate`
+//! starts an instance with its own socket instead of handing the window to the running one. With `--headless` it
 //! serves IPC with no windows (the E5 tests and scripts use it). When another instance already
 //! serves the socket, the new window opens in that instance and this process exits.
 //!
@@ -19,6 +20,8 @@ struct Args {
     cwd: Option<String>,
     command: Option<String>,
     headless: bool,
+    separate: bool,
+    socket: Option<String>,
     bench: Option<(usize, String)>,
 }
 
@@ -31,8 +34,8 @@ fn parse_args() -> Result<Args, String> {
         match arg.as_str() {
             "--cwd" => a.cwd = Some(it.next().ok_or("--cwd needs a folder")?),
             "--command" | "-e" => a.command = Some(it.next().ok_or("--command needs a program")?),
-            // SAFETY: set before any other thread starts.
-            "--socket" => unsafe { std::env::set_var("TERMINUS_SOCKET", it.next().ok_or("--socket needs a name")?) },
+            "--socket" => a.socket = Some(it.next().ok_or("--socket needs a name")?),
+            "--separate" => a.separate = true,
             "--headless" => a.headless = true,
             "--bench-latency" => {
                 let keys = it
@@ -73,15 +76,29 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
+    let socket = args
+        .socket
+        .clone()
+        .or_else(|| args.separate.then(|| terminus_protocol::separate_socket_name(std::process::id())));
+    if let Some(s) = socket {
+        // SAFETY: set before any other thread starts.
+        unsafe { std::env::set_var("TERMINUS_SOCKET", s) };
+    }
+    let _ = terminus_app::app::INSTANCE
+        .set(terminus_app::app::InstanceMode { separate: args.separate, headless: args.headless });
     let path = Config::path();
     let config = Config::load(&path).map(|(c, _)| c).unwrap_or_default();
     let socket = terminus_protocol::socket_name();
     let bench = bench_setup(&mut args);
     let result = if args.headless {
-        terminus_app::headless::run(config, path, &socket)
+        let first = args.separate.then(|| (args.cwd.clone().map(std::path::PathBuf::from), args.command.clone()));
+        terminus_app::headless::run(config, path, &socket, first)
     } else {
         terminus_app::gui::run(config, path, &socket, args.cwd, args.command, bench)
     };
+    // Replies to the request that ended the instance (quit) are written by the IPC threads; give
+    // them a moment to reach their clients before the process ends.
+    std::thread::sleep(std::time::Duration::from_millis(150));
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {

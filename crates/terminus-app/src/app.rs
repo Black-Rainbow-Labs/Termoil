@@ -20,6 +20,23 @@ use crate::config::Config;
 use crate::model::{Model, PaneId, WinId};
 use crate::session::{PromptWaiter, Session, SessionOptions, Waker};
 
+/// How this process was started.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct InstanceMode {
+    /// `--separate`: a window in a process of its own, with its own socket.
+    pub separate: bool,
+    /// `--headless`: no windows.
+    pub headless: bool,
+}
+
+/// The mode of this process, set once by `main`.
+pub static INSTANCE: std::sync::OnceLock<InstanceMode> = std::sync::OnceLock::new();
+
+/// The mode of this process (the default when `main` did not set one, as in tests).
+pub fn instance_mode() -> InstanceMode {
+    INSTANCE.get().copied().unwrap_or_default()
+}
+
 /// Something the window layer does after an action.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Effect {
@@ -247,7 +264,11 @@ impl App {
         }
         opts.spawn.cwd = cwd.or_else(|| shell.cwd.as_ref().map(PathBuf::from)).filter(|p| p.is_dir()).or_else(home_dir);
         opts.spawn.env.extend(shell.env.iter().map(|(k, v)| (k.clone(), v.clone())));
-        opts.spawn.env.push(("TERMINUS_SOCKET".into(), terminus_protocol::socket_name()));
+        // Sessions of a separate instance are told its socket, so `terminus +...` inside them
+        // reaches the instance that owns them; the primary's sessions find it by default.
+        if instance_mode().separate {
+            opts.spawn.env.push(("TERMINUS_SOCKET".into(), terminus_protocol::socket_name()));
+        }
         if shell.integration && command.is_none() {
             inject_shell_integration(&mut opts.spawn);
         }

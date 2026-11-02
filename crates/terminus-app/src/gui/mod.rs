@@ -138,7 +138,8 @@ impl Gui {
         })
         .ok();
         let bound = resolve(&config.resolved_keybindings(Platform::current()));
-        if let Ok(chord) = crate::keymap::parse_chord(&config.window.quick_terminal_hotkey)
+        if !crate::app::instance_mode().separate
+            && let Ok(chord) = crate::keymap::parse_chord(&config.window.quick_terminal_hotkey)
             && let Err(e) = quick::listen(&chord, proxy.clone())
         {
             eprintln!("terminus: no quick terminal hotkey: {e}");

@@ -112,18 +112,29 @@ pub fn decode_response(line: &str) -> Result<Response, String> {
 }
 
 /// The name of the running instance's socket: `\\.\pipe\terminus-<user>` on Windows,
-/// `$XDG_RUNTIME_DIR/terminus.sock` (or the temp folder) elsewhere. `TERMINUS_SOCKET` overrides it,
-/// which the tests use to run instances side by side.
+/// `$XDG_RUNTIME_DIR/terminus-<user>.sock` (or the temp folder) elsewhere. `TERMINUS_SOCKET` overrides it,
+/// which the tests and `terminus-gui --separate` use.
 pub fn socket_name() -> String {
     if let Ok(s) = std::env::var("TERMINUS_SOCKET") {
         return s;
     }
+    named_socket("")
+}
+
+/// The socket of an instance started with `terminus-gui --separate`: the primary name with the
+/// process id added (`docs/decisions/detach.md`).
+pub fn separate_socket_name(pid: u32) -> String {
+    named_socket(&format!("-{pid}"))
+}
+
+/// The default socket name with `suffix` after the user name.
+fn named_socket(suffix: &str) -> String {
     let user = std::env::var("USERNAME").or_else(|_| std::env::var("USER")).unwrap_or_else(|_| "user".into());
     if cfg!(windows) {
-        format!(r"\\.\pipe\terminus-{user}")
+        format!(r"\\.\pipe\terminus-{user}{suffix}")
     } else {
         let dir =
             std::env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| std::env::temp_dir().to_string_lossy().into_owned());
-        format!("{dir}/terminus-{user}.sock")
+        format!("{dir}/terminus-{user}{suffix}.sock")
     }
 }

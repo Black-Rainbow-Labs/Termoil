@@ -11,6 +11,10 @@
           "cwd": {
             "description": "Working directory for the shell.",
             "type": "string"
+          },
+          "separate": {
+            "description": "Start the window in a process of its own, with its own socket; the answer names the socket.",
+            "type": "boolean"
           }
         },
         "required": [],

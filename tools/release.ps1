@@ -16,7 +16,7 @@
     6. Compiles the Inno Setup installer into installer/dist/.
     7. Installs it silently on this machine and checks that the installed `terminus.exe +version`
        prints the new version.
-    8. Builds the Linux AppImage and .deb in WSL (the macOS dmg is not built until M4).
+    8. Builds the Linux AppImage and .deb in WSL (the macOS dmg comes from installer/macos/build-on-windows.ps1 when its preflight passes).
     9. Commits Cargo.toml and Cargo.lock as `Release v<version>`, tags `v<version>`, and pushes the
        branch and the tag.
    10. Creates the GitHub release with the installers attached, then downloads each asset back and
@@ -305,11 +305,30 @@ function Install-OnThisMachine([string] $Installer, [string] $Version) {
 
 <#
 .SYNOPSIS
-  Builds the macOS dmg. Not built until M4.
+  Builds the macOS dmg with installer/macos/build-on-windows.ps1 and returns its path.
+.DESCRIPTION
+  The script builds both Apple architectures with the cross toolchain, signs with the Developer ID,
+  notarises, staples and writes a universal dmg to installer/dist. It runs after the version bump,
+  so it reads the new version from Cargo.toml. When its -Preflight reports that something is missing
+  (the SDK, the cross tools, the signing identity, the notary credential or the dmg tools in WSL)
+  the step is skipped with the reason and returns nothing.
 #>
 function Build-MacosPackage {
-    Write-Host 'macOS dmg: not built until M4, skipping.'
-    return @()
+    $script = Join-Path $Repo 'installer/macos/build-on-windows.ps1'
+    $problems = (& pwsh -NoProfile -File $script -Preflight) -join ' '
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "macOS dmg: skipped, because $problems"
+        return @()
+    }
+    Write-Step 'Building, signing and notarising the macOS dmg'
+    # Every line goes to the console and is kept, because the script's last line names the dmg.
+    $printed = @(& pwsh -NoProfile -File $script -Notarize 2>&1 | ForEach-Object { Write-Host $_; "$_" })
+    if ($LASTEXITCODE -ne 0) { throw "installer/macos/build-on-windows.ps1 failed with exit code $LASTEXITCODE." }
+    $dmgLine = $printed | Where-Object { $_ -like 'DMG: *' } | Select-Object -Last 1
+    if (-not $dmgLine) { throw 'installer/macos/build-on-windows.ps1 did not print the dmg path.' }
+    $dmg = $dmgLine.Substring(5)
+    if (-not (Test-Path -LiteralPath $dmg)) { throw "The macOS build did not produce $dmg." }
+    return @($dmg)
 }
 
 <#
@@ -442,7 +461,7 @@ if ($WhatIf) {
     Write-Host '    4. cargo build --release -p terminus-cli -p terminus-app'
     Write-Host '    5. fetch ConPTY if missing, compile installer/windows/terminus.iss with ISCC'
     Write-Host "    6. $(if ($SkipInstall) { 'skip the install on this machine' } else { "install silently into $InstallDir and check terminus.exe +version prints $next" })"
-    Write-Host '    7. macOS dmg: not built until M4; Linux AppImage and .deb: built in WSL by installer/linux/build.sh when wsl.exe exists'
+    Write-Host '    7. macOS dmg: installer/macos/build-on-windows.ps1 -Notarize when its -Preflight passes, otherwise skipped with the reason; Linux AppImage and .deb: built in WSL by installer/linux/build.sh when wsl.exe exists'
     Write-Host "    8. commit 'Release v$next', tag v$next, push the branch and the tag"
     Write-Host "    9. gh release create v$next with $(Join-Path $DistDir "TerminusSetup-$next-x64.exe") ($kind)"
     Write-Host '   10. download each asset back and compare SHA256 with the local file'

@@ -34,5 +34,5 @@ fn a4_palette_lists_every_action() {
     for a in CATALOGUE {
         assert!(entries.iter().any(|e| e.action == a.name), "the palette does not list {}", a.name);
     }
-    assert_eq!(entries.len(), CATALOGUE.len());
+    assert_eq!(entries.iter().filter(|e| e.preset.is_none()).count(), CATALOGUE.len());
 }

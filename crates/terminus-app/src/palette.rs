@@ -17,6 +17,9 @@ pub struct Entry {
     pub keys: String,
     /// The action has required parameters, so the palette asks for them before running it.
     pub needs_args: bool,
+    /// Arguments the entry runs its action with, as a JSON object, for entries that are an action
+    /// with a fixed argument ("New window in its own process").
+    pub preset: Option<&'static str>,
 }
 
 /// Every action, in catalogue order, with the bindings that run it.
@@ -34,8 +37,16 @@ pub fn entries(bindings: &[Binding]) -> Vec<Entry> {
                 summary: a.summary,
                 keys: keys.join(", "),
                 needs_args: a.params.iter().any(|p| p.required),
+                preset: None,
             }
         })
+        .chain(std::iter::once(Entry {
+            action: "new-window",
+            summary: "New window in its own process.",
+            keys: String::new(),
+            needs_args: false,
+            preset: Some(r#"{"separate":true}"#),
+        }))
         .collect()
 }
 
@@ -93,6 +104,7 @@ mod tests {
         let found = filter(&all, "ntab");
         assert_eq!(found[0].action, "new-tab");
         assert!(filter(&all, "zzzz").is_empty());
-        assert_eq!(filter(&all, "").len(), CATALOGUE.len());
+        assert_eq!(filter(&all, "").len(), CATALOGUE.len() + 1);
+        assert!(filter(&all, "own process").iter().any(|e| e.preset.is_some()));
     }
 }

@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  The manifest inside Terminus.app.
+
+  installer/macos/build-on-windows.ps1 copies this in and replaces __VERSION__ with the version from
+  Cargo.toml, so the version is written down once, in Cargo.toml.
+
+  The main executable is terminus-gui. The command line program `terminus` sits beside it in
+  Contents/MacOS and is not named here: it is the program the IPC commands and `terminus +command` use.
+-->
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>Terminus</string>
+    <key>CFBundleDisplayName</key>
+    <string>Terminus</string>
+    <key>CFBundleIdentifier</key>
+    <string>dev.terminus.Terminus</string>
+    <key>CFBundleExecutable</key>
+    <string>terminus-gui</string>
+    <key>CFBundleIconFile</key>
+    <string>Terminus</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleSignature</key>
+    <string>????</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleShortVersionString</key>
+    <string>__VERSION__</string>
+    <key>CFBundleVersion</key>
+    <string>__VERSION__</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>Licensed under MIT or Apache-2.0</string>
+
+    <!-- Without this the window is drawn at 1x and scaled up, which blurs the text on a Retina screen. -->
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>LSMinimumSystemVersion</key>
+    <string>11.0</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.developer-tools</string>
+
+    <!-- A program started in a Terminus window runs as a child of Terminus, so macOS asks the person to
+         let Terminus reach these folders when a command first touches them. These sentences are what
+         the prompts show. -->
+    <key>NSDesktopFolderUsageDescription</key>
+    <string>A program running in Terminus wants to read or write files on your Desktop.</string>
+    <key>NSDocumentsFolderUsageDescription</key>
+    <string>A program running in Terminus wants to read or write files in your Documents folder.</string>
+    <key>NSDownloadsFolderUsageDescription</key>
+    <string>A program running in Terminus wants to read or write files in your Downloads folder.</string>
+    <key>NSRemovableVolumesUsageDescription</key>
+    <string>A program running in Terminus wants to read or write files on a removable drive.</string>
+    <key>NSNetworkVolumesUsageDescription</key>
+    <string>A program running in Terminus wants to read or write files on a network volume.</string>
+</dict>
+</plist>

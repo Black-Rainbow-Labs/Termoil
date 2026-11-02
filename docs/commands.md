@@ -70,7 +70,7 @@ or the IPC socket asked for it.
 Opens a new window with one tab.
 
 ```
-terminus +new-window [--cwd <path>] [--command <text>]
+terminus +new-window [--cwd <path>] [--command <text>] [--separate <true|false>]
 ```
 
 Over IPC: `{"id":1,"action":"new-window","args":{...}}`. MCP tool: `terminus_new_window`.
@@ -79,6 +79,7 @@ Over IPC: `{"id":1,"action":"new-window","args":{...}}`. MCP tool: `terminus_new
 |---|---|---|---|
 | `cwd` | path | no | Working directory for the shell. |
 | `command` | text | no | Program to run instead of the configured shell. |
+| `separate` | true|false | no | Start the window in a process of its own, with its own socket; the answer names the socket. |
 
 ## new-tab
 

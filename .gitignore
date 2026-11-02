@@ -16,3 +16,6 @@
 .unluminous/
 .vscode/
 .DS_Store
+# macOS signing credentials and the cross toolchain; neither belongs in the repository.
+/installer/macos/notarize.env
+/tools/cross/

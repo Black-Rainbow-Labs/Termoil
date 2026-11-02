@@ -89,6 +89,12 @@ pub const CATALOGUE: &[ActionDef] = &[
         &[
             p("cwd", Path, false, "Working directory for the shell."),
             p("command", Text, false, "Program to run instead of the configured shell."),
+            p(
+                "separate",
+                Bool,
+                false,
+                "Start the window in a process of its own, with its own socket; the answer names the socket.",
+            ),
         ],
         G,
         true,

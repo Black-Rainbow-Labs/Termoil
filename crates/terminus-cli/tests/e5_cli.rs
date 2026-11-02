@@ -336,3 +336,77 @@ fn e5_errors_are_reported() {
     assert!(!inst.cli(&["+resize", "--cols", "10"]).status.success());
     inst.ok(&["+run-action", "--name", "quit"]);
 }
+
+/// Stops a process when the test ends, passed or failed, so a separate instance never outlives it
+/// (cargo waits for every process holding the test's output).
+struct KillOnDrop(u32);
+
+impl Drop for KillOnDrop {
+    /// Ends the process.
+    fn drop(&mut self) {
+        let pid = self.0.to_string();
+        let _ = if cfg!(windows) {
+            Command::new("taskkill").args(["/PID", &pid, "/F"]).output()
+        } else {
+            Command::new("kill").arg(&pid).output()
+        };
+    }
+}
+
+/// Runs `terminus --socket <socket>` with arguments.
+fn cli_at(socket: &str, args: &[&str]) -> Output {
+    Command::new(cli_exe())
+        .arg("--socket")
+        .arg(socket)
+        .args(args)
+        .env_remove("TERMINUS_SOCKET")
+        .output()
+        .expect("run terminus")
+}
+
+/// Polls a command against a socket until it succeeds and its output satisfies `ok`.
+fn poll_at(socket: &str, args: &[&str], ok: impl Fn(&str) -> bool) -> String {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        let out = cli_at(socket, args);
+        let text = String::from_utf8_lossy(&out.stdout).into_owned();
+        if out.status.success() && ok(&text) {
+            return text;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "terminus --socket {socket} {} never gave the expected output; last: {text}{}",
+            args.join(" "),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+/// docs/decisions/detach.md: `new-window --separate` starts an instance with its own socket; a
+/// pane of it reaches that instance with `terminus +list`; it keeps running when the primary stops.
+#[test]
+fn e5_separate_instance() {
+    let mut inst = Instance::start("sep");
+    let r = inst.json(&["+new-window", "--separate"]);
+    let socket = r["socket"].as_str().expect("the answer names the socket").to_string();
+    let _separate = KillOnDrop(r["pid"].as_u64().expect("the answer names the pid") as u32);
+    let list: Value = serde_json::from_str(&poll_at(&socket, &["+list"], |t| {
+        pane_ids(&serde_json::from_str(t).unwrap_or(Value::Null)).len() == 1
+    }))
+    .unwrap();
+    let pane = pane_ids(&list)[0];
+    let shell_pid = pane_entry(&list, pane)["pid"].as_u64().expect("pid");
+    poll_at(&socket, &["+wait-prompt", "--pane", &pane.to_string(), "--timeout", "30"], |_| true);
+    // send-text unescapes backslash sequences, so the path's backslashes are doubled.
+    let cmd = format!("\"{}\" +list\n", cli_exe().display().to_string().replace('\\', "\\\\"));
+    assert!(cli_at(&socket, &["+send-text", "--pane", &pane.to_string(), &cmd]).status.success());
+    poll_at(&socket, &["+screen", "--pane", &pane.to_string()], |t| t.contains(&format!("\"pid\": {shell_pid}")));
+    let _ = inst.child.kill();
+    let _ = inst.child.wait();
+    assert!(!inst.cli(&["+list"]).status.success(), "the primary still answers after being stopped");
+    poll_at(&socket, &["+list"], |t| t.contains(&format!("\"pid\": {shell_pid}")));
+    assert!(cli_at(&socket, &["+send-text", "--pane", &pane.to_string(), "echo SEP_ALIVE\n"]).status.success());
+    poll_at(&socket, &["+screen", "--pane", &pane.to_string()], |t| t.lines().any(|l| l.trim() == "SEP_ALIVE"));
+    let _ = cli_at(&socket, &["+run-action", "--name", "quit"]);
+}

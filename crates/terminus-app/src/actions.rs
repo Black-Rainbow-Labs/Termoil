@@ -7,7 +7,7 @@ use std::time::Duration;
 use serde_json::{Map, Value, json};
 use terminus_protocol::ActionError;
 
-use crate::app::{App, Effect, Outcome, cwd_path};
+use crate::app::{App, Effect, Outcome, cwd_path, instance_mode};
 use crate::model::{Dir, PaneId, neighbour};
 
 /// Runs a catalogue action by name.
@@ -97,6 +97,9 @@ fn done(r: Result<Value, ActionError>) -> Outcome {
 /// new-window, new-tab, split and close.
 fn layout_action(app: &mut App, name: &str, args: &Map<String, Value>) -> Outcome {
     done(match name {
+        "new-window" if arg_bool(args, "separate") => {
+            separate_window(app, arg_str(args, "cwd").map(PathBuf::from), arg_str(args, "command"))
+        }
         "new-window" => new_window(app, arg_str(args, "cwd").map(PathBuf::from), arg_str(args, "command")),
         "new-tab" => new_tab(app, args),
         "split" => {
@@ -120,6 +123,26 @@ fn layout_action(app: &mut App, name: &str, args: &Map<String, Value>) -> Outcom
             json!({ "closed": p })
         }),
     })
+}
+
+/// Starts `terminus-gui --separate` (headless when this instance is), in the given directory or the
+/// focused pane's, and answers with the new instance's socket name.
+fn separate_window(app: &App, cwd: Option<PathBuf>, command: Option<&str>) -> Result<Value, ActionError> {
+    let exe = std::env::current_exe().map_err(|e| ActionError::Failed(e.to_string()))?;
+    let cwd = cwd.or_else(|| focused_cwd(app));
+    let mut cmd = std::process::Command::new(exe);
+    cmd.arg("--separate").env_remove("TERMINUS_SOCKET");
+    if instance_mode().headless {
+        cmd.arg("--headless");
+    }
+    if let Some(d) = &cwd {
+        cmd.arg("--cwd").arg(d);
+    }
+    if let Some(c) = command {
+        cmd.arg("--command").arg(c);
+    }
+    let child = cmd.spawn().map_err(|e| ActionError::Failed(format!("could not start a separate instance: {e}")))?;
+    Ok(json!({ "pid": child.id(), "socket": terminus_protocol::separate_socket_name(child.id()) }))
 }
 
 /// Opens a window with one tab.
