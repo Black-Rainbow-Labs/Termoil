@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json
+PackageIdentifier: Terminus.Terminus
+PackageVersion: 0.1.1
+PackageLocale: en-US
+Publisher: Terminus
+PublisherUrl: https://github.com/jasonmcaffee/terminus
+PublisherSupportUrl: https://github.com/jasonmcaffee/terminus/issues
+PackageName: Terminus
+PackageUrl: https://github.com/jasonmcaffee/terminus
+License: MIT OR Apache-2.0
+LicenseUrl: https://github.com/jasonmcaffee/terminus/blob/main/LICENSE-MIT
+ShortDescription: A GPU accelerated terminal emulator written in Rust.
+Moniker: terminus
+Tags:
+- terminal
+- terminal-emulator
+- rust
+ReleaseNotesUrl: https://github.com/jasonmcaffee/terminus/releases/tag/v0.1.1
+ManifestType: defaultLocale
+ManifestVersion: 1.10.0

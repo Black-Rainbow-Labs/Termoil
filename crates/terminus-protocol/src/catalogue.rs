@@ -248,6 +248,19 @@ pub const CATALOGUE: &[ActionDef] = &[
     ),
     a("open-config", "Opens the configuration file in the configured editor.", &[], G, false, true),
     a(
+        "activate-key-table",
+        "Makes a key table active: keys are looked up in its bindings first until it is deactivated.",
+        &[
+            p("name", Text, true, "The key table, as the `table` field of the keybindings names it."),
+            p("once", Bool, false, "Deactivate the table after the next key."),
+        ],
+        G,
+        true,
+        false,
+    ),
+    a("deactivate-key-table", "Deactivates the key table that was activated last.", &[], G, true, false),
+    a("deactivate-all-key-tables", "Deactivates every active key table.", &[], G, true, false),
+    a(
         "install-shell-integration",
         "Installs the shell integration scripts and hooks them into the named shells' startup files.",
         &[

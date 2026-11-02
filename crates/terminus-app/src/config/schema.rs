@@ -148,7 +148,9 @@ pub static SECTIONS: &[Section] = &[
     Section {
         path: "keybindings",
         doc: "Bindings added to the defaults. Each is { keys = \"ctrl+shift+t\", action = \"new-tab\" }. A sequence is \
-              written \"ctrl+a>c\". action = \"none\" removes a default. `table` names a key table.",
+              written \"ctrl+a>c\". action = \"none\" removes a default. `table` puts a binding in a key table, \
+              used only while the action activate-key-table (args { name, once }) has made the table active; \
+              keys = \"catch_all\" in a table takes every key the table binds no other way.",
         keys: &[e("bindings", "Your bindings; see the comment below for the defaults.")],
     },
     Section {

@@ -1,5 +1,10 @@
 //! Key chords: turning a config chord (`ctrl+c`, `shift+tab`, `f5`) into a key event for the encoder,
-//! a key event into a chord for keybinding lookup, and matching chained bindings.
+//! a key event into a chord for keybinding lookup, and matching chained bindings and key tables.
+//!
+//! A binding with `table = "name"` belongs to that key table and is used only while the table is
+//! active (`activate-key-table`). Keys are looked up in the newest active table first, then the
+//! older ones, then the bindings outside any table. `keys = "catch_all"` in a table takes every key
+//! the table binds no other way.
 
 use serde_json::{Map, Value};
 use terminus_input::{Key, KeyEvent, Modifiers, NamedKey};
@@ -121,13 +126,27 @@ fn named_key_name(n: NamedKey) -> Option<String> {
 /// A binding resolved for lookup.
 #[derive(Clone, Debug)]
 pub struct Bound {
-    /// The chords in order.
+    /// The chords in order; empty for a table's `catch_all`.
     pub chords: Vec<KeyChord>,
     /// The action.
     pub action: String,
     /// Its arguments.
     pub args: Map<String, Value>,
+    /// The key table it belongs to, or None for the bindings outside any table.
+    pub table: Option<String>,
 }
+
+/// A key table made active by `activate-key-table`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ActiveTable {
+    /// The table's name.
+    pub name: String,
+    /// Deactivate it after the next key.
+    pub once: bool,
+}
+
+/// The `keys` value that makes a table binding take every key the table binds no other way.
+pub const CATCH_ALL: &str = "catch_all";
 
 /// What a key press did against the bindings.
 #[derive(Clone, Debug, PartialEq)]
@@ -140,23 +159,48 @@ pub enum Lookup {
     Action(String, Map<String, Value>),
 }
 
-/// Resolves bindings once, dropping those whose keys do not parse and those set to `none`.
+/// Resolves bindings once, dropping those whose keys do not parse and those set to `none`. A
+/// `catch_all` binding is kept only inside a key table.
 pub fn resolve(bindings: &[Binding]) -> Vec<Bound> {
     bindings
         .iter()
-        .filter(|b| b.action != "none" && b.table.is_none())
+        .filter(|b| b.action != "none")
         .filter_map(|b| {
-            let chords = b.chords().ok()?;
+            let chords = if b.keys == CATCH_ALL && b.table.is_some() { Vec::new() } else { b.chords().ok()? };
             let args = serde_json::to_value(&b.args).ok().and_then(|v| v.as_object().cloned()).unwrap_or_default();
-            Some(Bound { chords, action: b.action.clone(), args })
+            Some(Bound { chords, action: b.action.clone(), args, table: b.table.clone() })
         })
         .collect()
 }
 
-/// Looks up the keys pressed so far (`pressed`, the last one included).
+/// Looks up the keys pressed so far (`pressed`, the last one included) in the bindings outside
+/// any key table.
 pub fn lookup(bound: &[Bound], pressed: &[KeyChord]) -> Lookup {
+    lookup_in(bound, None, pressed)
+}
+
+/// Looks up the keys pressed so far in the active key tables, newest first, and then in the
+/// bindings outside any table.
+pub fn lookup_active(bound: &[Bound], active: &[ActiveTable], pressed: &[KeyChord]) -> Lookup {
+    for table in active.iter().rev() {
+        match lookup_in(bound, Some(&table.name), pressed) {
+            Lookup::None => {}
+            found => return found,
+        }
+    }
+    lookup_in(bound, None, pressed)
+}
+
+/// Looks up the keys pressed so far in one key table (None: the bindings outside any table). A
+/// single key that nothing else in a table matches goes to the table's `catch_all`.
+fn lookup_in(bound: &[Bound], table: Option<&str>, pressed: &[KeyChord]) -> Lookup {
     let mut pending = false;
-    for b in bound {
+    let mut catch_all = None;
+    for b in bound.iter().filter(|b| b.table.as_deref() == table) {
+        if b.chords.is_empty() {
+            catch_all = Some(b);
+            continue;
+        }
         if b.chords.len() < pressed.len() || b.chords[..pressed.len()] != *pressed {
             continue;
         }
@@ -165,7 +209,11 @@ pub fn lookup(bound: &[Bound], pressed: &[KeyChord]) -> Lookup {
         }
         pending = true;
     }
-    if pending { Lookup::Pending } else { Lookup::None }
+    match catch_all {
+        _ if pending => Lookup::Pending,
+        Some(b) if pressed.len() == 1 => Lookup::Action(b.action.clone(), b.args.clone()),
+        _ => Lookup::None,
+    }
 }
 
 #[cfg(test)]
@@ -189,5 +237,37 @@ mod tests {
         assert_eq!(lookup(&bound, std::slice::from_ref(&a)), Lookup::Pending);
         assert!(matches!(lookup(&bound, &[a, c]), Lookup::Action(ref n, _) if n == "new-tab"));
         assert_eq!(lookup(&bound, &[parse_chord("x").unwrap()]), Lookup::None);
+    }
+
+    /// A binding in `table`.
+    fn in_table(keys: &str, action: &str, table: &str) -> Binding {
+        Binding { table: Some(table.into()), ..Binding::new(keys, action) }
+    }
+
+    #[test]
+    fn key_tables_are_looked_up_newest_first_then_the_root() {
+        let bound = resolve(&[
+            Binding::new("ctrl+shift+t", "new-tab"),
+            Binding::new("h", "should-not-run"),
+            in_table("h", "focus-left", "panes"),
+            in_table("escape", "deactivate-key-table", "panes"),
+            in_table("h", "resize-split", "resize"),
+            in_table("catch_all", "deactivate-all-key-tables", "resize"),
+        ]);
+        let key = |k: &str| vec![parse_chord(k).unwrap()];
+        let action = |l: Lookup| match l {
+            Lookup::Action(n, _) => n,
+            other => format!("{other:?}"),
+        };
+        let panes = ActiveTable { name: "panes".into(), once: false };
+        let resize = ActiveTable { name: "resize".into(), once: false };
+        assert_eq!(action(lookup(&bound, &key("h"))), "should-not-run", "no table is active");
+        assert_eq!(action(lookup_active(&bound, std::slice::from_ref(&panes), &key("h"))), "focus-left");
+        assert_eq!(action(lookup_active(&bound, std::slice::from_ref(&panes), &key("ctrl+shift+t"))), "new-tab");
+        assert_eq!(action(lookup_active(&bound, std::slice::from_ref(&panes), &key("x"))), "None");
+        let both = [panes, resize];
+        assert_eq!(action(lookup_active(&bound, &both, &key("h"))), "resize-split", "the newest table wins");
+        assert_eq!(action(lookup_active(&bound, &both, &key("x"))), "deactivate-all-key-tables", "catch_all");
+        assert!(resolve(&[Binding::new("catch_all", "new-tab")]).is_empty(), "catch_all only inside a table");
     }
 }

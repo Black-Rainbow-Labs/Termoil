@@ -34,6 +34,9 @@ pub fn dispatch(app: &mut App, name: &str, args: &Map<String, Value>) -> Outcome
             crate::view::scroll_action(app, name, args)
         }
         "search" | "search-next" | "search-previous" => crate::view::search_action(app, name, args),
+        "activate-key-table" | "deactivate-key-table" | "deactivate-all-key-tables" => {
+            done(key_table_action(app, name, args))
+        }
         "set-theme" => done(
             req_str(args, "name")
                 .map(String::from)
@@ -366,6 +369,22 @@ fn window_action(app: &mut App, name: &str) -> Outcome {
         _ => Effect::ShowPalette(win),
     });
     Outcome::ok(Value::Null)
+}
+
+/// Activates or deactivates key tables, answering with the tables active afterwards. A table
+/// activated with `once` ends after the next key (`gui::handle`).
+fn key_table_action(app: &mut App, name: &str, args: &Map<String, Value>) -> Result<Value, ActionError> {
+    match name {
+        "activate-key-table" => {
+            let table = req_str(args, "name")?.to_string();
+            app.key_tables.push(crate::keymap::ActiveTable { name: table, once: arg_bool(args, "once") });
+        }
+        "deactivate-key-table" => {
+            app.key_tables.pop();
+        }
+        _ => app.key_tables.clear(),
+    }
+    Ok(json!({ "active": app.key_tables.iter().map(|t| t.name.clone()).collect::<Vec<_>>() }))
 }
 
 /// list, run-action, the config actions, install-shell-integration, version, quit and quick-terminal.

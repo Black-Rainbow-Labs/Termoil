@@ -17,7 +17,7 @@ use winit::event::{ElementState, Ime, MouseScrollDelta};
 use crate::app::App;
 use crate::gui::window::WinState;
 use crate::inspect;
-use crate::keymap::{Bound, Lookup, event_to_chord, lookup};
+use crate::keymap::{Bound, Lookup, event_to_chord, lookup_active};
 use crate::model::PaneId;
 use crate::view;
 
@@ -71,7 +71,12 @@ fn binding(ws: &mut WinState, app: &mut App, bound: &[Bound], ev: &KeyEvent) -> 
     }
     let Some(chord) = event_to_chord(ev) else { return false };
     ws.chords.push(chord);
-    match lookup(bound, &ws.chords) {
+    let result = lookup_active(bound, &app.key_tables, &ws.chords);
+    // A table activated for one key ends once that key (or chained sequence) is decided.
+    if result != Lookup::Pending && app.key_tables.last().is_some_and(|t| t.once) {
+        app.key_tables.pop();
+    }
+    match result {
         Lookup::Action(name, args) => {
             ws.chords.clear();
             let _ = app.run_action(&terminus_protocol::ActionCall { action: name, args });

@@ -187,6 +187,8 @@ pub struct App {
     pub clipboard: Box<dyn Clipboard>,
     /// Record the input of new sessions (the E6 tests read it).
     pub record_input: bool,
+    /// The active key tables, oldest first (`activate-key-table`).
+    pub key_tables: Vec<crate::keymap::ActiveTable>,
     wakers: WakerFactory,
 }
 
@@ -203,6 +205,7 @@ impl App {
             grids: HashMap::new(),
             clipboard,
             record_input: false,
+            key_tables: Vec::new(),
             wakers,
         }
     }

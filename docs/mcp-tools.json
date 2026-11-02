@@ -362,6 +362,44 @@
       "name": "terminus_set_theme"
     },
     {
+      "description": "Makes a key table active: keys are looked up in its bindings first until it is deactivated.",
+      "inputSchema": {
+        "properties": {
+          "name": {
+            "description": "The key table, as the `table` field of the keybindings names it.",
+            "type": "string"
+          },
+          "once": {
+            "description": "Deactivate the table after the next key.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "name": "terminus_activate_key_table"
+    },
+    {
+      "description": "Deactivates the key table that was activated last.",
+      "inputSchema": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "terminus_deactivate_key_table"
+    },
+    {
+      "description": "Deactivates every active key table.",
+      "inputSchema": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "terminus_deactivate_all_key_tables"
+    },
+    {
       "description": "Installs the shell integration scripts and hooks them into the named shells' startup files.",
       "inputSchema": {
         "properties": {

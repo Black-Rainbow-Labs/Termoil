@@ -37,6 +37,9 @@ or the IPC socket asked for it.
 | [`set-theme`](#set-theme) | yes | yes | nothing | Switches to a bundled colour theme and writes it to the configuration file. |
 | [`choose-theme`](#choose-theme) | no | yes | a window | Lists the bundled themes, previewing each as it is highlighted; Enter keeps one. |
 | [`open-config`](#open-config) | no | yes | nothing | Opens the configuration file in the configured editor. |
+| [`activate-key-table`](#activate-key-table) | yes | no | nothing | Makes a key table active: keys are looked up in its bindings first until it is deactivated. |
+| [`deactivate-key-table`](#deactivate-key-table) | yes | no | nothing | Deactivates the key table that was activated last. |
+| [`deactivate-all-key-tables`](#deactivate-all-key-tables) | yes | no | nothing | Deactivates every active key table. |
 | [`install-shell-integration`](#install-shell-integration) | yes | yes | nothing | Installs the shell integration scripts and hooks them into the named shells' startup files. |
 | [`version`](#version) | yes | yes | nothing | Prints the version and build date. |
 | [`copy`](#copy) | no | yes | a pane | Copies the selection to the clipboard. |
@@ -416,6 +419,45 @@ No parameters.
 ## open-config
 
 Opens the configuration file in the configured editor.
+
+No parameters.
+
+## activate-key-table
+
+Makes a key table active: keys are looked up in its bindings first until it is deactivated.
+
+```
+terminus +activate-key-table --name <text> [--once <true|false>]
+```
+
+Over IPC: `{"id":1,"action":"activate-key-table","args":{...}}`. MCP tool: `terminus_activate_key_table`.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `name` | text | yes | The key table, as the `table` field of the keybindings names it. |
+| `once` | true|false | no | Deactivate the table after the next key. |
+
+## deactivate-key-table
+
+Deactivates the key table that was activated last.
+
+```
+terminus +deactivate-key-table
+```
+
+Over IPC: `{"id":1,"action":"deactivate-key-table","args":{...}}`. MCP tool: `terminus_deactivate_key_table`.
+
+No parameters.
+
+## deactivate-all-key-tables
+
+Deactivates every active key table.
+
+```
+terminus +deactivate-all-key-tables
+```
+
+Over IPC: `{"id":1,"action":"deactivate-all-key-tables","args":{...}}`. MCP tool: `terminus_deactivate_all_key_tables`.
 
 No parameters.
 

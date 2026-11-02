@@ -165,13 +165,23 @@ fn run_action_args(name: &str, pane: u64) -> Value {
         "resize-split" => json!({ "pane": pane, "direction": "right" }),
         "move-tab-to-window" => json!({ "pane": pane }),
         "set-theme" => json!({ "name": "Terminus Light" }),
+        "activate-key-table" => json!({ "name": "e5", "once": true }),
         "set-title" => json!({ "pane": pane, "title": "run-action" }),
         "run-action" => json!({ "name": "version" }),
         "wait-prompt" => json!({ "pane": pane, "timeout": 20 }),
         "search" => json!({ "pane": pane, "pattern": "E5" }),
         "install-shell-integration" => json!({ "shells": "bash", "dry-run": true }),
-        "new-window" | "new-tab" | "show-config" | "reload-config" | "open-config" | "version" | "list"
-        | "quick-terminal" | "quit" => json!({}),
+        "new-window"
+        | "new-tab"
+        | "show-config"
+        | "reload-config"
+        | "open-config"
+        | "version"
+        | "list"
+        | "quick-terminal"
+        | "quit"
+        | "deactivate-key-table"
+        | "deactivate-all-key-tables" => json!({}),
         "split" | "split-right" | "split-down" => json!({ "pane": pane }),
         _ => json!({ "pane": pane }),
     }
@@ -259,6 +269,20 @@ fn more_commands(inst: &Instance, p2: &str, covered: &mut BTreeSet<String>) {
     seen("install-shell-integration");
     inst.ok(&["+run-action", "--name", "version"]);
     seen("run-action");
+    let active = |v: Value| {
+        v["active"].as_array().map(|a| a.iter().filter_map(|t| t.as_str().map(String::from)).collect::<Vec<_>>())
+    };
+    assert_eq!(active(inst.json(&["+activate-key-table", "--name", "a"])), Some(vec!["a".to_string()]));
+    assert_eq!(
+        active(inst.json(&["+activate-key-table", "--name", "b", "--once"])),
+        Some(vec!["a".to_string(), "b".to_string()])
+    );
+    seen("activate-key-table");
+    assert_eq!(active(inst.json(&["+deactivate-key-table"])), Some(vec!["a".to_string()]));
+    seen("deactivate-key-table");
+    inst.ok(&["+activate-key-table", "--name", "c"]);
+    assert_eq!(active(inst.json(&["+deactivate-all-key-tables"])), Some(Vec::new()));
+    seen("deactivate-all-key-tables");
 }
 
 /// Every catalogue action through `run-action`: none may be unknown to `run_action`.

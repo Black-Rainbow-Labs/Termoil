@@ -21,6 +21,8 @@
        branch and the tag.
    10. Creates the GitHub release with the installers attached, then downloads each asset back and
        compares its SHA256 with the local file.
+   11. Writes the winget manifest for the release into installer/winget/manifests. It is not committed or
+       submitted; installer/winget/README.md says how a person publishes it.
 
   Every release is a prerelease until promoted. -Stable makes a full release.
 
@@ -434,6 +436,93 @@ function Test-DownloadedAssets([string] $Gh, [string] $Version, [string[]] $Asse
     }
 }
 
+<#
+.SYNOPSIS
+  Writes the winget multi file manifest (version, default locale and installer files) for a release
+  into installer/winget/manifests/t/Terminus/Terminus/<version>/ and returns that folder.
+.DESCRIPTION
+  The package identifier Terminus.Terminus matches the AppUserModelID in installer/windows/terminus.iss.
+  The scope is user because terminus.iss sets PrivilegesRequired=lowest. winget adds the Inno silent
+  switches itself, so none are written here. ProductCode is the AppId from terminus.iss followed by _is1,
+  which is the key Inno Setup writes under Uninstall.
+.PARAMETER Version
+  The released version, x.y.z.
+.PARAMETER InstallerUrl
+  The URL of the installer asset on the GitHub release.
+.PARAMETER Sha256
+  The SHA256 of the installer, in any letter case.
+.PARAMETER OutRoot
+  The manifests folder to write under. Defaults to installer/winget/manifests in the checkout.
+#>
+function Write-WingetManifest([string] $Version, [string] $InstallerUrl, [string] $Sha256, [string] $OutRoot = (Join-Path $Repo 'installer/winget/manifests')) {
+    $id = 'Terminus.Terminus'
+    $schema = '1.10.0'
+    $schemaBase = 'https://aka.ms/winget-manifest'
+    $folder = Join-Path $OutRoot "t/Terminus/Terminus/$Version"
+    New-Item -ItemType Directory -Force -Path $folder | Out-Null
+    $hash = $Sha256.ToUpper()
+    $date = (Get-Date).ToUniversalTime().ToString('yyyy-MM-dd')
+    $repoUrl = 'https://github.com/jasonmcaffee/terminus'
+    $versionYaml = @"
+# yaml-language-server: `$schema=$schemaBase.version.$schema.schema.json
+PackageIdentifier: $id
+PackageVersion: $Version
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: $schema
+"@
+    $localeYaml = @"
+# yaml-language-server: `$schema=$schemaBase.defaultLocale.$schema.schema.json
+PackageIdentifier: $id
+PackageVersion: $Version
+PackageLocale: en-US
+Publisher: Terminus
+PublisherUrl: $repoUrl
+PublisherSupportUrl: $repoUrl/issues
+PackageName: Terminus
+PackageUrl: $repoUrl
+License: MIT OR Apache-2.0
+LicenseUrl: $repoUrl/blob/main/LICENSE-MIT
+ShortDescription: A GPU accelerated terminal emulator written in Rust.
+Moniker: terminus
+Tags:
+- terminal
+- terminal-emulator
+- rust
+ReleaseNotesUrl: $repoUrl/releases/tag/v$Version
+ManifestType: defaultLocale
+ManifestVersion: $schema
+"@
+    $installerYaml = @"
+# yaml-language-server: `$schema=$schemaBase.installer.$schema.schema.json
+PackageIdentifier: $id
+PackageVersion: $Version
+InstallerType: inno
+Scope: user
+InstallModes:
+- interactive
+- silent
+- silentWithProgress
+UpgradeBehavior: install
+Commands:
+- terminus
+ReleaseDate: $date
+Installers:
+- Architecture: x64
+  InstallerUrl: $InstallerUrl
+  InstallerSha256: $hash
+  ProductCode: '{9B3E6D52-4C1A-4F0E-8A57-2D6C1E7B94A3}_is1'
+ManifestType: installer
+ManifestVersion: $schema
+"@
+    $files = @{ "$id.yaml" = $versionYaml; "$id.locale.en-US.yaml" = $localeYaml; "$id.installer.yaml" = $installerYaml }
+    foreach ($name in $files.Keys) {
+        Set-Content -Path (Join-Path $folder $name) -Value (($files[$name] -replace "`r`n", "`n") + "`n") -NoNewline -Encoding utf8
+    }
+    Write-Host "winget manifest written to $folder"
+    return $folder
+}
+
 $current = Get-CurrentVersion
 $next = Get-NextVersion $current $Part
 $buildDate = (Get-Date).ToUniversalTime().ToString('yyyy-MM-dd')
@@ -465,6 +554,7 @@ if ($WhatIf) {
     Write-Host "    8. commit 'Release v$next', tag v$next, push the branch and the tag"
     Write-Host "    9. gh release create v$next with $(Join-Path $DistDir "TerminusSetup-$next-x64.exe") ($kind)"
     Write-Host '   10. download each asset back and compare SHA256 with the local file'
+    Write-Host '   11. write the winget manifest into installer/winget/manifests'
     exit 0
 }
 
@@ -503,5 +593,8 @@ $assets = @($installer) + (Build-MacosPackage) + (Build-LinuxPackages $next $bui
 Publish-Tag $next
 if ($SkipPublish) { Write-Host "Tagged v$next locally. Skipped the push and GitHub because of -SkipPublish."; exit 0 }
 Publish-GitHubRelease $gh $next $assets
+Write-Step 'Writing the winget manifest'
+$installerUrl = "https://github.com/jasonmcaffee/terminus/releases/download/v$next/$(Split-Path -Leaf $installer)"
+Write-WingetManifest $next $installerUrl (Get-FileHash -Algorithm SHA256 -LiteralPath $installer).Hash | Out-Null
 Write-Host ''
 Write-Host "Released Terminus v$next ($kind)." -ForegroundColor Green
