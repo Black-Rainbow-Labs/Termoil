@@ -293,7 +293,9 @@ function Build-WindowsInstaller([string] $Version) {
 #>
 function Install-OnThisMachine([string] $Installer, [string] $Version) {
     Write-Step 'Installing on this machine'
-    Invoke-Checked 'the installer' { & $Installer /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CURRENTUSER }
+    # Setup hands the work to a second process and returns at once, so wait for the whole tree.
+    $proc = Start-Process -FilePath $Installer -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER' -Wait -PassThru
+    if ($proc.ExitCode -ne 0) { throw "The installer exited with code $($proc.ExitCode)." }
     $exe = Join-Path $InstallDir 'terminus.exe'
     if (-not (Test-Path -LiteralPath $exe)) { throw "$exe is not there after the install." }
     $printed = (& $exe +version) -join "`n"
