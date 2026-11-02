@@ -213,6 +213,8 @@ pub struct Terminal {
     modes: ModeSet,
     config: TerminalConfig,
     palette: [Rgb; 256],
+    /// The palette the host gave with [`Terminal::set_palette`], which OSC 104 and RIS put back.
+    base_palette: [Rgb; 256],
     default_colors: DynamicColors,
     colors: DynamicColors,
     title: String,
@@ -265,6 +267,7 @@ impl Terminal {
             alt_active: false,
             modes,
             palette: default_palette(),
+            base_palette: default_palette(),
             default_colors: DynamicColors::default(),
             colors: DynamicColors::default(),
             title: String::new(),
@@ -397,9 +400,16 @@ impl Terminal {
         self.default_colors = colors;
     }
 
-    /// Replaces the base palette (a theme); colours set by OSC 4 since are reset.
+    /// Replaces the base palette (a theme); colours set by OSC 4 since are reset. OSC 104 and RIS
+    /// put this palette back rather than the xterm one.
     pub fn set_palette(&mut self, palette: [Rgb; 256]) {
         self.palette = palette;
+        self.base_palette = palette;
+    }
+
+    /// The palette the host gave, which a reset puts back.
+    pub fn base_palette(&self) -> &[Rgb; 256] {
+        &self.base_palette
     }
 
     /// The cursor shape from DECSCUSR.

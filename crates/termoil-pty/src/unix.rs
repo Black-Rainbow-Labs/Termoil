@@ -71,6 +71,11 @@ impl PtyImpl {
         self.child.id()
     }
 
+    /// A second descriptor for the controller side, for a host that asks the pty questions itself.
+    pub fn clone_controller(&self) -> io::Result<OwnedFd> {
+        self.controller.try_clone()
+    }
+
     /// Always `NotApplicable` on Unix.
     pub fn conpty_source(&self) -> ConptySource {
         ConptySource::NotApplicable

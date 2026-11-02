@@ -109,9 +109,10 @@ impl Terminal {
         }
     }
 
-    /// OSC 104: resets the listed palette entries (256 to 260 are special colours), or all of them.
+    /// OSC 104: resets the listed palette entries (256 to 260 are special colours), or all of them,
+    /// to the palette the host gave.
     fn osc_reset_palette(&mut self, rest: &[u8]) {
-        let defaults = crate::style::default_palette();
+        let defaults = self.base_palette;
         let text = String::from_utf8_lossy(rest);
         if text.is_empty() {
             self.palette = defaults;

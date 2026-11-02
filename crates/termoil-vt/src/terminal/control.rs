@@ -5,7 +5,6 @@ use super::{CursorShape, Event, Terminal};
 use crate::charset::Charset;
 use crate::modes::Mode;
 use crate::screen::{SavedCursor, Screen, default_tabs};
-use crate::style::default_palette;
 
 impl Terminal {
     /// Executes a C0 control.
@@ -310,7 +309,7 @@ impl Terminal {
         self.alt_active = false;
         self.modes.reset();
         self.modes.set(Mode::GraphemeCluster, self.config.grapheme_clustering);
-        self.palette = default_palette();
+        self.palette = self.base_palette;
         self.special_colors = [None; 5];
         self.extra_colors = [None; 5];
         self.notification_pending.clear();

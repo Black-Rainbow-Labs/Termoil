@@ -124,6 +124,13 @@ impl Pty {
         self.inner.pid()
     }
 
+    /// A duplicate of the controller (master) descriptor, so a host can ask the pty which process
+    /// group is in the foreground (`tcgetpgrp`) while Termoil keeps reading and writing it.
+    #[cfg(unix)]
+    pub fn clone_controller(&self) -> io::Result<std::os::fd::OwnedFd> {
+        self.inner.clone_controller()
+    }
+
     /// Which pseudoconsole implementation is in use: bundled or inbox on Windows, not applicable elsewhere.
     pub fn conpty_source(&self) -> ConptySource {
         self.inner.conpty_source()
