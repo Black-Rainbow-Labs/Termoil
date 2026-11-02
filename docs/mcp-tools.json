@@ -111,6 +111,20 @@
       "name": "terminus_focus"
     },
     {
+      "description": "Closes the tab holding a pane, ending every shell in it; the last tab closes its window.",
+      "inputSchema": {
+        "properties": {
+          "pane": {
+            "description": "The pane to act on; the focused pane when omitted.",
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "terminus_close_tab"
+    },
+    {
       "description": "Moves the tab holding a pane into a new window of its own.",
       "inputSchema": {
         "properties": {

@@ -15,6 +15,7 @@ use terminus_vt::selection::{Selection, SelectionMode};
 use winit::event::{ElementState, Ime, MouseScrollDelta};
 
 use crate::app::App;
+use crate::gui::tab_bar::TabHit;
 use crate::gui::window::WinState;
 use crate::inspect;
 use crate::keymap::{Bound, Lookup, event_to_chord, lookup_active};
@@ -245,6 +246,7 @@ fn set_hover(ws: &mut WinState, hover: Option<crate::links::Hover>) {
 /// The pointer moved: extend a selection being dragged, or report motion.
 pub fn cursor_moved(ws: &mut WinState, app: &mut App, x: f64, y: f64) {
     ws.mouse.pos = (x, y);
+    hover_tab_bar(ws, x, y);
     if drag_divider(ws, app, x, y) {
         return;
     }
@@ -283,8 +285,7 @@ pub fn cursor_moved(ws: &mut WinState, app: &mut App, x: f64, y: f64) {
 pub fn button(ws: &mut WinState, app: &mut App, state: ElementState, b: winit::event::MouseButton) {
     let (x, y) = ws.mouse.pos;
     if state == ElementState::Pressed && y < ws.tab_bar_h as f64 {
-        ws.mouse.tab_drag = tab_index_at(ws, x);
-        click_tab(ws, app, x);
+        press_tab_bar(ws, app, x, b);
         return;
     }
     if state == ElementState::Released
@@ -437,18 +438,62 @@ fn right_click(app: &mut App, pane: PaneId) {
 }
 
 /// A click in the tab bar switches to the tab under it.
-fn click_tab(ws: &mut WinState, app: &mut App, x: f64) {
-    let Some(i) = tab_index_at(ws, x) else { return };
-    let Some(wi) = app.model.window_index(ws.id) else { return };
-    let focus = app.model.windows[wi].tabs[i].focus;
-    let _ = crate::actions::focus_pane(app, focus);
+/// A button went down in the tab bar. A left click on a tab shows it and may start dragging it, on its
+/// cross closes it, and on the plus opens a new tab; a middle click on a tab closes it. Closing and
+/// opening go through `run_action` (`close-tab`, `new-tab`), the same as a keybinding or the CLI.
+fn press_tab_bar(ws: &mut WinState, app: &mut App, x: f64, b: winit::event::MouseButton) {
+    use winit::event::MouseButton as B;
+    let hit = crate::gui::tab_bar::hit(&ws.tab_layout, x, ws.cell().0);
+    let tab_pane = |app: &App, i: usize| {
+        let wi = app.model.window_index(ws.id)?;
+        app.model.windows[wi].tabs.get(i).map(|t| t.focus)
+    };
+    match (b, hit) {
+        (B::Left, Some(TabHit::Tab(i))) => {
+            ws.mouse.tab_drag = Some(i);
+            if let Some(pane) = tab_pane(app, i) {
+                let _ = crate::actions::focus_pane(app, pane);
+            }
+        }
+        (B::Left, Some(TabHit::Close(i))) | (B::Middle, Some(TabHit::Tab(i) | TabHit::Close(i))) => {
+            if let Some(pane) = tab_pane(app, i) {
+                let args = Map::from_iter([("pane".to_string(), serde_json::json!(pane))]);
+                let _ = app.run_action(&terminus_protocol::ActionCall { action: "close-tab".into(), args });
+            }
+        }
+        (B::Left, Some(TabHit::NewTab)) => {
+            let _ = app.run_action(&terminus_protocol::ActionCall { action: "new-tab".into(), args: Map::new() });
+        }
+        _ => {}
+    }
+    ws.tab_hover = None;
+    ws.window.request_redraw();
 }
 
 /// The tab under a window x in the tab bar.
 fn tab_index_at(ws: &WinState, x: f64) -> Option<usize> {
-    let (cw, _) = ws.cell();
-    let col = (x / cw as f64) as u16;
-    ws.tab_spans.iter().position(|s| col >= s.start && col < s.end)
+    match crate::gui::tab_bar::hit(&ws.tab_layout, x, ws.cell().0)? {
+        TabHit::Tab(i) | TabHit::Close(i) => Some(i),
+        TabHit::NewTab => None,
+    }
+}
+
+/// Tracks what in the tab bar is under the pointer, redrawing when it changed.
+fn hover_tab_bar(ws: &mut WinState, x: f64, y: f64) {
+    let hover = if y >= 0.0 && y < ws.tab_bar_h as f64 {
+        crate::gui::tab_bar::hit(&ws.tab_layout, x, ws.cell().0)
+    } else {
+        None
+    };
+    if hover != ws.tab_hover {
+        ws.tab_hover = hover;
+        ws.window.request_redraw();
+    }
+}
+
+/// The pointer left the window: nothing in the tab bar is under it any more.
+pub fn cursor_left(ws: &mut WinState) {
+    hover_tab_bar(ws, -1.0, -1.0);
 }
 
 /// Ends a tab drag: the tab moves to the place under the pointer (the end when past the last tab).

@@ -443,9 +443,9 @@ fn config_theme_applies_the_selection_then_the_colour_overrides() {
     assert_eq!(t.palette[0], [255, 0, 0]);
     assert_eq!(t.palette[1], [0, 255, 0]);
     assert_eq!(t.palette[2], dracula.palette[2]);
-    assert_eq!(Config::default().theme(true).name, "Terminus Dark");
+    assert_eq!(Config::default().theme(true).name, "Unluminous Dark");
     let (unknown, _) = parse_ok("theme = \"nonexistent\"");
-    assert_eq!(unknown.theme(true).name, "Terminus Dark");
+    assert_eq!(unknown.theme(true).name, "Unluminous Dark");
 }
 
 #[test]

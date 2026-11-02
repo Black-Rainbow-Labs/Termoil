@@ -26,7 +26,7 @@ pub use cpu::VelloCpuRenderer;
 pub use draw::Layer;
 pub use frame::{
     Area, BgSpan, CursorFrame, CursorStyle, Decoration, DecorationKind, Frame, GlyphPos, GlyphRun, ImageRecord, Rgba,
-    RowFrame, SpriteCell,
+    RowFrame, Shape, SpriteCell,
 };
 pub use gpu::{GpuContext, VelloGpuRenderer, request_device};
 pub use images::{ImageData, ImagePlacement, PxRect, Z_BELOW_BACKGROUND, drawn_size};
@@ -54,6 +54,9 @@ pub struct FrameStats {
     pub total: Duration,
     /// Glyphs drawn.
     pub glyphs: usize,
+    /// The frame reached the screen. False when a window surface was occluded or timed out and the
+    /// frame was skipped; the caller draws it again later.
+    pub presented: bool,
 }
 
 /// Why a frame could not be drawn.

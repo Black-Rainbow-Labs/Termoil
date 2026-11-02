@@ -178,6 +178,32 @@ pub struct Area {
     pub y1: f32,
 }
 
+/// A filled shape drawn by the window's own controls (the tab bar), above the cell backgrounds and
+/// below the text, in frame pixels.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Shape {
+    /// A rectangle with rounded corners.
+    RoundRect {
+        /// Where it is.
+        area: Area,
+        /// Corner radius in pixels.
+        radius: f32,
+        /// Fill colour.
+        color: Rgba,
+    },
+    /// A straight line with square ends.
+    Line {
+        /// Start point.
+        from: (f32, f32),
+        /// End point.
+        to: (f32, f32),
+        /// Thickness in pixels.
+        width: f32,
+        /// Colour.
+        color: Rgba,
+    },
+}
+
 /// One image to draw: a rectangle of a decoded image stretched over a rectangle of the frame.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ImageRecord {
@@ -221,6 +247,8 @@ pub struct Frame {
     /// Id and generation of every image the terminal still holds, on screen or not. A renderer
     /// drops cached copies of images that no frame lists here.
     pub live_images: Vec<(u32, u64)>,
+    /// Shapes drawn above the cell backgrounds and below the text: the tab bar's tabs and buttons.
+    pub shapes: Vec<Shape>,
 }
 
 impl Frame {
@@ -231,6 +259,6 @@ impl Frame {
 
     /// Whether the frame draws any image under the text, which changes how the rows are drawn.
     pub fn has_images_under_text(&self) -> bool {
-        !self.images_below.is_empty() || !self.images_mid.is_empty()
+        !self.images_below.is_empty() || !self.images_mid.is_empty() || !self.shapes.is_empty()
     }
 }

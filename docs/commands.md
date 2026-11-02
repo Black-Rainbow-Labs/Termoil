@@ -17,6 +17,7 @@ or the IPC socket asked for it.
 | [`focus-right`](#focus-right) | no | yes | a window | Moves focus to the pane on the right. |
 | [`focus-up`](#focus-up) | no | yes | a window | Moves focus to the pane above. |
 | [`focus-down`](#focus-down) | no | yes | a window | Moves focus to the pane below. |
+| [`close-tab`](#close-tab) | yes | yes | a pane | Closes the tab holding a pane, ending every shell in it; the last tab closes its window. |
 | [`next-tab`](#next-tab) | no | yes | a window | Switches to the next tab. |
 | [`move-tab-to-window`](#move-tab-to-window) | yes | yes | a pane | Moves the tab holding a pane into a new window of its own. |
 | [`previous-tab`](#previous-tab) | no | yes | a window | Switches to the previous tab. |
@@ -182,6 +183,20 @@ No parameters.
 Moves focus to the pane below.
 
 No parameters.
+
+## close-tab
+
+Closes the tab holding a pane, ending every shell in it; the last tab closes its window.
+
+```
+terminus +close-tab [--pane <pane id>]
+```
+
+Over IPC: `{"id":1,"action":"close-tab","args":{...}}`. MCP tool: `terminus_close_tab`.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `pane` | pane id | no | The pane to act on; the focused pane when omitted. |
 
 ## next-tab
 

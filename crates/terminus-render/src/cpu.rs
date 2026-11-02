@@ -177,7 +177,8 @@ impl Renderer for VelloCpuRenderer {
         let encode = start.elapsed();
         let settings = vello_cpu::RasterizerSettings { render_mode: RenderMode::OptimizeSpeed, ..Default::default() };
         self.ctx.render_with(&mut self.pixmap, &mut self.resources, settings);
-        Ok(FrameStats { encode, total: start.elapsed(), glyphs: layers.iter().map(|l| l.frame.glyph_count()).sum() })
+        let glyphs = layers.iter().map(|l| l.frame.glyph_count()).sum();
+        Ok(FrameStats { encode, total: start.elapsed(), glyphs, presented: true })
     }
 
     /// The pixmap as straight RGBA8.

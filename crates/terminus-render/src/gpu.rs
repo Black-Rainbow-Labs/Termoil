@@ -128,6 +128,15 @@ fn upload_image(device: &wgpu::Device, queue: &wgpu::Queue, image: &ImageData) -
     texture
 }
 
+/// The backends tried first for window surfaces. On Windows that is DX12: on the RTX 5090 here,
+/// Vulkan and OpenGL surfaces reported every present as a success while the desktop went on showing
+/// the window's first frame, at its first size and place, after the window was resized or moved
+/// (task-2468, `docs/decisions/renderer.md`). DX12 swapchains are what the desktop compositor is
+/// built around and showed every frame. Elsewhere it is the primary backends.
+fn window_backends() -> wgpu::Backends {
+    if cfg!(windows) { wgpu::Backends::DX12 } else { wgpu::Backends::PRIMARY }
+}
+
 /// A GPU device the windows share: the instance, the adapter and its device and queue.
 #[derive(Clone)]
 pub struct GpuContext {
@@ -148,8 +157,9 @@ impl GpuContext {
     /// Starts a device for windows on `display` (a winit window or its event loop): the primary
     /// backends, and OpenGL when none of them has a usable adapter (a virtual machine or an old
     /// driver). OpenGL is not tried first because its start up alone costs about 170 ms here, and
-    /// it needs the display to make window surfaces. `TERMINUS_GPU_BACKEND=gl` uses OpenGL only,
-    /// to measure and test it.
+    /// it needs the display to make window surfaces. `TERMINUS_GPU_BACKEND` set to `gl`, `vulkan` or
+    /// `dx12` uses that backend only, to measure and test it. On Windows DX12 is tried first (see
+    /// `window_backends`).
     pub fn for_display<D>(display: D) -> Result<GpuContext, RenderError>
     where
         D: wgpu::rwh::HasDisplayHandle + std::fmt::Debug + Send + Sync + Clone + 'static,
@@ -158,10 +168,15 @@ impl GpuContext {
             let desc = wgpu::InstanceDescriptor::new_with_display_handle(Box::new(display.clone()));
             Self::with_descriptor(wgpu::InstanceDescriptor { backends: wgpu::Backends::GL, ..desc })
         };
-        if std::env::var("TERMINUS_GPU_BACKEND").is_ok_and(|v| v.eq_ignore_ascii_case("gl")) {
-            return gl();
+        match std::env::var("TERMINUS_GPU_BACKEND").map(|v| v.to_ascii_lowercase()).as_deref() {
+            Ok("gl") => return gl(),
+            Ok("vulkan") => return Self::with_backends(wgpu::Backends::VULKAN),
+            Ok("dx12") => return Self::with_backends(wgpu::Backends::DX12),
+            _ => {}
         }
-        Self::with_backends(wgpu::Backends::PRIMARY).or_else(|_| gl())
+        Self::with_backends(window_backends())
+            .or_else(|_| Self::with_backends(wgpu::Backends::PRIMARY))
+            .or_else(|_| gl())
     }
 
     /// Starts a device whose window surfaces can be translucent (`window.opacity` below 1). On
@@ -472,8 +487,10 @@ impl VelloGpuRenderer {
     }
 
     /// The surface texture for the next frame, or None when the window is occluded or the GPU timed
-    /// out (skip the frame). Reconfigures and retries once when the surface is outdated or lost
-    /// (after a resize or a display change).
+    /// out (skip the frame). Reconfigures and retries once when the surface is outdated, lost or
+    /// suboptimal (after a resize or a display change). A suboptimal texture still has the old size,
+    /// so it is dropped and a new one taken after the reconfigure; presenting it put a frame of the
+    /// old size on a window that had grown (task-2468).
     fn acquire(&mut self) -> Result<Option<wgpu::SurfaceTexture>, RenderError> {
         let Target::Surface { surface, config } = &self.target else {
             return Err(RenderError::Gpu("not a surface".into()));
@@ -481,9 +498,10 @@ impl VelloGpuRenderer {
         for attempt in 0..2 {
             match surface.get_current_texture() {
                 wgpu::CurrentSurfaceTexture::Success(t) => return Ok(Some(t)),
+                wgpu::CurrentSurfaceTexture::Suboptimal(t) if attempt == 1 => return Ok(Some(t)),
                 wgpu::CurrentSurfaceTexture::Suboptimal(t) => {
+                    drop(t);
                     surface.configure(&self.device, config);
-                    return Ok(Some(t));
                 }
                 wgpu::CurrentSurfaceTexture::Timeout | wgpu::CurrentSurfaceTexture::Occluded => return Ok(None),
                 _ if attempt == 0 => surface.configure(&self.device, config),
@@ -621,13 +639,15 @@ impl Renderer for VelloGpuRenderer {
             let view = t.create_view(&wgpu::TextureViewDescriptor::default());
             self.submit(&view)?;
             self.wait_idle();
-            return Ok(FrameStats { encode, total: start.elapsed(), glyphs });
+            return Ok(FrameStats { encode, total: start.elapsed(), glyphs, presented: true });
         }
-        let Some(frame) = self.acquire()? else { return Ok(FrameStats { encode, total: start.elapsed(), glyphs: 0 }) };
+        let Some(frame) = self.acquire()? else {
+            return Ok(FrameStats { encode, total: start.elapsed(), glyphs: 0, presented: false });
+        };
         let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
         self.submit(&view)?;
         self.queue.present(frame);
-        Ok(FrameStats { encode, total: start.elapsed(), glyphs })
+        Ok(FrameStats { encode, total: start.elapsed(), glyphs, presented: true })
     }
 
     /// Copies the offscreen target back to memory. A window surface cannot be read back.

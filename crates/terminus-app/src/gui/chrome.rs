@@ -1,4 +1,4 @@
-//! The window's own text: the tab bar, the configuration error banner and the IME preedit. Each is
+//! The window's own text: the tab bar's titles, the configuration error banner and the IME preedit. Each is
 //! a small `Terminal` written with escape sequences and built into a frame like a pane, so it gets
 //! the same shaping, font fallback and wide character handling as terminal text.
 
@@ -58,6 +58,20 @@ impl Strip {
         self.frame.as_ref().expect("built above")
     }
 
+    /// Sets what the text cannot carry on the frame built last: its full size in pixels, its
+    /// background, and the shapes drawn under the text (the tab bar's tabs and buttons). Called after
+    /// every `frame`, since the shapes change with the pointer while the text does not.
+    pub fn decorate(
+        &mut self, width: u32, height: u32, background: terminus_render::Rgba, shapes: Vec<terminus_render::Shape>,
+    ) {
+        if let Some(f) = self.frame.as_mut() {
+            f.width = width;
+            f.height = height;
+            f.background = background;
+            f.shapes = shapes;
+        }
+    }
+
     /// The frame built last, if any.
     pub fn frame_ref(&self) -> Option<&Frame> {
         self.frame.as_ref()
@@ -67,42 +81,6 @@ impl Strip {
 /// An SGR sequence setting a truecolor foreground and background.
 pub fn sgr_colors(fg: Rgb, bg: Rgb) -> String {
     format!("\x1b[38;2;{};{};{};48;2;{};{};{}m", fg.r, fg.g, fg.b, bg.r, bg.g, bg.b)
-}
-
-/// One tab's place in the tab bar, for clicks.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct TabSpan {
-    /// First column.
-    pub start: u16,
-    /// One past the last column.
-    pub end: u16,
-}
-
-/// The tab bar's content: each tab as ` n title `, the active one in the pane colours and the rest
-/// dimmed, the remaining width in the bar colour. Returns the bytes and each tab's columns.
-pub fn tab_bar(titles: &[String], active: usize, cols: u16, colors: &Colors) -> (Vec<u8>, Vec<TabSpan>) {
-    let bar = crate::gui::look::mix(colors.background, colors.foreground, 0.12);
-    let dim = crate::gui::look::mix(colors.foreground, colors.background, 0.35);
-    let each = (cols as usize / titles.len().max(1)).clamp(8, 40);
-    let mut out = String::new();
-    let mut spans = Vec::new();
-    let mut col = 0u16;
-    for (i, t) in titles.iter().enumerate() {
-        let label = truncate(&format!(" {} {} ", i + 1, if t.is_empty() { "Terminus" } else { t }), each);
-        let width = label.chars().count() as u16;
-        if col + width > cols {
-            break;
-        }
-        let (fg, bg) = if i == active { (colors.foreground, colors.background) } else { (dim, bar) };
-        out.push_str(&sgr_colors(fg, bg));
-        out.push_str(if i == active { "\x1b[1m" } else { "\x1b[22m" });
-        out.push_str(&label);
-        spans.push(TabSpan { start: col, end: col + width });
-        col += width;
-    }
-    out.push_str(&sgr_colors(dim, bar));
-    out.push_str("\x1b[K");
-    (out.into_bytes(), spans)
 }
 
 /// The banner shown while the configuration file has an error.
@@ -128,14 +106,4 @@ pub fn shader_banner(message: &str) -> Vec<u8> {
 /// The IME preedit: the composing text, underlined, in the pane colours.
 pub fn preedit(text: &str, colors: &Colors) -> Vec<u8> {
     format!("{}\x1b[4m{}", sgr_colors(colors.foreground, colors.background), text).into_bytes()
-}
-
-/// Cuts a label to `max` characters, ending in an ellipsis when cut.
-fn truncate(s: &str, max: usize) -> String {
-    if s.chars().count() <= max {
-        return s.to_string();
-    }
-    let mut t: String = s.chars().take(max.saturating_sub(2)).collect();
-    t.push_str("\u{2026} ");
-    t
 }

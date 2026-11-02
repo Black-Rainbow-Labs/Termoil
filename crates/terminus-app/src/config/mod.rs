@@ -20,7 +20,9 @@ pub use keys::{
 };
 pub use model::*;
 pub use schema::{Entry, SECTIONS, Section};
-pub use theme::{DEFAULT_THEME, Theme, contrast_ratio, relative_luminance, theme, themes};
+pub use theme::{
+    Chrome, DEFAULT_THEME, Theme, chrome_for, contrast_ratio, derived_chrome, relative_luminance, theme, themes,
+};
 pub use watch::{DEFAULT_DEBOUNCE, LoadResult, Watcher};
 
 /// A problem in the file that did not stop it loading: an unknown or renamed key, a bad binding or a value that

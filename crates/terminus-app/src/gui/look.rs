@@ -63,6 +63,11 @@ pub fn colors(config: &Config, os_dark: bool) -> Colors {
     }
 }
 
+/// The colours of the window's own controls for the theme in effect (`config::chrome_for`).
+pub fn chrome(config: &Config, os_dark: bool) -> crate::config::Chrome {
+    crate::config::chrome_for(&config.theme(os_dark))
+}
+
 /// The alpha of the window colour for `window.opacity` (0.0 to 1.0).
 pub fn background_alpha(config: &Config) -> u8 {
     (config.window.opacity.clamp(0.0, 1.0) * 255.0).round() as u8
@@ -87,11 +92,22 @@ pub fn build_options(config: &Config, scale: f64) -> BuildOptions {
 }
 
 /// The inner size in physical pixels of a new window: the configured columns and rows of cells
-/// plus the padding on both sides.
-pub fn window_size(config: &Config, m: &terminus_font::CellMetrics, opts: &BuildOptions) -> (u32, u32) {
+/// plus the padding on both sides, and the tab bar when it shows with one tab.
+pub fn window_size(config: &Config, m: &terminus_font::CellMetrics, opts: &BuildOptions, scale: f64) -> (u32, u32) {
     let w = config.window.columns * m.width + 2 * opts.padding.0;
-    let h = config.window.rows * m.height + 2 * opts.padding.1;
+    let h = config.window.rows * m.height + 2 * opts.padding.1 + tab_bar_height(config, m.height, scale, 1);
     (w, h)
+}
+
+/// The tab bar's height in physical pixels for a window with `tabs` tabs: the cell height plus
+/// `tab_bar.padding` above and below, or zero when the bar is hidden (`window.show_tab_bar` off, or one
+/// tab and `tab_bar.show_with_one_tab` off).
+pub fn tab_bar_height(config: &Config, cell_h: u32, scale: f64, tabs: usize) -> u32 {
+    let shown = config.window.show_tab_bar && (tabs > 1 || config.tab_bar.show_with_one_tab);
+    if !shown {
+        return 0;
+    }
+    cell_h + 2 * (config.tab_bar.padding as f64 * scale).round() as u32
 }
 
 /// A colour between `a` and `b`: `t` of the way from `a`.

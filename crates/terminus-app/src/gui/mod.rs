@@ -17,6 +17,7 @@ pub mod settings_view;
 pub mod shader;
 mod show;
 mod showtrace;
+pub mod tab_bar;
 mod taskbar;
 mod warm;
 pub mod window;
@@ -473,8 +474,10 @@ impl Gui {
         let ids: Vec<WinId> = self.windows.keys().copied().collect();
         for id in ids {
             let colors = look::colors(&self.app.config, self.os_dark);
+            let chrome = look::chrome(&self.app.config, self.os_dark);
             self.with_window(id, |ws, app| {
                 ws.colors = colors.clone();
+                ws.chrome = chrome;
                 for v in ws.views.values_mut() {
                     v.state.defaults = colors.clone();
                     v.state.needs_full = true;
@@ -827,6 +830,7 @@ impl ApplicationHandler<UserEvent> for Gui {
                 handle::focus(ws, app, f);
             }
             WindowEvent::CursorMoved { position, .. } => handle::cursor_moved(ws, app, position.x, position.y),
+            WindowEvent::CursorLeft { .. } => handle::cursor_left(ws),
             WindowEvent::MouseInput { state, button, .. } => handle::button(ws, app, state, button),
             WindowEvent::MouseWheel { delta, .. } => handle::wheel(ws, app, delta),
             WindowEvent::DroppedFile(path) => handle::dropped_file(ws, app, &path),

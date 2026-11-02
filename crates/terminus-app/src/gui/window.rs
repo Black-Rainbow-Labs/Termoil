@@ -19,9 +19,10 @@ use winit::window::Window;
 
 use crate::app::{App, Grid, Pane};
 use crate::config::KeyChord;
-use crate::gui::chrome::{self, Strip, TabSpan};
+use crate::gui::chrome::{self, Strip};
 use crate::gui::look;
 use crate::gui::paint::Painter;
+use crate::gui::tab_bar::{self, TabHit, TabLayout};
 use crate::model::{PaneId, Rect, WinId};
 
 /// Set by a key press so the blinking cursor shows at once.
@@ -86,10 +87,16 @@ pub struct WinState {
     pub views: HashMap<PaneId, PaneView>,
     /// The visible panes and their rectangles.
     pub layout: Vec<(PaneId, Rect)>,
-    /// Where each tab is in the tab bar.
-    pub tab_spans: Vec<TabSpan>,
+    /// Where each tab and button is in the tab bar.
+    pub tab_layout: TabLayout,
+    /// The part of the tab bar under the pointer.
+    pub tab_hover: Option<TabHit>,
+    /// The theme's colours for the tab bar.
+    pub chrome: crate::config::Chrome,
     /// Height of the tab bar (0 when hidden).
     pub tab_bar_h: f32,
+    /// Frames in a row that did not reach the screen, for the repaint backoff.
+    pub repaint_misses: u32,
     /// The tab bar.
     pub tab_strip: Strip,
     /// The config error banner.
@@ -199,7 +206,7 @@ impl WinState {
         if translucent {
             opts.background_alpha = look::background_alpha(config);
         }
-        let (w, h) = look::window_size(config, grid.metrics(), &opts);
+        let (w, h) = look::window_size(config, grid.metrics(), &opts, scale);
         match quick {
             Some(edge) => crate::gui::quick::place(&window, edge),
             None => match app.geometry.get(&id).filter(|g| on_a_monitor(el, g)) {
@@ -233,8 +240,11 @@ impl WinState {
             scale,
             views: HashMap::new(),
             layout: Vec::new(),
-            tab_spans: Vec::new(),
+            tab_layout: TabLayout::default(),
+            tab_hover: None,
+            chrome: look::chrome(config, os_dark),
             tab_bar_h: 0.0,
+            repaint_misses: 0,
             tab_strip: Strip::new(1, colors.clone()),
             banner_strip: Strip::new(1, colors.clone()),
             preedit_strip: Strip::new(1, colors.clone()),
@@ -300,7 +310,7 @@ impl WinState {
         let size = self.window.inner_size();
         let (cw, ch) = self.cell();
         let tabs = app.model.windows[wi].tabs.len();
-        self.tab_bar_h = if tabs > 1 && app.config.window.show_tab_bar { ch as f32 + 6.0 } else { 0.0 };
+        self.tab_bar_h = look::tab_bar_height(&app.config, ch, self.scale, tabs) as f32;
         let banner_h = if self.banner_text(app).is_some() { ch as f32 + 4.0 } else { 0.0 };
         let top = self.tab_bar_h + banner_h;
         let area = Rect { x: 0.0, y: top, w: size.width as f32, h: (size.height as f32 - top).max(0.0) };
@@ -324,6 +334,11 @@ impl WinState {
         self.views.retain(|p, _| layout.iter().any(|(q, _)| q == p));
         self.layout = layout;
         self.window.request_redraw();
+    }
+
+    /// Pixels above and below the tab titles: `tab_bar.padding` at this window's scale.
+    pub fn tab_bar_padding(&self, app: &App) -> u32 {
+        (app.config.tab_bar.padding as f64 * self.scale).round() as u32
     }
 
     /// The divider under a window position: the pane whose right (or bottom) edge it is, and the
@@ -425,7 +440,13 @@ impl WinState {
         }
         let window_colour = Rgba { a: self.opts.background_alpha, ..Rgba::rgb(bg.r, bg.g, bg.b) };
         self.painter.set_shader_cursor(shader_cursor);
-        self.painter.paint(window_colour, &layers, &self.grid)?;
+        let painted = self.painter.paint(window_colour, &layers, &self.grid);
+        if matches!(&painted, Ok(stats) if stats.presented) {
+            self.repaint_misses = 0;
+        } else {
+            self.schedule_repaint(&app.config.window);
+        }
+        painted?;
         self.last_paint = Some(Instant::now());
         self.keep_animating();
         if self.shown {
@@ -479,6 +500,18 @@ impl WinState {
     /// Moves a redraw that came too soon to `due`, so it happens once at the display rate.
     pub fn defer_paint(&mut self, due: Instant) {
         self.wake_at = Some(self.wake_at.map_or(due, |w| w.min(due)));
+    }
+
+    /// Draws again later after a frame did not reach the screen: the surface was covered or
+    /// minimised, timed out, or was lost while the window was being resized. Without this the
+    /// window kept showing the last frame it presented, at the old size, until the program printed
+    /// something (task-2468). The wait starts at `window.repaint_retry_ms` and doubles with each
+    /// further miss up to `window.repaint_retry_max_ms`, so a covered window does not spin.
+    fn schedule_repaint(&mut self, cfg: &crate::config::Window) {
+        let doubled = cfg.repaint_retry_ms.saturating_mul(1u64 << self.repaint_misses.min(16));
+        let wait = doubled.min(cfg.repaint_retry_max_ms).max(1);
+        self.repaint_misses = self.repaint_misses.saturating_add(1);
+        self.defer_paint(Instant::now() + std::time::Duration::from_millis(wait));
     }
 
     /// The banner bytes: the configuration error when there is one, otherwise the shader's error.
@@ -646,11 +679,7 @@ impl WinState {
         let cols = (self.window.inner_size().width / cw.max(1)) as u16;
         let opts = BuildOptions { padding: (0, 3), all_rows: true, minimum_contrast: 1.0, ..self.opts.clone() };
         if self.tab_bar_h > 0.0 {
-            let w = &app.model.windows[wi];
-            let titles: Vec<String> = w.tabs.iter().map(|t| tab_label(app, t)).collect();
-            let (bytes, spans) = chrome::tab_bar(&titles, w.active, cols, &self.colors);
-            self.tab_strip.frame(cols, 1, &bytes, &self.colors, &mut self.grid, &opts);
-            self.tab_spans = spans;
+            self.build_tab_bar(app, wi, cols, &opts);
             at.tab = Some((0.0, 0.0));
         }
         if let Some(text) = self.banner_text(app) {
@@ -679,6 +708,29 @@ impl WinState {
         at.overlay = self.build_overlay(cols, &opts);
         at.hints = self.build_hints(&opts);
         at
+    }
+
+    /// Builds the tab bar: lays the tabs out, writes their titles into the strip, and puts the tabs,
+    /// crosses and the new tab button on its frame as shapes.
+    fn build_tab_bar(&mut self, app: &App, wi: usize, cols: u16, opts: &BuildOptions) {
+        let w = &app.model.windows[wi];
+        let titles: Vec<String> = w.tabs.iter().map(|t| tab_label(app, t)).collect();
+        self.tab_layout = tab_bar::layout(titles.len(), cols, &app.config.tab_bar);
+        let bytes = tab_bar::text(&titles, w.active, &self.tab_layout, &self.chrome);
+        let opts = BuildOptions { padding: (0, self.tab_bar_padding(app)), ..opts.clone() };
+        self.tab_strip.frame(cols, 1, &bytes, &self.colors, &mut self.grid, &opts);
+        let look = tab_bar::Look {
+            chrome: &self.chrome,
+            cell: self.cell(),
+            height: self.tab_bar_h,
+            scale: self.scale as f32,
+            sizes: &app.config.tab_bar,
+            focused: self.focused,
+        };
+        let shapes = tab_bar::shapes(&self.tab_layout, w.active, self.tab_hover, &look);
+        let bar = self.chrome.bar;
+        let width = self.window.inner_size().width;
+        self.tab_strip.decorate(width, self.tab_bar_h as u32, Rgba::rgb(bar[0], bar[1], bar[2]), shapes);
     }
 
     /// Builds the palette or search bar strip and returns where it goes: the palette centred near

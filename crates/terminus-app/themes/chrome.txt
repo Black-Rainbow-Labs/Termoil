@@ -1,0 +1,11 @@
+# The colours of the window's own controls for the themes taken from Unluminous, in the roles
+# Unluminous's palette names them (crates/unluminous-app/src/theme/mod.rs and the Themes Bundle 1 plugin).
+# A theme not listed here has its chrome worked out from its own colours (config/theme.rs, derived_chrome).
+# name|bar (toolbar)|tab (control)|border (control_border)|accent|text_strong|text (text_control)|text_dim|close
+Unluminous Dark|1e222a|353b46|383f4b|489ff8|ffffff|c8cedb|8b93a3|ff5f57
+Unluminous Light|f1f3f6|ffffff|c3cad5|2a63f0|10151c|343d4b|5a6575|d93f3a
+Islands Dracula Colorful|343746|4f566d|5d5e66|ff79c6|ffffff|e4e4de|a0a8c8|ff5555
+Material Palenight|252837|3a3f58|515772|ab47bc|ffffff|b6bcda|8a90b5|f07178
+Material Deep Ocean|12141c|2c3043|464b5d|84ffff|ffffff|a6abbd|8f93a2|f07178
+Monokai Pro|272428|423f44|5b595c|ffd866|ffffff|c1c0c0|939293|ff6188
+One Dark|21252b|3e4451|4b5263|61afef|ffffff|b9c0cc|828997|e06c75

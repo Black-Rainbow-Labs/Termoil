@@ -5,7 +5,10 @@ use terminus_font::{FontGrid, sprite};
 use vello_common::kurbo::{Affine, BezPath, Rect, Shape, Vec2};
 use vello_common::peniko::FontData;
 
-use crate::frame::{CursorStyle, Decoration, DecorationKind, Frame, GlyphRun, ImageRecord, Rgba, RowFrame, SpriteCell};
+use crate::frame::{
+    CursorStyle, Decoration, DecorationKind, Frame, GlyphRun, ImageRecord, Rgba, RowFrame, Shape as FrameShape,
+    SpriteCell,
+};
 
 /// The drawing calls a renderer provides.
 pub trait Canvas {
@@ -66,6 +69,7 @@ pub fn draw_frame<C: Canvas>(c: &mut C, frame: &Frame, grid: &FontGrid) {
         frame.images_below.iter().for_each(|i| c.image(i));
         frame.rows.iter().for_each(|row| draw_row_spans(c, row, frame));
         frame.images_mid.iter().for_each(|i| c.image(i));
+        frame.shapes.iter().for_each(|s| draw_shape(c, s));
         frame.rows.iter().for_each(|row| draw_row_text(c, row, frame, grid));
     } else {
         for row in &frame.rows {
@@ -79,6 +83,38 @@ pub fn draw_frame<C: Canvas>(c: &mut C, frame: &Frame, grid: &FontGrid) {
             draw_run(c, text, grid);
         }
     }
+}
+
+/// Fills one of the frame's shapes.
+fn draw_shape<C: Canvas>(c: &mut C, shape: &FrameShape) {
+    match *shape {
+        FrameShape::RoundRect { area, radius, color } => {
+            let r = Rect::new(area.x0 as f64, area.y0 as f64, area.x1 as f64, area.y1 as f64);
+            c.paint(color);
+            c.path(&r.to_rounded_rect(radius as f64).to_path(0.1));
+        }
+        FrameShape::Line { from, to, width, color } => {
+            c.paint(color);
+            c.path(&line_outline(from, to, width));
+        }
+    }
+}
+
+/// The outline of a line `width` pixels thick from `from` to `to`, with square ends.
+fn line_outline(from: (f32, f32), to: (f32, f32), width: f32) -> BezPath {
+    let (dx, dy) = ((to.0 - from.0) as f64, (to.1 - from.1) as f64);
+    let len = (dx * dx + dy * dy).sqrt().max(1e-6);
+    let half = width as f64 / 2.0;
+    let (ux, uy) = (dx / len * half, dy / len * half);
+    let (nx, ny) = (-uy, ux);
+    let (x0, y0, x1, y1) = (from.0 as f64 - ux, from.1 as f64 - uy, to.0 as f64 + ux, to.1 as f64 + uy);
+    let mut p = BezPath::new();
+    p.move_to((x0 + nx, y0 + ny));
+    p.line_to((x1 + nx, y1 + ny));
+    p.line_to((x1 - nx, y1 - ny));
+    p.line_to((x0 - nx, y0 - ny));
+    p.close_path();
+    p
 }
 
 /// Draws one row: its background (the window colour, then spans), text, sprites, decorations.

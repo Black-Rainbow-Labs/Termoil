@@ -349,6 +349,7 @@ iglass Light|1d1d1f|f5f5f7|005cc5|bad7f9|1d1d1f|1d1d1f|92000b|00521b|763200|0035
 IR Black|f1f1f1|000000|808080|b5d5ff|000000|4f4f4f|fa6c60|a8ff60|fffeb7|96cafe|fa73fd|c6c5fe|efedef|7b7b7b|fcb6b0|cfffab|ffffcc|b5dcff|fb9cfe|e0e0fe|ffffff
 IRIX Console|f2f2f2|0c0c0c|c7c7c7|c2deff|000000|1a1919|d42426|37a327|c29d28|0739e2|911f9c|4497df|cccccc|767676|f34f59|45c731|f9f2a7|4079ff|c31ba2|6ed7d7|f2f2f2
 IRIX Terminal|f2f2f2|000043|c7c7c7|c2deff|000000|1a1919|ff2b1e|57ff3d|ffff44|0004ff|ff2cff|56ffff|ffffff|ffff44|ffff44|ffff44|fffc72|ffff44|ffff44|ffff44|ffff44
+Islands Dracula Colorful|f8f8f2|282a36|ff79c6|44475a||21222c|ff5555|50fa7b|f1fa8c|bd93f9|ff79c6|8be9fd|f8f8f2|6272a4|ff6e6e|69ff94|ffffa5|d6acff|ff92df|a4ffff|ffffff
 Isocon Dark|868686|062329|868686|868686|062329|062329|e34b87|419658|ba783e|408cbd|976fe3|3e8c7e|868686|565656|f81486|109b48|c7700e|0f8dcd|9c61fc|0f907f|868686
 Isocon Light|6e6e6e|eef3ea|6e6e6e|6e6e6e|eef3ea|eef3ea|c33f3d|347b47|856b31|2f6bcf|9242d6|306f72|6e6e6e|8c8c8c|d0272f|1f7d3f|896a1c|1a67e1|982ae9|1c7175|6e6e6e
 iTerm2 Dark Background|c7c7c7|000000|c7c7c7|c1deff|000000|000000|c91b00|00c200|c7c400|0225c7|ca30c7|00c5c7|c7c7c7|686868|ff6e67|5ffa68|fffc67|6871ff|ff77ff|60fdff|ffffff
@@ -456,8 +457,10 @@ Matcha Zen|354029|f5f7ea|4e8c2e|dde7cc|a8aa9d|354029|c2452a|4e8c2e|927000|2e7c78
 Material|232322|eaeaea|16afca|c2c2c2|4e4e4e|212121|b7141f|457b24|f6981e|134eb2|560088|0e717c|efefef|424242|e83b3f|7aba3a|ffea2e|54a4f3|aa4dbc|26bbd1|d9d9d9
 Material Dark|e5e5e5|232322|16afca|dfdfdf|3d3d3d|212121|b7141f|457b24|f6981e|134eb2|560088|0e717c|efefef|424242|e83b3f|7aba3a|ffea2e|54a4f3|aa4dbc|26bbd1|d9d9d9
 Material Darker|eeffff|212121|ffffff|eeffff|545454|000000|ff5370|c3e88d|ffcb6b|82aaff|c792ea|89ddff|ffffff|545454|ff5370|c3e88d|ffcb6b|82aaff|c792ea|89ddff|ffffff
+Material Deep Ocean|c3cee3|0f111a|84ffff|3b3f51||2c3043|ff5370|c3e88d|ffcb6b|82aaff|c792ea|89ddff|c3cee3|4b526d|ff5370|c3e88d|ffcb6b|82aaff|c792ea|89ddff|ffffff
 Material Design Colors|e7ebed|1d262a|eaeaea|4e6a78|e7ebed|435b67|fc3841|5cf19e|fed032|37b6ff|fc226e|59ffd1|ffffff|a1b0b8|fc746d|adf7be|fee16c|70cfff|fc669b|9affe6|ffffff
 Material Ocean|8f93a2|0f111a|ffcc00|1f2233|8f93a2|546e7a|ff5370|c3e88d|ffcb6b|82aaff|c792ea|89ddff|ffffff|546e7a|ff5370|c3e88d|ffcb6b|82aaff|c792ea|89ddff|ffffff
+Material Palenight|a6accd|292d3e|ab47bc|424865||3a3f58|ff5370|c3e88d|ffcb6b|82aaff|c792ea|89ddff|d0d0d0|676e95|ff5370|c3e88d|ffcb6b|82aaff|c792ea|89ddff|ffffff
 Mathias|bbbbbb|000000|bbbbbb|555555|f2f2f2|000000|e52222|a6e32d|fc951e|c48dff|fa2573|67d9f0|f2f2f2|555555|ff5555|55ff55|ffff55|5555ff|ff55ff|55ffff|ffffff
 Matrix|426644|0f191c|384545|18282e|00ff87|0f191c|23755a|82d967|ffd700|3f5242|409931|50b45a|507350|688060|2fc079|90d762|faff00|4f7e7e|11ff25|c1ff8a|678c61
 Matte Black|bebebe|121212|eaeaea|333333|eaeaea|333333|d35f5f|ffc107|b91c1c|e68e0d|d35f5f|bebebe|bebebe|8a8a8d|891c1c|ffc107|b90a0a|f59e0b|b91c1c|eaeaea|ffffff
@@ -562,6 +565,7 @@ Oceanic Material|c2c8d7|1c262b|b3b8c3|6dc2b8|c2c8d7|000000|ee2b2a|40a33f|ffea2e|
 Oceanic Next|c1c5cd|1b2b34|c1c5cd|515b65|c1c5cd|1b2b34|db686b|a2c699|f2ca73|7198c8|bd96c2|74b1b2|ffffff|68737d|db686b|a2c699|f2ca73|7198c8|bd96c2|74b1b2|ffffff
 Ocotillo|fff0d8|66301e|f7be55|854b37|fff8e9|d8c8bc|ffa08a|91d6a4|f4cf6c|95c9ed|e7a8d1|88ddd6|fff0d8|e5d6cb|ffb5a0|aae0b7|ffdf8b|b1d8f3|efbfdb|a8e8e2|fffaf0
 Ollie|8a8dae|222125|5b6ea7|1e3a66|8a8eac|000000|ac2e31|31ac61|ac4300|2d57ac|b08528|1fa6ac|8a8eac|5b3725|ff3d48|3bff99|ff5e1e|4488ff|ffc21d|1ffaff|5b6ea7
+One Dark|abb2bf|282c34|61afef|3e4451||3f4451|e06c75|98c379|e5c07b|61afef|c678dd|56b6c2|abb2bf|5c6370|e06c75|98c379|e5c07b|61afef|c678dd|56b6c2|ffffff
 One Dark Two|e6e6e6|21252b|e6e6e6|393e47|e6e6e6|1d1f23|e27881|98c379|eac786|71b9f4|c88bda|62bac6|c9ccd3|4a505a|e68991|a8cc8e|edcf97|8dc7f6|d3a2e2|78c4ce|e6e6e6
 One Double Dark|dcdfe4|292c33|f1e1dd|595b6e|cfd6f1|3e4451|e06c75|98c379|e5c07b|61afef|c678dd|56b6c2|dcdfe4|545d6d|fd807f|96d58b|edc273|84c8ff|ee82ee|3ae1f7|f7f9fc
 One Double Light|383a42|fafafa|1a1a1a|474e5d|1a1a1a|464b57|e45649|50a14f|c18401|0184bc|a626a4|0997b3|e8d9d9|0f131e|f24c2d|3db637|e09d00|2e63d6|d21fd1|06b1d8|ffffff
@@ -823,6 +827,8 @@ Unalive 'Em All|eee3dd|110c0b|ff4541|3f2223|fff4e8|aaa29e|ec514a|81bb7a|e7b75d|7
 Undead|f3edcf|3d3c1c|ded157|5d5c37|fff8e3|c0bd9f|e69a72|a8c97c|d9c164|91bdb5|bd9eb0|83c5b5|f3edcf|d1ceb2|ecae8b|bad598|e4d181|a8ccc4|cdb6c1|9dd4c7|fff8e5
 Under The Sea|ffffff|011116|4afcd6|415555|4dffda|022026|b2302d|00a941|59819c|459a86|00599d|5d7e19|405555|384451|ff4242|2aea5e|8ed4fd|61d5ba|1298ff|98d028|58fbd6
 Unikitty|0b0b0b|ff8cd9|bafc8b|3ea9fe|ffffff|0c0c0c|a80f20|bafc8b|eedf4b|145fcd|ff36a2|6bd1bc|e2d7e1|434343|d91329|d3ffaf|ffef50|0075ea|fdd5e5|79ecd5|fff3fe
+Unluminous Dark|e8ebf1|1a1f26|489ff8|304361||242a33|e04a4a|5cc87a|febc2e|489ff8|c37cf0|4fc1c4|c8cedb|535c6b|ff6e6e|7ee79b|ffd566|7cbbff|da9eff|74e0e3|ffffff
+Unluminous Light|1e2530|fbfcfd|2a63f0|c6d8ff||24292f|cf222e|116329|8a6100|0969da|8250df|1b7c83|6e7781|57606a|a40e26|1a7f37|633c01|218bff|a475f9|3192aa|8c959f
 urban|bca89c|302e38|bca89c|bca89c|302e38|32303a|7e444f|7a9256|a78560|5f5770|704156|534856|bca89c|4e4b57|7e444f|7a9256|a78560|5f5770|704156|534856|bca89c
 Urple|877a9b|1b1b23|a063eb|a063eb|1b1b22|000000|b0425b|37a415|ad5c42|564d9b|6c3ca1|808080|87799c|5d3225|ff6388|29e620|f08161|867aed|a05eee|eaeaea|bfa3ff
 Vacuum Tube|f7efe3|0c0907|ffc078|35251a|fff4e8|bdb5aa|ff826d|79d09b|f5cb67|8fb4ee|d9a1e8|83d3dc|f7efe3|cec7bd|ff9e8e|99ddb4|f9dc89|adc8f4|e7bbed|a4e2e7|fffaf2

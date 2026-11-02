@@ -299,6 +299,7 @@ fn steps() -> Vec<(&'static str, Step)> {
             }),
         ),
         ("the split resizes from its keys and by dragging", Box::new(resize_step)),
+        ("the tab bar closes a tab from its cross and opens one from its plus", Box::new(tab_bar_step)),
         ("hints label the links on screen", Box::new(hints_step)),
         ("the theme switcher previews and keeps a theme", Box::new(theme_step)),
         ("the settings view edits font.size and saves it", Box::new(settings_step)),
@@ -456,6 +457,52 @@ fn resize_step(g: &mut Gui, el: &ActiveEventLoop) -> Result<bool, String> {
     if after_drag <= after_key + 0.01 {
         return Err(format!("dragging the divider right left the ratio at {after_drag}"));
     }
+    Ok(true)
+}
+
+/// The tab bar with the pointer (task-2468): with a third tab open, the pointer over the last tab's cross
+/// is a hover on that cross, a click there closes the tab through `close-tab`, and a click on the plus
+/// opens a tab through `new-tab`.
+fn tab_bar_step(g: &mut Gui, el: &ActiveEventLoop) -> Result<bool, String> {
+    use terminus_app::gui::tab_bar::TabHit;
+    let (_, before) = focus(g).ok_or("pane")?;
+    g.app.run_named("new-tab").map_err(|e| e.to_string())?;
+    g.flush(el);
+    let tabs = g.app.model.windows[0].tabs.len();
+    let (win, _) = focus(g).ok_or("window")?;
+    let Gui { app, windows, .. } = g;
+    let ws = windows.get_mut(&win).ok_or("window")?;
+    ws.relayout(app);
+    ws.draw(app)?;
+    let last = ws.tab_layout.tabs.len().checked_sub(1).ok_or("the tab bar laid out no tabs")?;
+    let (cw, y) = (ws.cell().0 as f64, ws.tab_bar_h as f64 / 2.0);
+    let cross = (ws.tab_layout.tabs[last].close() as f64 + 1.0) * cw;
+    handle::cursor_moved(ws, app, cross, y);
+    if ws.tab_hover != Some(TabHit::Close(last)) {
+        return Err(format!("the pointer on the cross is {:?}, not Close({last})", ws.tab_hover));
+    }
+    handle::button(ws, app, winit::event::ElementState::Pressed, winit::event::MouseButton::Left);
+    handle::button(ws, app, winit::event::ElementState::Released, winit::event::MouseButton::Left);
+    if app.model.windows[0].tabs.len() != tabs - 1 {
+        return Err(format!("the cross left {} tabs, not {}", app.model.windows[0].tabs.len(), tabs - 1));
+    }
+    ws.relayout(app);
+    ws.draw(app)?;
+    let plus = ws.tab_layout.new_tab.ok_or("no new tab button")? as f64 * cw + cw;
+    handle::cursor_moved(ws, app, plus, y);
+    handle::button(ws, app, winit::event::ElementState::Pressed, winit::event::MouseButton::Left);
+    handle::button(ws, app, winit::event::ElementState::Released, winit::event::MouseButton::Left);
+    if app.model.windows[0].tabs.len() != tabs {
+        return Err(format!("the plus left {} tabs, not {tabs}", app.model.windows[0].tabs.len()));
+    }
+    // Put things back for the steps after this one: close the tab the plus opened, and focus the pane
+    // that had the keyboard before.
+    let opened = app.model.windows[0].tab().focus;
+    let _ = app.run_action(&terminus_protocol::ActionCall {
+        action: "close-tab".into(),
+        args: serde_json::Map::from_iter([("pane".to_string(), serde_json::json!(opened))]),
+    });
+    terminus_app::actions::focus_pane(app, before).map_err(|e| e.to_string())?;
     Ok(true)
 }
 

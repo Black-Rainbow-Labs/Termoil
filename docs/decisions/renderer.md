@@ -130,3 +130,28 @@ the same font is a visual judgement on the installed release build and is not do
    of one. The TDD said FIFO with a two frame swap chain; mailbox measured lower latency and the TDD is updated.
 5. Rendering happens on the UI thread for now. The renderer thread in the TDD's data flow is not needed to meet R4 or P2:
    building a frame takes under 0.4 ms and the terminal lock is held only to copy the dirty rows.
+
+## Windows: window surfaces use DX12 (task-2468, 2026-11-02)
+
+Jason reported that a window made bigger kept its old contents: Claude Code did not fill the new space. The size reached
+the program (a Node program reading stdin in raw mode, as Ink does, redrew at the new size, and `terminus +screen` showed
+the new frame), so the fault was in what reached the screen.
+
+What was measured, on the RTX 5090, by resizing and moving a window with `SetWindowPos` and capturing it with Windows
+Graphics Capture (the API screen recorders use; a GDI screen copy cannot see a GPU swapchain and is not evidence here):
+
+| Window surface | Every present reported success | What the desktop showed after a resize or a move |
+|---|---|---|
+| Vulkan (the old default) | yes | the window's first frame, at its first size and first screen position, black elsewhere |
+| OpenGL (`TERMINUS_GPU_BACKEND=gl`) | yes | the same as Vulkan |
+| DX12 | yes | the new frame, filling the window, at every size tried (67 by 19 to 167 by 45 cells) |
+| CPU (`window.renderer = "cpu"`) | yes | the new frame |
+
+So on Windows `GpuContext::for_display` now tries DX12 first, then the other primary backends, then OpenGL.
+`TERMINUS_GPU_BACKEND` accepts `dx12`, `vulkan` and `gl` to measure each one. P2 on DX12, 800 keys, unpaced:
+p50 1.73 ms, p99 5.34 ms, max 22.14 ms (Vulkan in the same session: p50 1.66 ms, p99 4.49 ms). The gate is p99 under 16 ms.
+
+Two smaller faults in the same path were fixed with it. A suboptimal surface texture was presented at the old size
+before the surface was reconfigured; it is now dropped and a new one taken. A frame that is skipped (the surface is
+covered, minimised, timed out or lost) used to be gone for good until the program printed something; the window now draws
+it again after `window.repaint_retry_ms` (16), doubling to at most `window.repaint_retry_max_ms` (1000).

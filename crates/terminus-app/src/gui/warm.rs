@@ -52,7 +52,7 @@ pub fn take(scale: f64) -> Option<(FontGrid, Box<VelloCpuRenderer>)> {
 fn make(config: &Config, scale: f64) -> Made {
     let mut grid = look::font_grid(config, config.font.size as f32, scale)?;
     let opts = look::build_options(config, scale);
-    let (w, h) = look::window_size(config, grid.metrics(), &opts);
+    let (w, h) = look::window_size(config, grid.metrics(), &opts, scale);
     let mut renderer = Box::new(VelloCpuRenderer::new(w, h, crate::gui::paint::cpu_threads(), true));
     let colors = look::colors(config, true);
     let text: Vec<u8> = (0x20u8..0x7f).collect();

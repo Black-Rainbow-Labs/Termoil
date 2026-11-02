@@ -52,6 +52,7 @@ pub struct Config {
     pub colors: ColorOverrides,
     pub cursor: Cursor,
     pub window: Window,
+    pub tab_bar: TabBar,
     pub scrollback: Scrollback,
     pub session: SessionRestore,
     pub shell: Shell,
@@ -105,9 +106,9 @@ pub struct ThemeSel {
 }
 
 impl Default for ThemeSel {
-    /// Terminus Dark, with no separate dark and light choice.
+    /// Unluminous Dark, with no separate dark and light choice.
     fn default() -> Self {
-        ThemeSel { name: "Terminus Dark".into(), dark: None, light: None }
+        ThemeSel { name: super::DEFAULT_THEME.into(), dark: None, light: None }
     }
 }
 
@@ -165,6 +166,35 @@ pub enum CursorStyle {
     Underline,
 }
 
+/// `[tab_bar]`: the sizes of the tab bar, in pixels at a display scale of 1 and in columns.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TabBar {
+    pub padding: u32,
+    pub corner_radius: f32,
+    pub inset: f32,
+    pub underline: f32,
+    pub min_columns: u16,
+    pub max_columns: u16,
+    pub show_with_one_tab: bool,
+}
+
+impl Default for TabBar {
+    /// Unluminous's file tabs: a rounded tab with a two pixel accent line, 12 to 32 columns wide, shown
+    /// with one tab too so the new tab button is always there.
+    fn default() -> Self {
+        TabBar {
+            padding: 7,
+            corner_radius: 7.0,
+            inset: 3.0,
+            underline: 2.0,
+            min_columns: 12,
+            max_columns: 32,
+            show_with_one_tab: true,
+        }
+    }
+}
+
 /// `[cursor]`: shape and blinking.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -219,6 +249,8 @@ pub struct Window {
     pub quick_terminal_hotkey: String,
     pub shader: String,
     pub shader_poll_ms: u64,
+    pub repaint_retry_ms: u64,
+    pub repaint_retry_max_ms: u64,
 }
 
 impl Default for Window {
@@ -240,6 +272,8 @@ impl Default for Window {
             quick_terminal_hotkey: "ctrl+`".into(),
             shader: String::new(),
             shader_poll_ms: 1000,
+            repaint_retry_ms: 16,
+            repaint_retry_max_ms: 1000,
         }
     }
 }

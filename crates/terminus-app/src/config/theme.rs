@@ -1,5 +1,6 @@
-//! The bundled colour schemes (the iTerm2 colour schemes set plus Terminus Dark and Terminus Light) and the
-//! resolution of `[theme]` and `[colors]` into the colours a window draws with.
+//! The bundled colour schemes (the iTerm2 colour schemes set, Terminus Dark and Terminus Light, and the themes
+//! Unluminous ships) and the resolution of `[theme]` and `[colors]` into the colours a window draws with,
+//! including the colours of the window's own controls ([`Chrome`]).
 use std::sync::OnceLock;
 
 use super::Config;
@@ -7,8 +8,12 @@ use super::Config;
 /// The data file written by `tools/themes`, one theme per line.
 const THEME_DATA: &str = include_str!("../../themes/themes.txt");
 
-/// The theme used when the configured name does not exist.
-pub const DEFAULT_THEME: &str = "Terminus Dark";
+/// The chrome colours of the themes taken from Unluminous, one theme per line.
+const CHROME_DATA: &str = include_str!("../../themes/chrome.txt");
+
+/// The theme used when none is configured or the configured name does not exist: Unluminous's own dark
+/// theme, so Terminus and the Unluminous editor look like one family (task-2468).
+pub const DEFAULT_THEME: &str = "Unluminous Dark";
 
 /// A colour scheme: default colours, selection colours and the sixteen ANSI palette entries.
 #[derive(Clone, Debug, PartialEq)]
@@ -20,6 +25,89 @@ pub struct Theme {
     pub selection_background: [u8; 3],
     pub selection_foreground: Option<[u8; 3]>,
     pub palette: [[u8; 3]; 16],
+}
+
+/// The colours of the window's own controls: the tab bar, its tabs and their buttons. The roles are the
+/// ones Unluminous's palette names, so a theme taken from Unluminous colours Terminus's tabs the way
+/// Unluminous colours its own.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Chrome {
+    /// Behind the tabs (Unluminous's `toolbar`).
+    pub bar: [u8; 3],
+    /// The tab that is showing, and a tab under the pointer (`control`).
+    pub tab: [u8; 3],
+    /// The edge of the tab that is showing (`control_border`).
+    pub border: [u8; 3],
+    /// The line under the tab that is showing (`accent`).
+    pub accent: [u8; 3],
+    /// The title of the tab that is showing (`text_strong`).
+    pub text_strong: [u8; 3],
+    /// The title of any other tab (`text_control`).
+    pub text: [u8; 3],
+    /// The close cross and the new tab button (`text_dim`).
+    pub text_dim: [u8; 3],
+    /// Behind the close cross under the pointer (`close`).
+    pub close: [u8; 3],
+}
+
+/// Parses one line of `chrome.txt`: `name|bar|tab|border|accent|text_strong|text|text_dim|close`.
+fn parse_chrome_line(line: &str) -> Option<(String, Chrome)> {
+    let f: Vec<&str> = line.split('|').collect();
+    if f.len() != 9 || line.starts_with('#') {
+        return None;
+    }
+    let chrome = Chrome {
+        bar: hex_color(f[1])?,
+        tab: hex_color(f[2])?,
+        border: hex_color(f[3])?,
+        accent: hex_color(f[4])?,
+        text_strong: hex_color(f[5])?,
+        text: hex_color(f[6])?,
+        text_dim: hex_color(f[7])?,
+        close: hex_color(f[8])?,
+    };
+    Some((f[0].to_lowercase(), chrome))
+}
+
+/// The chrome listed for a theme by name, ignoring case.
+fn listed_chrome(name: &str) -> Option<Chrome> {
+    static LISTED: OnceLock<Vec<(String, Chrome)>> = OnceLock::new();
+    let wanted = name.trim().to_lowercase();
+    LISTED
+        .get_or_init(|| CHROME_DATA.lines().filter_map(parse_chrome_line).collect())
+        .iter()
+        .find(|(n, _)| *n == wanted)
+        .map(|(_, c)| *c)
+}
+
+/// A colour `t` of the way from `a` to `b`.
+fn blend(a: [u8; 3], b: [u8; 3], t: f64) -> [u8; 3] {
+    let m = |x: u8, y: u8| (x as f64 + (y as f64 - x as f64) * t).round() as u8;
+    [m(a[0], b[0]), m(a[1], b[1]), m(a[2], b[2])]
+}
+
+/// Chrome worked out from a theme's own colours, for a theme `chrome.txt` does not list. The bar is a
+/// step from the background towards the text, the tab that is showing a larger step, and the accent is
+/// the theme's blue, the way Unluminous's own palette is built.
+pub fn derived_chrome(t: &Theme) -> Chrome {
+    let (fg, bg) = (t.foreground, t.background);
+    let dark = relative_luminance(bg) < 0.4;
+    let strong = if dark { blend(fg, [255; 3], 0.6) } else { blend(fg, [0; 3], 0.6) };
+    Chrome {
+        bar: blend(bg, fg, if dark { 0.03 } else { 0.04 }),
+        tab: if dark { blend(bg, fg, 0.14) } else { blend(bg, [255; 3], 0.8) },
+        border: blend(bg, fg, 0.2),
+        accent: t.palette[4],
+        text_strong: strong,
+        text: blend(fg, bg, 0.12),
+        text_dim: blend(fg, bg, 0.42),
+        close: t.palette[1],
+    }
+}
+
+/// The chrome for a theme: its line in `chrome.txt` when it has one, otherwise worked out from its colours.
+pub fn chrome_for(t: &Theme) -> Chrome {
+    listed_chrome(&t.name).unwrap_or_else(|| derived_chrome(t))
 }
 
 /// Parses six hex digits into a colour.
@@ -95,7 +183,7 @@ impl Config {
         }
     }
 
-    /// The colours to draw with: the selected theme (Terminus Dark when the name is unknown) with every
+    /// The colours to draw with: the selected theme (Unluminous Dark when the name is unknown) with every
     /// `[colors]` override applied on top.
     pub fn theme(&self, os_dark: bool) -> Theme {
         let base = theme(self.theme_name(os_dark)).or_else(|| theme(DEFAULT_THEME));

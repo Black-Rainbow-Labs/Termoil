@@ -48,8 +48,8 @@ pub static SECTIONS: &[Section] = &[
         doc: "Colour scheme. `theme = \"Name\"` is the same as `name`. dark and light follow the OS when both are set.",
         keys: &[
             e("name", "Theme name; see `terminus +list-themes`."),
-            opt("dark", "Theme used when the OS is in dark mode.", "\"Terminus Dark\""),
-            opt("light", "Theme used when the OS is in light mode.", "\"Terminus Light\""),
+            opt("dark", "Theme used when the OS is in dark mode.", "\"Unluminous Dark\""),
+            opt("light", "Theme used when the OS is in light mode.", "\"Unluminous Light\""),
         ],
     },
     Section {
@@ -98,6 +98,27 @@ pub static SECTIONS: &[Section] = &[
                 "shader_poll_ms",
                 "Milliseconds between checks of the shader file's modified time, so an edit applies without a restart.",
             ),
+            e(
+                "repaint_retry_ms",
+                "Milliseconds before a frame the window could not present (covered, minimised, or a surface being resized) is drawn again. Each further miss doubles the wait.",
+            ),
+            e(
+                "repaint_retry_max_ms",
+                "The longest wait between attempts to draw a frame the window could not present.",
+            ),
+        ],
+    },
+    Section {
+        path: "tab_bar",
+        doc: "The tab bar's sizes. Its colours come from the theme.",
+        keys: &[
+            e("padding", "Pixels above and below the tab titles."),
+            e("corner_radius", "Corner radius of a tab, in pixels."),
+            e("inset", "Pixels between a tab and its neighbours and the bar's edges."),
+            e("underline", "Thickness of the accent line under the tab that is showing, in pixels."),
+            e("min_columns", "The narrowest a tab is drawn, in columns, before tabs start being left off the end."),
+            e("max_columns", "The widest a tab is drawn, in columns."),
+            e("show_with_one_tab", "Show the tab bar, with its new tab button, when the window has one tab."),
         ],
     },
     Section {

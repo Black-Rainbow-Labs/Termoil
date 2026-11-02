@@ -178,6 +178,42 @@ fn builtin_schemes() -> Vec<Scheme> {
     vec![dark, light]
 }
 
+/// One theme from a `themes.txt` line, for the themes written here rather than converted.
+fn scheme_from_line(line: &str) -> Scheme {
+    let f: Vec<&str> = line.split('|').collect();
+    let mut palette = [[0u8; 3]; 16];
+    for (slot, text) in palette.iter_mut().zip(&f[6..]) {
+        *slot = rgb(text);
+    }
+    Scheme {
+        name: f[0].into(),
+        foreground: rgb(f[1]),
+        background: rgb(f[2]),
+        cursor: rgb(f[3]),
+        selection_background: rgb(f[4]),
+        selection_foreground: (!f[5].is_empty()).then(|| rgb(f[5])),
+        palette,
+    }
+}
+
+/// The themes Unluminous ships (task-2468). Ground, text, cursor and selection are Unluminous's `editor`, `text`,
+/// `accent` and `text_selection`; Unluminous Dark and Light use Unluminous's own sixteen terminal colours
+/// (`unluminous-terminal/src/palette.rs`), the others their scheme's published terminal colours. Their tab bar
+/// colours are in `crates/terminus-app/themes/chrome.txt`.
+fn unluminous_schemes() -> Vec<Scheme> {
+    [
+        "Unluminous Dark|e8ebf1|1a1f26|489ff8|304361||242a33|e04a4a|5cc87a|febc2e|489ff8|c37cf0|4fc1c4|c8cedb|535c6b|ff6e6e|7ee79b|ffd566|7cbbff|da9eff|74e0e3|ffffff",
+        "Unluminous Light|1e2530|fbfcfd|2a63f0|c6d8ff||24292f|cf222e|116329|8a6100|0969da|8250df|1b7c83|6e7781|57606a|a40e26|1a7f37|633c01|218bff|a475f9|3192aa|8c959f",
+        "Islands Dracula Colorful|f8f8f2|282a36|ff79c6|44475a||21222c|ff5555|50fa7b|f1fa8c|bd93f9|ff79c6|8be9fd|f8f8f2|6272a4|ff6e6e|69ff94|ffffa5|d6acff|ff92df|a4ffff|ffffff",
+        "Material Palenight|a6accd|292d3e|ab47bc|424865||3a3f58|ff5370|c3e88d|ffcb6b|82aaff|c792ea|89ddff|d0d0d0|676e95|ff5370|c3e88d|ffcb6b|82aaff|c792ea|89ddff|ffffff",
+        "Material Deep Ocean|c3cee3|0f111a|84ffff|3b3f51||2c3043|ff5370|c3e88d|ffcb6b|82aaff|c792ea|89ddff|c3cee3|4b526d|ff5370|c3e88d|ffcb6b|82aaff|c792ea|89ddff|ffffff",
+        "One Dark|abb2bf|282c34|61afef|3e4451||3f4451|e06c75|98c379|e5c07b|61afef|c678dd|56b6c2|abb2bf|5c6370|e06c75|98c379|e5c07b|61afef|c678dd|56b6c2|ffffff",
+    ]
+    .iter()
+    .map(|l| scheme_from_line(l))
+    .collect()
+}
+
 /// Reads every `.itermcolors` file in a folder and returns the schemes in directory order.
 fn read_folder(dir: &Path) -> Vec<Scheme> {
     let mut schemes = Vec::new();
@@ -212,7 +248,7 @@ fn write_output(schemes: &[Scheme], out: &Path, commit: &str, license: Option<St
     let body: Vec<String> = schemes.iter().map(to_line).collect();
     fs::write(out.join("themes.txt"), body.join("\n") + "\n").expect("write themes.txt");
     let readme = format!(
-        "Colour schemes converted from https://github.com/mbadolato/iTerm2-Color-Schemes at commit {commit} (MIT licence, see LICENSE). Regenerate with `cargo run -p terminus-themes -- <scheme folder>`. Terminus Dark and Terminus Light are written by the Terminus authors.\n"
+        "Colour schemes converted from https://github.com/mbadolato/iTerm2-Color-Schemes at commit {commit} (MIT licence, see LICENSE). Regenerate with `cargo run -p terminus-themes -- <scheme folder>`. Terminus Dark and Terminus Light are written by the Terminus authors; Unluminous Dark, Unluminous Light, Islands Dracula Colorful, Material Palenight, Material Deep Ocean and One Dark are the themes Unluminous ships, and chrome.txt holds their tab bar colours.\n"
     );
     fs::write(out.join("README"), readme).expect("write README");
     if let Some(text) = license {
@@ -229,8 +265,10 @@ fn main() {
     };
     let dir = PathBuf::from(dir);
     let out = args.get(1).map(PathBuf::from).unwrap_or_else(|| PathBuf::from("crates/terminus-app/themes"));
-    let mut schemes: Vec<Scheme> = read_folder(&dir).into_iter().filter(|s| !s.name.starts_with("Terminus ")).collect();
-    schemes.extend(builtin_schemes());
+    let ours: Vec<Scheme> = builtin_schemes().into_iter().chain(unluminous_schemes()).collect();
+    let taken = |name: &str| ours.iter().any(|o| o.name.eq_ignore_ascii_case(name));
+    let mut schemes: Vec<Scheme> = read_folder(&dir).into_iter().filter(|s| !taken(&s.name)).collect();
+    schemes.extend(ours);
     schemes.sort_by_key(|s| s.name.to_lowercase());
     schemes.dedup_by_key(|s| s.name.to_lowercase());
     let root = dir.parent().unwrap_or(&dir);

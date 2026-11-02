@@ -17,6 +17,7 @@ pub fn dispatch(app: &mut App, name: &str, args: &Map<String, Value>) -> Outcome
         "focus" | "focus-left" | "focus-right" | "focus-up" | "focus-down" | "next-tab" | "previous-tab"
         | "zoom-pane" | "resize-split" => focus_action(app, name, args),
         "move-tab-to-window" => done(app.arg_pane(args).and_then(|p| move_tab_to_window(app, p))),
+        "close-tab" => done(app.arg_pane(args).and_then(|p| close_tab(app, p))),
         "send-text" | "send-key" | "screen" | "scrollback" | "wait-prompt" | "resize" | "set-title"
         | "reset-terminal" => pane_io_action(app, name, args),
         "list"
@@ -265,6 +266,17 @@ fn move_tab_to_window(app: &mut App, pane: PaneId) -> Result<Value, ActionError>
     app.effects.push(Effect::Relayout(old));
     app.effects.push(Effect::OpenWindow(id));
     Ok(json!({ "window": id, "moved": true }))
+}
+
+/// Closes the tab holding `pane`: every pane in it is closed, which ends their shells. Closing the
+/// last tab closes the window, as closing its last pane does.
+fn close_tab(app: &mut App, pane: PaneId) -> Result<Value, ActionError> {
+    let at = app.model.locate(pane).ok_or_else(|| ActionError::NotFound(format!("pane {pane}")))?;
+    let panes = app.model.windows[at.win].tabs[at.tab].root.panes();
+    for p in &panes {
+        app.close_pane(*p);
+    }
+    Ok(json!({ "closed": panes }))
 }
 
 /// Focuses a pane: its window, its tab, and the pane in the tab.

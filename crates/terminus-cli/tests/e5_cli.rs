@@ -263,6 +263,11 @@ fn more_commands(inst: &Instance, p2: &str, covered: &mut BTreeSet<String>) {
     inst.ok(&["+close", "--pane", &p3]);
     seen("close");
     assert!(!pane_ids(&inst.json(&["+list"])).contains(&p3.parse().unwrap()));
+    let doomed = inst.json(&["+new-tab"])["pane"].as_u64().unwrap();
+    let closed = inst.json(&["+close-tab", "--pane", &doomed.to_string()]);
+    assert_eq!(closed["closed"], json!([doomed]), "{closed}");
+    seen("close-tab");
+    assert!(!pane_ids(&inst.json(&["+list"])).contains(&doomed));
     inst.ok(&["+quick-terminal"]);
     seen("quick-terminal");
     assert!(inst.ok(&["+show-config", "--default"]).contains("[font]"));
