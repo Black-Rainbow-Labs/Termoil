@@ -98,7 +98,7 @@ Each row is marked must (in 1.0), should (planned, may slip to 1.1) or later (no
 
 - Windows, macOS and Linux (Wayland and X11) from one code base, with winit.
 - Tabs, splits (horizontal and vertical, nested), a tab bar that can be hidden, focus follows mouse as an option, resizing with the mouse and keyboard, zooming a pane.
-- Multiple windows; a window can be detached to its own process.
+- Multiple windows. A tab moves to a new window with its sessions running (`move-tab-to-window`), and a window can be started in a process of its own (`terminus-gui --separate`, `new-window --separate`) so a fault in one process cannot reach the other windows. A running session does not move between processes in 1.0; that is the multiplexer in 5.5 (docs/decisions/detach.md).
 - Quick terminal (a dropdown window toggled by a global hotkey) on all three platforms.
 - Command palette listing every action with its binding.
 - Selection: character, word, line, block, and semantic (the output of one command, from OSC 133). Copy on select as an option. Middle click paste on Linux.
@@ -136,7 +136,7 @@ Each row is marked must (in 1.0), should (planned, may slip to 1.1) or later (no
 
 ### 5.6 Non goals
 
-- Not a tmux replacement in 1.0. Splits and tabs are in; detaching from a window is not.
+- Not a tmux replacement in 1.0. Splits and tabs are in; a session that outlives its window, or moves to another process, is not (docs/decisions/detach.md).
 - Not a Lua or scripting runtime inside the process. Scripting is the CLI and IPC.
 - No telemetry, no network access of any kind except SSH the user starts and the update check, which is off until the user turns it on.
 - No DRCS soft fonts, no VT52 mode, no ReGIS, no Tektronix. DECRQM answers 0 (unsupported) for each.
