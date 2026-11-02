@@ -84,6 +84,14 @@ impl Painter {
         }
     }
 
+    /// Turns glyph hinting on or off (`font.hinting`).
+    pub fn set_hinting(&mut self, on: bool) {
+        match self {
+            Painter::Gpu(r) => r.set_hinting(on),
+            Painter::Cpu { renderer, .. } => renderer.set_hinting(on),
+        }
+    }
+
     /// The renderer's name, for the log and `list`.
     pub fn name(&self) -> String {
         match self {
@@ -134,11 +142,35 @@ fn start_gpu(window: Arc<Window>, display: OwnedDisplayHandle) -> GpuUpgrade {
 }
 
 /// Gives a renderer from `start_gpu` its window surface. Runs on the thread that owns `window`.
-/// `TERMINUS_PRESENT=immediate` presents without waiting for the display (the latency benchmark).
 pub fn attach(gpu: &mut VelloGpuRenderer, window: &Arc<Window>) -> Result<(), String> {
     let Some(Ok(ctx)) = SHARED_GPU.get() else { return Err("the GPU device did not start".into()) };
-    let unpaced = std::env::var("TERMINUS_PRESENT").is_ok_and(|v| v == "immediate");
-    gpu.attach_window(ctx, window.clone(), unpaced).map_err(|e| e.to_string())
+    gpu.attach_window(ctx, window.clone(), unpaced(), false).map_err(|e| e.to_string())
+}
+
+/// `TERMINUS_PRESENT=immediate`: present without waiting for the display (the latency benchmark).
+fn unpaced() -> bool {
+    std::env::var("TERMINUS_PRESENT").is_ok_and(|v| v == "immediate")
+}
+
+/// The GPU device translucent windows share (`window.opacity` below 1): on Windows it presents
+/// through DirectComposition, which keeps alpha. Started on the UI thread before such a window is
+/// created, because the window has no surface the CPU renderer could show while it starts.
+static TRANSLUCENT_GPU: OnceLock<Result<GpuContext, String>> = OnceLock::new();
+
+/// Starts the translucent device when it has not started yet. False when no GPU can draw a
+/// translucent window, and the window is then made opaque.
+pub fn translucent_gpu_ready(display: OwnedDisplayHandle) -> bool {
+    TRANSLUCENT_GPU.get_or_init(|| GpuContext::for_translucent_display(display).map_err(|e| e.to_string())).is_ok()
+}
+
+/// The painter of a translucent window: the GPU renderer on the translucent device, attached at
+/// once (see `TRANSLUCENT_GPU`).
+pub fn translucent_painter(window: &Arc<Window>) -> Result<Painter, String> {
+    let Some(Ok(ctx)) = TRANSLUCENT_GPU.get() else { return Err("the GPU device did not start".into()) };
+    let size = window.inner_size();
+    let mut gpu = VelloGpuRenderer::new_detached_in(ctx, size.width, size.height, true);
+    gpu.attach_window(ctx, window.clone(), unpaced(), true).map_err(|e| e.to_string())?;
+    Ok(Painter::Gpu(Box::new(gpu)))
 }
 
 /// Copies the CPU renderer's premultiplied RGBA pixels into the softbuffer as 0RGB words.

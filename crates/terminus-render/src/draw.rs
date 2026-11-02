@@ -56,8 +56,12 @@ pub fn draw_layers<C: Canvas>(c: &mut C, size: (u32, u32), background: Rgba, lay
 /// the order the kitty graphics protocol gives: images below the cell backgrounds, the cell
 /// backgrounds, images between backgrounds and text, the text, images above the text, the cursor.
 pub fn draw_frame<C: Canvas>(c: &mut C, frame: &Frame, grid: &FontGrid) {
-    c.paint(frame.background);
-    c.rect(Rect::new(0.0, 0.0, frame.width as f64, frame.height as f64));
+    // A translucent window colour is drawn once, by `draw_layers`; drawing it again here would
+    // make it more opaque.
+    if frame.background.a == 255 {
+        c.paint(frame.background);
+        c.rect(Rect::new(0.0, 0.0, frame.width as f64, frame.height as f64));
+    }
     if frame.has_images_under_text() {
         frame.images_below.iter().for_each(|i| c.image(i));
         frame.rows.iter().for_each(|row| draw_row_spans(c, row, frame));
@@ -79,8 +83,10 @@ pub fn draw_frame<C: Canvas>(c: &mut C, frame: &Frame, grid: &FontGrid) {
 
 /// Draws one row: its background (the window colour, then spans), text, sprites, decorations.
 pub fn draw_row<C: Canvas>(c: &mut C, row: &RowFrame, frame: &Frame, grid: &FontGrid) {
-    c.paint(frame.background);
-    c.rect(Rect::new(0.0, row.y as f64, frame.width as f64, (row.y + frame.cell_height as f32) as f64));
+    if frame.background.a == 255 {
+        c.paint(frame.background);
+        c.rect(Rect::new(0.0, row.y as f64, frame.width as f64, (row.y + frame.cell_height as f32) as f64));
+    }
     draw_row_spans(c, row, frame);
     draw_row_text(c, row, frame, grid);
 }

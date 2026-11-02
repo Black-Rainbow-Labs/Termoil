@@ -89,4 +89,7 @@ pub trait Renderer {
     fn read_pixels(&mut self) -> Result<Image, RenderError>;
     /// A name for logs and test output, including the adapter for the GPU renderer.
     fn name(&self) -> String;
+    /// Turns glyph hinting on or off (`font.hinting`). On by default; `TERMINUS_HINT=0` makes a
+    /// new renderer start with it off, for measurements.
+    fn set_hinting(&mut self, on: bool);
 }

@@ -28,6 +28,9 @@ pub struct BuildOptions {
     pub all_rows: bool,
     /// The cursor shape when the program has not set one.
     pub default_cursor: CursorShape,
+    /// Alpha of the window colour (`window.opacity`): below 255 the default background is drawn
+    /// once, translucent, under the whole window, and cells with a colour of their own stay opaque.
+    pub background_alpha: u8,
 }
 
 impl Default for BuildOptions {
@@ -39,6 +42,7 @@ impl Default for BuildOptions {
             minimum_contrast: 1.0,
             all_rows: true,
             default_cursor: CursorShape::Block { blink: false },
+            background_alpha: 255,
         }
     }
 }
@@ -72,6 +76,7 @@ fn frame_shell(state: &RenderState, grid: &mut FontGrid, opts: &BuildOptions) ->
     let m = *grid.metrics();
     let (cw, ch) = (m.width, m.height);
     let background = rgba(if state.reverse_video { state.colors.foreground } else { state.colors.background });
+    let background = Rgba { a: opts.background_alpha, ..background };
     let mut frame = Frame {
         width: state.cols as u32 * cw + 2 * opts.padding.0,
         height: state.rows as u32 * ch + 2 * opts.padding.1,

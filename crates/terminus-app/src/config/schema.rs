@@ -37,6 +37,8 @@ pub static SECTIONS: &[Section] = &[
             e("family", "Faces to try in order; the first installed one is used."),
             e("size", "Size in points."),
             e("ligatures", "Draw programming ligatures."),
+            e("ligatures_off", "Families drawn without ligatures even when ligatures is on, such as [\"Fira Code\"]."),
+            e("hinting", "Hint glyphs to the pixel grid. Off draws them at their outline shapes."),
             e("line_height", "Line height as a multiple of the font's natural height."),
             e("fallback", "Extra faces tried for glyphs the main face lacks."),
         ],

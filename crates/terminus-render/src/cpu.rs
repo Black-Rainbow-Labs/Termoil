@@ -26,6 +26,7 @@ pub struct VelloCpuRenderer {
     resources: Resources,
     pixmap: Pixmap,
     atlas: bool,
+    hint: bool,
     images: HashMap<(u32, u64), Arc<Pixmap>>,
 }
 
@@ -40,6 +41,7 @@ impl VelloCpuRenderer {
             resources: Resources::new(),
             pixmap: Pixmap::new(w, h),
             atlas,
+            hint: hint_enabled(),
             images: HashMap::new(),
         }
     }
@@ -70,6 +72,7 @@ struct CpuCanvas<'a> {
     ctx: &'a mut RenderContext,
     resources: &'a mut Resources,
     atlas: bool,
+    hint: bool,
     images: &'a mut HashMap<(u32, u64), Arc<Pixmap>>,
 }
 
@@ -106,7 +109,7 @@ impl Canvas for CpuCanvas<'_> {
             .ctx
             .glyph_run(self.resources, font)
             .font_size(run.size)
-            .hint(hint_enabled())
+            .hint(self.hint)
             .atlas_cache(self.atlas)
             .glyph_transform(skew_transform(run));
         if run.embolden {
@@ -165,6 +168,7 @@ impl Renderer for VelloCpuRenderer {
                 ctx: &mut self.ctx,
                 resources: &mut self.resources,
                 atlas: self.atlas,
+                hint: self.hint,
                 images: &mut self.images,
             };
             draw_layers(&mut canvas, size, background, layers, grid);
@@ -183,6 +187,10 @@ impl Renderer for VelloCpuRenderer {
     }
 
     /// The renderer's name.
+    fn set_hinting(&mut self, on: bool) {
+        self.hint = on;
+    }
+
     fn name(&self) -> String {
         format!("vello_cpu{}", if self.atlas { " (glyph atlas)" } else { "" })
     }

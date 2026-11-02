@@ -120,13 +120,13 @@ mod imp {
     }
 }
 
+mod keymap;
+#[cfg(target_os = "macos")]
+mod macos;
 #[cfg(target_os = "linux")]
 mod wayland;
 #[cfg(target_os = "linux")]
 mod x11;
-#[cfg(target_os = "macos")]
-mod macos;
-mod keymap;
 
 /// On Linux the hotkey is an X11 key grab, or the Wayland shortcuts portal, chosen the way winit
 /// chooses its backend: `WAYLAND_DISPLAY` set means Wayland, otherwise `DISPLAY` means X11.
@@ -145,7 +145,8 @@ mod imp {
         } else if set("DISPLAY") {
             super::x11::listen(chord, proxy)
         } else {
-            Err("neither WAYLAND_DISPLAY nor DISPLAY is set, so there is no display server to register a hotkey with".into())
+            Err("neither WAYLAND_DISPLAY nor DISPLAY is set, so there is no display server to register a hotkey with"
+                .into())
         }
     }
 }

@@ -354,3 +354,29 @@ fn opengl_backend_starts_a_device() {
         Err(e) => println!("no OpenGL adapter here; skipping: {e}"),
     }
 }
+
+/// `window.opacity`: with a translucent window colour the empty part of the window keeps that
+/// alpha (drawn once, not once per row), and a cell with a background of its own stays opaque.
+#[test]
+fn translucent_window_colour_leaves_coloured_cells_opaque() {
+    let mut g = grid(16.0);
+    let mut t = Terminal::new(10, 2, TerminalConfig::default());
+    t.advance(b"\x1b[41m  \x1b[0m");
+    let mut state = RenderState::new(10, 2, Colors::dark_default());
+    state.update(&mut t, 0);
+    let opts = BuildOptions { background_alpha: 128, ..BuildOptions::default() };
+    let f = build_frame(&state, &mut g, &opts);
+    assert_eq!(f.background.a, 128);
+    let mut r = VelloCpuRenderer::new(f.width, f.height, 1, false);
+    let layer = terminus_render::Layer { x: 0.0, y: 0.0, frame: &f };
+    r.render_layers(f.background, &[layer], &g).expect("render");
+    let img = r.read_pixels().expect("pixels");
+    let alpha = |x: u32, y: u32| img.rgba[((y * img.width + x) * 4 + 3) as usize];
+    let (cw, ch) = (f.cell_width, f.cell_height);
+    let (px, py) = f.padding;
+    // Column 5, row 1: no colour of its own, so the window colour's alpha.
+    let empty = alpha(px + 5 * cw + cw / 2, py + ch + ch / 2);
+    assert!((126..=130).contains(&empty), "empty cell alpha {empty}");
+    // Column 0, row 0: red background, opaque.
+    assert_eq!(alpha(px + cw / 2, py + ch / 2), 255);
+}

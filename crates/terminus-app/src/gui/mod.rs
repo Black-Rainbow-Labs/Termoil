@@ -3,6 +3,7 @@
 //! action, from a key, the mouse, IPC or the CLI, goes through `App::run_action`, and the effects
 //! it queues are applied here.
 
+mod backdrop;
 pub mod bench;
 pub mod chrome;
 pub mod handle;
@@ -13,6 +14,7 @@ pub mod paint;
 pub mod quick;
 mod show;
 mod showtrace;
+mod taskbar;
 mod warm;
 pub mod window;
 
@@ -482,7 +484,23 @@ impl Gui {
                     }
                 }
                 Notice::CommandFinished { pane, code, seconds } => self.command_finished(pane, code, seconds),
+                Notice::Progress(pane) => self.progress_changed(pane),
             }
+        }
+    }
+
+    /// Shows a pane's progress on its window's taskbar button when it is the focused pane, and
+    /// redraws the tab bar, whose label carries the progress too.
+    fn progress_changed(&mut self, pane: PaneId) {
+        let Some(win) = self.app.window_of(pane) else { return };
+        let Some(wi) = self.app.model.window_index(win) else { return };
+        let focus = self.app.model.windows[wi].tab().focus;
+        let progress = self.app.panes.get(&focus).and_then(|p| p.progress);
+        if let Some(ws) = self.windows.get(&win) {
+            if focus == pane {
+                taskbar::show(&ws.window, progress);
+            }
+            ws.window.request_redraw();
         }
     }
 
@@ -628,7 +646,8 @@ fn bench_after_paint(b: &mut bench::LatencyBench, ws: &WinState, app: &App) {
 /// Sets the window title to the active tab's title.
 fn update_title(ws: &WinState, app: &App) {
     let Some(wi) = app.model.window_index(ws.id) else { return };
-    let t = crate::view::tab_title(app, app.model.windows[wi].tab());
+    // The label carries a failed command's exit code, so it shows even with the tab bar hidden.
+    let t = crate::view::tab_label(app, app.model.windows[wi].tab());
     let title = if t.is_empty() { "Terminus".to_string() } else { t };
     if ws.window.title() != title {
         ws.window.set_title(&title);
@@ -697,6 +716,7 @@ impl ApplicationHandler<UserEvent> for Gui {
                 ws.painter.resize(size.width, size.height);
                 ws.relayout(app);
             }
+            WindowEvent::Moved(_) => ws.refresh_frame_interval(),
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 ws.scale = scale_factor;
                 ws.refont(app);
@@ -704,6 +724,12 @@ impl ApplicationHandler<UserEvent> for Gui {
             }
             WindowEvent::RedrawRequested => {
                 phase("redraw_requested");
+                if let Some(due) = ws.paint_due(Instant::now()) {
+                    // Too soon after the last paint: paint once at the display rate instead.
+                    ws.defer_paint(due);
+                    self.apply_effects(el);
+                    return;
+                }
                 if let Err(e) = ws.draw(app) {
                     eprintln!("terminus: draw failed: {e}");
                 }

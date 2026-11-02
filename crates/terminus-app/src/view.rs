@@ -88,6 +88,39 @@ pub fn tab_title(app: &App, t: &crate::model::Tab) -> String {
     pane_title(&p.title, p.cwd.as_deref(), app.config.window.title_follows_cwd)
 }
 
+/// A tab's label for the tab bar and the window title: its title, and the exit code of the last
+/// command in its focused pane when that command failed (PRD 5.3: the exit code in the tab).
+pub fn tab_label(app: &App, t: &crate::model::Tab) -> String {
+    let p = app.panes.get(&t.focus);
+    let last_exit = p.and_then(|p| p.session.prompt_state().last_exit);
+    with_progress(&with_exit_code(&tab_title(app, t), last_exit), p.and_then(|p| p.progress))
+}
+
+/// `label` with a program's progress (OSC 9;4) in front: the percentage, a mark for an error or
+/// a pause, and an ellipsis when the program does not know how far along it is.
+pub fn with_progress(label: &str, progress: Option<crate::app::Progress>) -> String {
+    match progress {
+        None => label.to_string(),
+        Some(p) if p.state == 3 => format!("[\u{2026}] {label}"),
+        Some(p) => {
+            let mark = match p.state {
+                2 => "!",
+                4 => " paused",
+                _ => "",
+            };
+            format!("[{}%{mark}] {label}", p.value.min(100))
+        }
+    }
+}
+
+/// `title` followed by a cross and the exit code when `last_exit` is a failure.
+pub fn with_exit_code(title: &str, last_exit: Option<i32>) -> String {
+    match last_exit {
+        Some(code) if code != 0 => format!("{title} \u{2717}{code}"),
+        _ => title.to_string(),
+    }
+}
+
 /// A pane's title as shown. A program that sets only its own executable path as the title (pwsh and
 /// cmd under ConPTY do) shows the working directory instead when the configuration asks for it and
 /// the shell reported one, and otherwise the program's name.
@@ -402,7 +435,28 @@ pub fn open_config(app: &mut App) -> Result<Value, ActionError> {
 
 #[cfg(test)]
 mod tests {
-    use super::pane_title;
+    use super::{pane_title, with_exit_code, with_progress};
+    use crate::app::Progress;
+
+    /// Progress goes in front of the label, in each state OSC 9;4 names.
+    #[test]
+    fn labels_show_progress() {
+        let p = |state, value| Some(Progress { state, value });
+        assert_eq!(with_progress("make", None), "make");
+        assert_eq!(with_progress("make", p(1, 42)), "[42%] make");
+        assert_eq!(with_progress("make", p(2, 50)), "[50%!] make");
+        assert_eq!(with_progress("make", p(3, 0)), "[\u{2026}] make");
+        assert_eq!(with_progress("make", p(4, 7)), "[7% paused] make");
+        assert_eq!(with_progress("make", p(1, 250)), "[100%] make");
+    }
+
+    /// A failed command's exit code follows the title; success and no command leave it alone.
+    #[test]
+    fn labels_carry_a_failed_exit_code() {
+        assert_eq!(with_exit_code("pwsh", Some(7)), "pwsh \u{2717}7");
+        assert_eq!(with_exit_code("pwsh", Some(0)), "pwsh");
+        assert_eq!(with_exit_code("pwsh", None), "pwsh");
+    }
 
     /// An executable path as the title becomes the working directory, or the program's name.
     #[test]

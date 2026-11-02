@@ -15,6 +15,8 @@ pub enum Notice {
     Notification { title: String, body: String },
     /// A command finished in a pane, with its exit code and how long it ran.
     CommandFinished { pane: PaneId, code: Option<i32>, seconds: u64 },
+    /// A pane's progress (OSC 9;4) changed.
+    Progress(PaneId),
 }
 
 /// Applies the queued events of a pane. Returns the notices for the window layer. A pane whose
@@ -76,6 +78,12 @@ fn apply(app: &mut App, pane: PaneId, e: Event, os_dark: bool, notices: &mut Vec
             notices.push(Notice::CommandFinished { pane, code, seconds });
         }
         Event::Notification { title, body } => notices.push(Notice::Notification { title, body }),
+        Event::Progress { state, value } => {
+            if let Some(p) = app.panes.get_mut(&pane) {
+                p.progress = (state != 0).then_some(crate::app::Progress { state, value });
+            }
+            notices.push(Notice::Progress(pane));
+        }
         _ => {}
     }
 }

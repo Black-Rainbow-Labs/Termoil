@@ -142,6 +142,18 @@ pub struct Pane {
     pub title: String,
     /// The working directory from OSC 7.
     pub cwd: Option<String>,
+    /// The progress from OSC 9;4, until the program removes it.
+    pub progress: Option<Progress>,
+}
+
+/// A program's progress (OSC 9;4): state 1 normal, 2 error, 3 indeterminate, 4 paused, and the
+/// percentage done.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Progress {
+    /// The state.
+    pub state: u8,
+    /// Percent done, 0 to 100.
+    pub value: u8,
 }
 
 /// What `run_action` produced.
@@ -248,6 +260,7 @@ impl App {
                 search: None,
                 title: String::new(),
                 cwd,
+                progress: None,
             },
         );
         Ok(id)

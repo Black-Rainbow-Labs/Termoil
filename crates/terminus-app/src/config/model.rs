@@ -70,6 +70,8 @@ pub struct Font {
     pub family: Vec<String>,
     pub size: f64,
     pub ligatures: bool,
+    pub ligatures_off: Vec<String>,
+    pub hinting: bool,
     pub line_height: f64,
     pub fallback: Vec<String>,
 }
@@ -82,6 +84,8 @@ impl Default for Font {
             family: family.map(String::from).to_vec(),
             size: 13.0,
             ligatures: true,
+            ligatures_off: vec![],
+            hinting: true,
             line_height: 1.0,
             fallback: vec![],
         }

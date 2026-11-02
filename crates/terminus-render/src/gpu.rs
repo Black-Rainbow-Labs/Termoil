@@ -44,6 +44,7 @@ pub struct VelloGpuRenderer {
     depth: wgpu::TextureView,
     size: (u16, u16),
     atlas: bool,
+    hint: bool,
     images: GpuImages,
     format: wgpu::TextureFormat,
 }
@@ -154,6 +155,24 @@ impl GpuContext {
         Self::with_backends(wgpu::Backends::PRIMARY).or_else(|_| gl())
     }
 
+    /// Starts a device whose window surfaces can be translucent (`window.opacity` below 1). On
+    /// Windows a swapchain made for a window ignores alpha, so this is DX12 presenting through
+    /// DirectComposition, falling back to `for_display`. Elsewhere it is `for_display`.
+    pub fn for_translucent_display<D>(display: D) -> Result<GpuContext, RenderError>
+    where
+        D: wgpu::rwh::HasDisplayHandle + std::fmt::Debug + Send + Sync + Clone + 'static,
+    {
+        if cfg!(windows) {
+            let mut desc = wgpu::InstanceDescriptor::new_without_display_handle();
+            desc.backends = wgpu::Backends::DX12;
+            desc.backend_options.dx12.presentation_system = wgpu::Dx12SwapchainKind::DxgiFromVisual;
+            if let Ok(ctx) = Self::with_descriptor(desc) {
+                return Ok(ctx);
+            }
+        }
+        Self::for_display(display)
+    }
+
     /// Starts a device on the high performance adapter of the given backends, with no display.
     pub fn with_backends(backends: wgpu::Backends) -> Result<GpuContext, RenderError> {
         Self::with_descriptor(wgpu::InstanceDescriptor {
@@ -229,10 +248,18 @@ fn target_texture(device: &wgpu::Device, width: u16, height: u16) -> wgpu::Textu
     })
 }
 
+/// The compositing mode: for a translucent window premultiplied alpha (vello's output) when the
+/// surface offers it, else postmultiplied; otherwise the surface's first, usually opaque.
+fn alpha_mode(caps: &wgpu::SurfaceCapabilities, translucent: bool) -> wgpu::CompositeAlphaMode {
+    let wanted = [wgpu::CompositeAlphaMode::PreMultiplied, wgpu::CompositeAlphaMode::PostMultiplied];
+    let found = translucent.then(|| wanted.into_iter().find(|m| caps.alpha_modes.contains(m))).flatten();
+    found.or_else(|| caps.alpha_modes.first().copied()).unwrap_or(wgpu::CompositeAlphaMode::Auto)
+}
+
 /// Picks the surface format (8 bit, not sRGB, because vello writes sRGB encoded values) and the
 /// present mode (mailbox when offered, for the lowest latency without tearing, else FIFO).
 fn surface_config(
-    caps: &wgpu::SurfaceCapabilities, w: u16, h: u16, unpaced: bool,
+    caps: &wgpu::SurfaceCapabilities, w: u16, h: u16, unpaced: bool, translucent: bool,
 ) -> Option<wgpu::SurfaceConfiguration> {
     let format = [wgpu::TextureFormat::Rgba8Unorm, wgpu::TextureFormat::Bgra8Unorm]
         .into_iter()
@@ -244,7 +271,7 @@ fn surface_config(
     } else {
         wgpu::PresentMode::Fifo
     };
-    let alpha_mode = caps.alpha_modes.first().copied().unwrap_or(wgpu::CompositeAlphaMode::Auto);
+    let alpha_mode = alpha_mode(caps, translucent);
     Some(wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         format,
@@ -293,7 +320,7 @@ impl VelloGpuRenderer {
         unpaced: bool,
     ) -> Result<VelloGpuRenderer, RenderError> {
         let mut r = Self::new_detached_in(ctx, width, height, atlas);
-        r.attach_window(ctx, window, unpaced)?;
+        r.attach_window(ctx, window, unpaced, false)?;
         Ok(r)
     }
 
@@ -312,7 +339,7 @@ impl VelloGpuRenderer {
     /// another format than the one they were built for. `unpaced` presents immediately instead of
     /// at the display rate (the latency benchmark).
     pub fn attach_window(
-        &mut self, ctx: &GpuContext, window: impl Into<wgpu::SurfaceTarget<'static>>, unpaced: bool,
+        &mut self, ctx: &GpuContext, window: impl Into<wgpu::SurfaceTarget<'static>>, unpaced: bool, translucent: bool,
     ) -> Result<(), RenderError> {
         let surface =
             ctx.instance.create_surface(window).map_err(|e| RenderError::Gpu(format!("create surface: {e}")))?;
@@ -320,7 +347,7 @@ impl VelloGpuRenderer {
             return Err(RenderError::Gpu(format!("{} cannot draw to this window", ctx.info.name)));
         }
         let caps = surface.get_capabilities(&ctx.adapter);
-        let config = surface_config(&caps, self.size.0, self.size.1, unpaced)
+        let config = surface_config(&caps, self.size.0, self.size.1, unpaced, translucent)
             .ok_or_else(|| RenderError::Gpu("the surface offers no 8 bit RGBA or BGRA format".into()))?;
         surface.configure(&self.device, &config);
         if config.format != self.format {
@@ -352,6 +379,7 @@ impl VelloGpuRenderer {
             depth,
             size: (w, h),
             atlas,
+            hint: hint_enabled(),
             images: GpuImages::default(),
             format,
         }
@@ -434,6 +462,7 @@ struct GpuCanvas<'a> {
     scene: &'a mut Scene,
     resources: &'a mut Resources,
     atlas: bool,
+    hint: bool,
     images: &'a mut GpuImages,
     device: &'a wgpu::Device,
     queue: &'a wgpu::Queue,
@@ -462,7 +491,7 @@ impl Canvas for GpuCanvas<'_> {
             .scene
             .glyph_run(self.resources, font)
             .font_size(run.size)
-            .hint(hint_enabled())
+            .hint(self.hint)
             .atlas_cache(self.atlas)
             .glyph_transform(skew_transform(run));
         if run.embolden {
@@ -528,6 +557,7 @@ impl Renderer for VelloGpuRenderer {
                 scene: &mut self.scene,
                 resources: &mut self.resources,
                 atlas: self.atlas,
+                hint: self.hint,
                 images: &mut self.images,
                 device: &self.device,
                 queue: &self.queue,
@@ -560,6 +590,10 @@ impl Renderer for VelloGpuRenderer {
     }
 
     /// The renderer's name with the adapter.
+    fn set_hinting(&mut self, on: bool) {
+        self.hint = on;
+    }
+
     fn name(&self) -> String {
         format!(
             "vello_gpu on {} ({:?}){}",

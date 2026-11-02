@@ -120,6 +120,16 @@ pub struct WinState {
     pub pending_activation: bool,
     /// IME has been allowed for the window.
     pub ime_allowed: bool,
+    /// Glyph hinting (`font.hinting`), kept for the GPU renderer when it takes over.
+    pub hinting: bool,
+    /// When the window last painted, for frame pacing.
+    pub last_paint: Option<Instant>,
+    /// One refresh of the display the window is on: it never paints more often than this.
+    pub frame_interval: std::time::Duration,
+    /// Presents are not paced (`TERMINUS_PRESENT=immediate`, the latency benchmark).
+    pub unpaced: bool,
+    /// The window was made translucent (`window.opacity` below 1 and a GPU that can show it).
+    pub translucent: bool,
     /// When to draw again for synchronized output or a timer.
     pub wake_at: Option<Instant>,
     /// When the blinking cursor last changed between shown and hidden, and whether it shows.
@@ -146,7 +156,9 @@ impl WinState {
         el: &ActiveEventLoop, app: &App, id: WinId, os_dark: bool, quick: Option<crate::config::Edge>,
     ) -> Result<WinState, String> {
         let config = &app.config;
-        let attrs = Window::default_attributes()
+        let translucent =
+            config.window.opacity < 1.0 && crate::gui::paint::translucent_gpu_ready(el.owned_display_handle());
+        let attrs = translucent_attributes(Window::default_attributes(), translucent)
             .with_title("Terminus")
             .with_visible(false)
             .with_decorations(config.window.decorations)
@@ -163,7 +175,10 @@ impl WinState {
             None => (look::font_grid(config, points, scale)?, None),
         };
         crate::gui::phase("fonts_loaded");
-        let opts = look::build_options(config, scale);
+        let mut opts = look::build_options(config, scale);
+        if translucent {
+            opts.background_alpha = look::background_alpha(config);
+        }
         let (w, h) = look::window_size(config, grid.metrics(), &opts);
         match quick {
             Some(edge) => crate::gui::quick::place(&window, edge),
@@ -171,9 +186,16 @@ impl WinState {
                 let _ = window.request_inner_size(PhysicalSize::new(w, h));
             }
         }
-        let (painter, upgrade) = Painter::new(&window, config.window.renderer, warm_cpu, el.owned_display_handle())?;
+        let (mut painter, upgrade) = if translucent {
+            (crate::gui::paint::translucent_painter(&window)?, None)
+        } else {
+            Painter::new(&window, config.window.renderer, warm_cpu, el.owned_display_handle())?
+        };
+        crate::gui::backdrop::apply(&window, translucent, config.window.blur);
+        painter.set_hinting(config.font.hinting);
         crate::gui::phase("renderer_ready");
         let colors = look::colors(config, os_dark);
+        let interval = frame_interval(&window);
         Ok(WinState {
             id,
             window,
@@ -200,6 +222,11 @@ impl WinState {
             presented_shown: false,
             pending_activation: false,
             ime_allowed: false,
+            hinting: config.font.hinting,
+            last_paint: None,
+            translucent,
+            frame_interval: interval,
+            unpaced: std::env::var("TERMINUS_PRESENT").is_ok_and(|v| v == "immediate"),
             wake_at: None,
             upgrade,
             overlay: None,
@@ -223,6 +250,13 @@ impl WinState {
             self.grid = g;
         }
         self.opts = look::build_options(&app.config, self.scale);
+        if self.translucent {
+            // A window made translucent follows `window.opacity` as it changes; an opaque window
+            // stays opaque until it is opened again.
+            self.opts.background_alpha = look::background_alpha(&app.config);
+        }
+        self.painter.set_hinting(app.config.font.hinting);
+        self.hinting = app.config.font.hinting;
         for v in self.views.values_mut() {
             v.builder = FrameBuilder::new();
             v.state.needs_full = true;
@@ -353,7 +387,9 @@ impl WinState {
         if !self.shown {
             crate::gui::phase("frame_built");
         }
-        self.painter.paint(Rgba::rgb(bg.r, bg.g, bg.b), &layers, &self.grid)?;
+        let window_colour = Rgba { a: self.opts.background_alpha, ..Rgba::rgb(bg.r, bg.g, bg.b) };
+        self.painter.paint(window_colour, &layers, &self.grid)?;
+        self.last_paint = Some(Instant::now());
         if self.shown {
             self.presented_shown = true;
         } else {
@@ -368,6 +404,28 @@ impl WinState {
             crate::gui::phase("shown");
         }
         Ok(())
+    }
+
+    /// When a paint now would come sooner than one display refresh after the last one: the time
+    /// it is due instead (PRD 5.2: paint on damage at the display rate and never faster). None
+    /// means paint now.
+    pub fn paint_due(&self, now: Instant) -> Option<Instant> {
+        // The first frame after the show is the one a person sees first (P4); it never waits.
+        if self.unpaced || (self.shown && !self.presented_shown) {
+            return None;
+        }
+        let due = self.last_paint? + self.frame_interval;
+        (now < due).then_some(due)
+    }
+
+    /// Moves a redraw that came too soon to `due`, so it happens once at the display rate.
+    pub fn defer_paint(&mut self, due: Instant) {
+        self.wake_at = Some(self.wake_at.map_or(due, |w| w.min(due)));
+    }
+
+    /// Reads the display's refresh rate again (the window moved to another monitor).
+    pub fn refresh_frame_interval(&mut self) {
+        self.frame_interval = frame_interval(&self.window);
     }
 
     /// Finishes showing the window once a frame has been presented to it while visible: activates
@@ -399,6 +457,7 @@ impl WinState {
                 self.upgrade = None;
                 let size = self.window.inner_size();
                 terminus_render::Renderer::resize(&mut gpu, size.width, size.height);
+                terminus_render::Renderer::set_hinting(&mut gpu, self.hinting);
                 match crate::gui::paint::attach(&mut gpu, &self.window) {
                     Ok(()) => self.painter = Painter::Gpu(Box::new(gpu)),
                     Err(e) => eprintln!("terminus: GPU renderer unavailable, staying on the CPU renderer: {e}"),
@@ -607,11 +666,7 @@ impl WinState {
 /// A tab's label in the tab bar: its title, and the exit code of its focused pane's last command
 /// when that command failed.
 fn tab_label(app: &App, t: &crate::model::Tab) -> String {
-    let title = crate::view::tab_title(app, t);
-    match app.panes.get(&t.focus).and_then(|p| p.session.prompt_state().last_exit) {
-        Some(code) if code != 0 => format!("{title} \u{2717}{code}"),
-        _ => title,
-    }
+    crate::view::tab_label(app, t)
 }
 
 /// The title bar theme matching the terminal background: dark for a dark background.
@@ -648,6 +703,32 @@ impl Strip {
     pub fn last_frame(&self) -> Option<&Frame> {
         self.frame_ref()
     }
+}
+
+/// Window attributes for a translucent window: transparent, and on Windows without the GDI
+/// surface, which DirectComposition would otherwise show under the translucent pixels.
+fn translucent_attributes(
+    attrs: winit::window::WindowAttributes, translucent: bool,
+) -> winit::window::WindowAttributes {
+    if !translucent {
+        return attrs;
+    }
+    #[cfg(windows)]
+    let attrs = winit::platform::windows::WindowAttributesExtWindows::with_no_redirection_bitmap(attrs, true);
+    attrs.with_transparent(true)
+}
+
+/// The refresh rate assumed when the monitor does not report one.
+const DEFAULT_REFRESH_MILLIHERTZ: u32 = 60_000;
+
+/// One refresh of the monitor the window is on.
+fn frame_interval(window: &winit::window::Window) -> std::time::Duration {
+    let mhz = window
+        .current_monitor()
+        .and_then(|m| m.refresh_rate_millihertz())
+        .filter(|&r| r > 0)
+        .unwrap_or(DEFAULT_REFRESH_MILLIHERTZ);
+    std::time::Duration::from_nanos(1_000_000_000_000 / mhz as u64)
 }
 
 /// The clock kitty graphics animations run on: milliseconds since the first call.

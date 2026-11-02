@@ -22,6 +22,7 @@ pub fn font_grid(config: &Config, points: f32, scale: f64) -> Result<FontGrid, S
         fallback_families: f.fallback.clone(),
         size_px: font_px(points, scale),
         ligatures: f.ligatures,
+        ligatures_off: f.ligatures_off.clone(),
         line_height: f.line_height as f32,
         ..FontConfig::default()
     };
@@ -62,6 +63,11 @@ pub fn colors(config: &Config, os_dark: bool) -> Colors {
     }
 }
 
+/// The alpha of the window colour for `window.opacity` (0.0 to 1.0).
+pub fn background_alpha(config: &Config) -> u8 {
+    (config.window.opacity.clamp(0.0, 1.0) * 255.0).round() as u8
+}
+
 /// The frame builder options. `padding` is in physical pixels.
 pub fn build_options(config: &Config, scale: f64) -> BuildOptions {
     let pad = |v: u32| (v as f64 * scale).round() as u32;
@@ -76,6 +82,7 @@ pub fn build_options(config: &Config, scale: f64) -> BuildOptions {
             CursorStyle::Bar => CursorShape::Bar { blink },
             CursorStyle::Underline => CursorShape::Underline { blink },
         },
+        background_alpha: 255,
     }
 }
 

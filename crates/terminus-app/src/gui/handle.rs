@@ -354,20 +354,27 @@ fn open_link(app: &App, pane: PaneId, row: u16, col: u16) -> bool {
     crate::links::open(&link, &opener, cwd.as_deref()).is_some()
 }
 
-/// Starts a selection: one click by cell, two by word, three by line, alt for a rectangle.
+/// What a click selects: one click by cell, two by word, three by line, four the output of the
+/// command under the pointer (between its OSC 133 marks), and alt with any count a rectangle.
+pub fn click_selection_mode(count: u8, alt: bool) -> SelectionMode {
+    match count {
+        _ if alt => SelectionMode::Block,
+        2 => SelectionMode::Word,
+        3 => SelectionMode::Line,
+        4 => SelectionMode::Semantic,
+        _ => SelectionMode::Char,
+    }
+}
+
+/// Starts a selection by the number of clicks in a row on the same cell (`click_selection_mode`).
 fn start_selection(ws: &mut WinState, app: &mut App, pane: PaneId, col: u16, row: u16) {
     let ay = absolute_row(app, pane, row);
     let count = match ws.mouse.last_click {
-        Some((at, cell, n)) if at.elapsed() < MULTI_CLICK && cell == (ay, col) => n % 3 + 1,
+        Some((at, cell, n)) if at.elapsed() < MULTI_CLICK && cell == (ay, col) => n % 4 + 1,
         _ => 1,
     };
     ws.mouse.last_click = Some((Instant::now(), (ay, col), count));
-    let mode = match count {
-        _ if ws.mods.alt_key() => SelectionMode::Block,
-        2 => SelectionMode::Word,
-        3 => SelectionMode::Line,
-        _ => SelectionMode::Char,
-    };
+    let mode = click_selection_mode(count, ws.mods.alt_key());
     let p = app.panes.get_mut(&pane).expect("pane under pointer");
     view::clear_selection(p);
     let sel = Selection::new(&mut p.session.lock().screen_mut().pages, mode, ay, col);
@@ -491,7 +498,18 @@ pub fn wheel(ws: &mut WinState, app: &mut App, delta: MouseScrollDelta) {
 
 #[cfg(test)]
 mod tests {
-    use super::quote_path;
+    use super::{click_selection_mode, quote_path};
+    use terminus_vt::selection::SelectionMode;
+
+    /// Clicks in a row select a cell, a word, a line, then a command's output; alt a rectangle.
+    #[test]
+    fn clicks_choose_the_selection() {
+        assert_eq!(click_selection_mode(1, false), SelectionMode::Char);
+        assert_eq!(click_selection_mode(2, false), SelectionMode::Word);
+        assert_eq!(click_selection_mode(3, false), SelectionMode::Line);
+        assert_eq!(click_selection_mode(4, false), SelectionMode::Semantic);
+        assert_eq!(click_selection_mode(2, true), SelectionMode::Block);
+    }
 
     /// Paths with spaces are quoted for the shell; plain paths are left alone.
     #[test]

@@ -32,6 +32,8 @@ pub struct FontConfig {
     pub size_px: f32,
     /// Programming ligatures (the `calt` and `liga` features).
     pub ligatures: bool,
+    /// Families drawn without ligatures even when `ligatures` is on (compared without case).
+    pub ligatures_off: Vec<String>,
     /// Multiplier on the font's natural line height.
     pub line_height: f32,
     /// Font files loaded in addition to (or, without `system_fonts`, instead of) the system's.
@@ -61,6 +63,7 @@ impl Default for FontConfig {
             fallback_families: Vec::new(),
             size_px: 13.0 * 96.0 / 72.0,
             ligatures: true,
+            ligatures_off: Vec::new(),
             line_height: 1.0,
             font_files: Vec::new(),
             system_fonts: true,
@@ -143,8 +146,10 @@ impl FontGrid {
     /// Shapes `text` with face `face`, returning glyphs with their cluster offsets. Runs are cached
     /// by face and text, so a line that repeats costs one lookup.
     pub fn shape(&mut self, face: FaceId, text: &str) -> Arc<ShapedRun> {
-        let ligatures = self.config.ligatures;
-        self.shaper.shape(self.faces.face(face), text, ligatures, self.config.size_px)
+        let f = self.faces.face(face);
+        let ligatures =
+            self.config.ligatures && !self.config.ligatures_off.iter().any(|n| n.eq_ignore_ascii_case(&f.family));
+        self.shaper.shape(f, text, ligatures, self.config.size_px)
     }
 
     /// The glyph id for `c` in `face`, without shaping (for single characters that need none).
