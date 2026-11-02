@@ -192,11 +192,36 @@ function Get-InnoCompiler {
 
 <#
 .SYNOPSIS
-  Returns the GitHub CLI, failing early when it is missing or not signed in.
+  Returns the GitHub token: GH_TOKEN or GITHUB_TOKEN when set, otherwise the github.com credential
+  git already uses to push (the credential manager), so gh needs no separate login.
+#>
+function Get-GitHubToken {
+    if ($env:GH_TOKEN) { return $env:GH_TOKEN }
+    if ($env:GITHUB_TOKEN) { return $env:GITHUB_TOKEN }
+    # The request goes in through a file: a piped string does not reach git credential in a form it
+    # accepts from every PowerShell. The file holds the protocol and host only; the answer, which holds
+    # the secret, is only ever in memory.
+    $ask = Join-Path ([System.IO.Path]::GetTempPath()) ('terminus-credential-' + [guid]::NewGuid().ToString('N') + '.txt')
+    try {
+        Set-Content -Path $ask -Value "protocol=https`nhost=github.com`n" -NoNewline -Encoding ascii
+        $answer = & cmd /c "git credential fill < `"$ask`"" 2>$null
+    } finally {
+        Remove-Item -LiteralPath $ask -Force -ErrorAction SilentlyContinue
+    }
+    $line = $answer | Where-Object { $_ -like 'password=*' } | Select-Object -First 1
+    if (-not $line) { throw 'No GitHub credential is stored for github.com. Run `gh auth login` (or set GH_TOKEN) and run this again.' }
+    return $line.Substring('password='.Length)
+}
+
+<#
+.SYNOPSIS
+  Returns the GitHub CLI, authenticated with the token from Get-GitHubToken, failing early when it is
+  missing or the token is refused.
 #>
 function Get-GitHubCli {
     $gh = Get-Command 'gh' -ErrorAction SilentlyContinue
     if (-not $gh) { throw 'The GitHub CLI (gh) is not installed. Install it from https://cli.github.com and run this again.' }
+    $env:GH_TOKEN = Get-GitHubToken
     Invoke-Checked 'gh auth status' { & $gh.Source auth status 2>&1 | Out-Null }
     return $gh.Source
 }
