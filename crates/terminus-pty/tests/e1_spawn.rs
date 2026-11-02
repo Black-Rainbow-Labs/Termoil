@@ -187,6 +187,36 @@ mod windows_process {
     }
 }
 
+/// Killing one pwsh session ends that session's processes only: the other pwsh keeps running and
+/// still reports its own exit code. (With pwsh from the Microsoft Store, a kill in one session
+/// made pwsh in another exit with code 1.)
+#[cfg(windows)]
+#[test]
+fn killing_one_pwsh_session_leaves_the_other_running() {
+    use std::io::Write;
+    if std::process::Command::new("pwsh").arg("-NoProfile").arg("-Command").arg("exit 0").status().is_err() {
+        println!("pwsh not on PATH; skipping");
+        return;
+    }
+    for (name, config) in configs() {
+        let script = |mark: &str| format!("'{mark}_' + 'UP'; $l = [Console]::ReadLine(); exit $l.Length");
+        let mut a =
+            Session::start(&command("pwsh.exe", &["-NoProfile", "-Command", &script("FIRST")], size(100, 30)), &config);
+        assert!(a.wait_for("FIRST_UP"), "{name}: {}", show_bytes(&a.bytes()));
+        let mut b = Session::start(
+            &command("pwsh.exe", &["-NoProfile", "-Command", &script("SECOND")], size(100, 30)),
+            &config,
+        );
+        assert!(b.wait_for("SECOND_UP"), "{name}: {}", show_bytes(&b.bytes()));
+        a.pty.kill().unwrap();
+        let _ = a.pty.wait();
+        assert_eq!(b.pty.try_wait().unwrap(), None, "{name}: killing the first session ended the second");
+        b.writer.write_all(b"four\r").unwrap();
+        b.writer.flush().unwrap();
+        assert_eq!(b.pty.wait().unwrap(), ExitStatus::Code(4), "{name}");
+    }
+}
+
 /// Two pwsh sessions alive at once. pwsh from the Microsoft Store runs in a job the system makes
 /// for its package, and a second instance created with our job in its attribute list was refused
 /// with access denied while the first was alive.

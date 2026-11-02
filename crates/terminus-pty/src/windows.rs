@@ -11,17 +11,15 @@ use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
 use windows::Win32::Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE, WAIT_OBJECT_0};
 use windows::Win32::System::Console::{COORD, HPCON};
 use windows::Win32::System::JobObjects::{
-    AssignProcessToJobObject, CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
-    JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation, SetInformationJobObject,
-    TerminateJobObject,
+    CreateJobObjectW, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+    JobObjectExtendedLimitInformation, SetInformationJobObject, TerminateJobObject,
 };
 use windows::Win32::System::Pipes::CreatePipe;
 use windows::Win32::System::Threading::{
-    CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, CreateProcessW, DeleteProcThreadAttributeList,
-    EXTENDED_STARTUPINFO_PRESENT, GetExitCodeProcess, INFINITE, InitializeProcThreadAttributeList,
-    LPPROC_THREAD_ATTRIBUTE_LIST, PROC_THREAD_ATTRIBUTE_JOB_LIST, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE,
-    PROCESS_INFORMATION, ResumeThread, STARTF_USESTDHANDLES, STARTUPINFOEXW, STARTUPINFOW, TerminateProcess,
-    UpdateProcThreadAttribute, WaitForSingleObject,
+    CREATE_UNICODE_ENVIRONMENT, CreateProcessW, DeleteProcThreadAttributeList, EXTENDED_STARTUPINFO_PRESENT,
+    GetExitCodeProcess, INFINITE, InitializeProcThreadAttributeList, LPPROC_THREAD_ATTRIBUTE_LIST,
+    PROC_THREAD_ATTRIBUTE_JOB_LIST, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, PROCESS_INFORMATION, STARTF_USESTDHANDLES,
+    STARTUPINFOEXW, STARTUPINFOW, TerminateProcess, UpdateProcThreadAttribute, WaitForSingleObject,
 };
 use windows::core::{PCWSTR, PWSTR};
 
@@ -278,17 +276,16 @@ impl Drop for AttributeList {
 /// added to the job afterwards (best effort: a package job may not allow it, and then closing the
 /// pseudoconsole still ends the shell), and resumed.
 fn start_child(opts: &SpawnOptions, hpc: HPCON, job: &OwnedHandle) -> io::Result<(OwnedHandle, u32)> {
-    let info = match create_process(opts, hpc, Some(job), false) {
+    // A packaged app (pwsh from the Microsoft Store) runs in a job Windows makes for its package.
+    // Started inside this session's job, the package's job would sit under it, every later
+    // instance of the package (in other sessions too) would join it, and ending this session would
+    // end them all. So a packaged app starts outside the session's job; closing the pseudoconsole
+    // still ends the console processes attached to it, and `kill` ends the process itself.
+    let job = if is_packaged_app(&opts.program) { None } else { Some(job) };
+    let info = match create_process(opts, hpc, job) {
         Ok(info) => info,
-        Err(err) if is_access_denied(&err) => {
-            let info = create_process(opts, hpc, None, true)?;
-            // SAFETY: both handles are open; the thread was created suspended and is resumed once.
-            unsafe {
-                let _ = AssignProcessToJobObject(handle_of(job), info.hProcess);
-                ResumeThread(info.hThread);
-            }
-            info
-        }
+        // The program is already in a job hierarchy the session's job cannot join.
+        Err(err) if job.is_some() && is_access_denied(&err) => create_process(opts, hpc, None)?,
         Err(err) => return Err(err),
     };
     // SAFETY: CreateProcessW returned two open handles that nothing else owns; the thread handle is not needed.
@@ -297,15 +294,34 @@ fn start_child(opts: &SpawnOptions, hpc: HPCON, job: &OwnedHandle) -> io::Result
     Ok((unsafe { OwnedHandle::from_raw_handle(info.hProcess.0) }, info.dwProcessId))
 }
 
+/// True when `program` resolves to a packaged app: an app execution alias or a file in a package
+/// folder, both inside a folder named `WindowsApps`.
+pub(crate) fn is_packaged_app(program: &str) -> bool {
+    resolve_program(program).is_some_and(|p| p.components().any(|c| c.as_os_str().eq_ignore_ascii_case("WindowsApps")))
+}
+
+/// The file `program` names: itself when it has a folder in it, else the first match on PATH,
+/// trying `.exe` when it has no extension. An app execution alias is a reparse point that does not
+/// open as a file, so a match is any directory entry.
+fn resolve_program(program: &str) -> Option<std::path::PathBuf> {
+    let path = std::path::Path::new(program);
+    if path.is_absolute() || path.components().count() > 1 {
+        return Some(path.to_path_buf());
+    }
+    let names: Vec<String> =
+        if path.extension().is_some() { vec![program.into()] } else { vec![program.into(), format!("{program}.exe")] };
+    let dirs = std::env::var_os("PATH")?;
+    std::env::split_paths(&dirs)
+        .find_map(|dir| names.iter().map(|n| dir.join(n)).find(|c| std::fs::symlink_metadata(c).is_ok()))
+}
+
 /// True for the access denied error in its Win32, HRESULT and NTSTATUS forms.
 fn is_access_denied(err: &io::Error) -> bool {
     matches!(err.raw_os_error(), Some(5) | Some(-2147024891) | Some(-1073283067))
 }
 
 /// Calls CreateProcessW with the pseudoconsole and, when given, the job in the attribute list.
-fn create_process(
-    opts: &SpawnOptions, hpc: HPCON, job: Option<&OwnedHandle>, suspended: bool,
-) -> io::Result<PROCESS_INFORMATION> {
+fn create_process(opts: &SpawnOptions, hpc: HPCON, job: Option<&OwnedHandle>) -> io::Result<PROCESS_INFORMATION> {
     let mut command_line = to_wide(build_command_line(&opts.program, &opts.args));
     let environment = build_environment_block(&opts.env);
     let cwd = opts.cwd.as_ref().map(|dir| to_wide(dir.as_os_str()));
@@ -320,10 +336,7 @@ fn create_process(
     startup.StartupInfo.hStdError = INVALID_HANDLE_VALUE;
     let mut info = PROCESS_INFORMATION::default();
     let cwd_ptr = cwd.as_ref().map_or(PCWSTR::null(), |wide| PCWSTR(wide.as_ptr()));
-    let mut flags = EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT;
-    if suspended {
-        flags |= CREATE_SUSPENDED;
-    }
+    let flags = EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT;
     let startup_ptr = (&raw const startup).cast::<STARTUPINFOW>();
     let env_ptr = Some(environment.as_ptr().cast::<c_void>());
     // SAFETY: every pointer refers to a buffer that lives until the call returns; the command line is mutable and nul terminated.
