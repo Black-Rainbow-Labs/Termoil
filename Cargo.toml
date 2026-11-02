@@ -17,7 +17,7 @@ members = [
 
 # The version is written here once. tools/release.ps1 bumps it and every crate inherits it.
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 rust-version = "1.95"
 license = "MIT OR Apache-2.0"
