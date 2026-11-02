@@ -354,7 +354,9 @@ function Publish-GitHubRelease([string] $Gh, [string] $Version, [string[]] $Asse
     # Not named $body: inside Invoke-Checked that name is its own scriptblock parameter, which
     # PowerShell would pass to gh as an encoded command.
     $releaseNotes = if ($Notes) { $Notes } else { "Terminus $Version" }
-    $releaseFlags = if ($Stable) { @() } else { @('--prerelease') }
+    # @() around the if: an if expression unrolls a one item array to a string, and splatting a
+    # string passes it one character at a time.
+    $releaseFlags = @(if (-not $Stable) { '--prerelease' })
     Invoke-Checked 'gh release create' { & $Gh release create "v$Version" @Assets --title "Terminus $Version" --notes $releaseNotes @releaseFlags }
     Test-DownloadedAssets $Gh $Version $Assets
 }
