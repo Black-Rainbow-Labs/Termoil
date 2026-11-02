@@ -3275,7 +3275,7 @@ dependencies = [
 
 [[package]]
 name = "termoil-app"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "accesskit",
  "accesskit_winit",
@@ -3310,7 +3310,7 @@ dependencies = [
 
 [[package]]
 name = "termoil-bench"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "alacritty_terminal",
  "pollster",
@@ -3326,7 +3326,7 @@ dependencies = [
 
 [[package]]
 name = "termoil-cli"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "embed-resource",
  "serde_json",
@@ -3337,7 +3337,7 @@ dependencies = [
 
 [[package]]
 name = "termoil-font"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "fontique",
  "harfrust",
@@ -3348,7 +3348,7 @@ dependencies = [
 
 [[package]]
 name = "termoil-headless"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "termoil-pty",
  "termoil-vt",
@@ -3356,11 +3356,11 @@ dependencies = [
 
 [[package]]
 name = "termoil-input"
-version = "1.1.0"
+version = "1.2.0"
 
 [[package]]
 name = "termoil-protocol"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -3368,7 +3368,7 @@ dependencies = [
 
 [[package]]
 name = "termoil-pty"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "libc",
  "rustix 1.1.6",
@@ -3378,7 +3378,7 @@ dependencies = [
 
 [[package]]
 name = "termoil-render"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "base64",
  "glifo",
@@ -3398,7 +3398,7 @@ version = "0.1.0"
 
 [[package]]
 name = "termoil-vt"
-version = "1.1.0"
+version = "1.2.0"
 dependencies = [
  "base64",
  "flate2",
@@ -3644,7 +3644,7 @@ checksum = "c6f5d3c3b1bf09027a88a6bc961fc00497d651009560b5463668dc81b0fa87a8"
 
 [[package]]
 name = "unicode-tables"
-version = "1.1.0"
+version = "1.2.0"
 
 [[package]]
 name = "unicode-width"
