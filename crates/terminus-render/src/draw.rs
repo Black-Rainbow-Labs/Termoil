@@ -5,7 +5,7 @@ use terminus_font::{FontGrid, sprite};
 use vello_common::kurbo::{Affine, BezPath, Rect, Shape, Vec2};
 use vello_common::peniko::FontData;
 
-use crate::frame::{CursorStyle, Decoration, DecorationKind, Frame, GlyphRun, Rgba, RowFrame, SpriteCell};
+use crate::frame::{CursorStyle, Decoration, DecorationKind, Frame, GlyphRun, ImageRecord, Rgba, RowFrame, SpriteCell};
 
 /// The drawing calls a renderer provides.
 pub trait Canvas {
@@ -19,6 +19,11 @@ pub trait Canvas {
     fn glyphs(&mut self, font: &FontData, run: &GlyphRun);
     /// Sets the transform applied to everything drawn after it.
     fn transform(&mut self, t: Affine);
+    /// Draws `rec.src` of the image stretched over `rec.dest`. A renderer keeps the decoded image
+    /// in a cache keyed by the image's id and generation.
+    fn image(&mut self, rec: &ImageRecord);
+    /// Tells the renderer which images (id, generation) are still alive; it drops the others.
+    fn retain_images(&mut self, live: &[(u32, u64)]);
 }
 
 /// One frame placed in the window at a pixel offset: a pane, the tab bar, an overlay.
@@ -37,6 +42,8 @@ pub fn draw_layers<C: Canvas>(c: &mut C, size: (u32, u32), background: Rgba, lay
     c.transform(Affine::IDENTITY);
     c.paint(background);
     c.rect(Rect::new(0.0, 0.0, size.0 as f64, size.1 as f64));
+    let live: Vec<(u32, u64)> = layers.iter().flat_map(|l| l.frame.live_images.iter().copied()).collect();
+    c.retain_images(&live);
     for l in layers {
         c.transform(Affine::translate((l.x.round() as f64, l.y.round() as f64)));
         draw_frame(c, l.frame, grid);
@@ -44,13 +51,24 @@ pub fn draw_layers<C: Canvas>(c: &mut C, size: (u32, u32), background: Rgba, lay
     c.transform(Affine::IDENTITY);
 }
 
-/// Draws the whole frame: background, then each row, then the cursor.
+/// Draws the whole frame. Without images under the text: each row (its background, then text),
+/// then images above the text, then the cursor. With images under the text the layers are drawn in
+/// the order the kitty graphics protocol gives: images below the cell backgrounds, the cell
+/// backgrounds, images between backgrounds and text, the text, images above the text, the cursor.
 pub fn draw_frame<C: Canvas>(c: &mut C, frame: &Frame, grid: &FontGrid) {
     c.paint(frame.background);
     c.rect(Rect::new(0.0, 0.0, frame.width as f64, frame.height as f64));
-    for row in &frame.rows {
-        draw_row(c, row, frame, grid);
+    if frame.has_images_under_text() {
+        frame.images_below.iter().for_each(|i| c.image(i));
+        frame.rows.iter().for_each(|row| draw_row_spans(c, row, frame));
+        frame.images_mid.iter().for_each(|i| c.image(i));
+        frame.rows.iter().for_each(|row| draw_row_text(c, row, frame, grid));
+    } else {
+        for row in &frame.rows {
+            draw_row(c, row, frame, grid);
+        }
     }
+    frame.images_above.iter().for_each(|i| c.image(i));
     if let Some(cursor) = frame.cursor {
         draw_cursor(c, &cursor, frame);
         if let Some(text) = &frame.cursor_text {
@@ -63,10 +81,20 @@ pub fn draw_frame<C: Canvas>(c: &mut C, frame: &Frame, grid: &FontGrid) {
 pub fn draw_row<C: Canvas>(c: &mut C, row: &RowFrame, frame: &Frame, grid: &FontGrid) {
     c.paint(frame.background);
     c.rect(Rect::new(0.0, row.y as f64, frame.width as f64, (row.y + frame.cell_height as f32) as f64));
+    draw_row_spans(c, row, frame);
+    draw_row_text(c, row, frame, grid);
+}
+
+/// Draws the background spans of a row that differ from the window colour.
+fn draw_row_spans<C: Canvas>(c: &mut C, row: &RowFrame, frame: &Frame) {
     for span in &row.backgrounds {
         c.paint(span.color);
         c.rect(Rect::new(span.x0 as f64, row.y as f64, span.x1 as f64, (row.y + frame.cell_height as f32) as f64));
     }
+}
+
+/// Draws a row's text, sprite characters and decorations.
+fn draw_row_text<C: Canvas>(c: &mut C, row: &RowFrame, frame: &Frame, grid: &FontGrid) {
     for run in &row.runs {
         draw_run(c, run, grid);
     }
@@ -181,6 +209,20 @@ fn draw_cursor<C: Canvas>(c: &mut C, cur: &crate::frame::CursorFrame, frame: &Fr
             c.rect(Rect::new(x + w - t, y, x + w, y + h));
         }
     }
+}
+
+/// The rectangle an image record fills.
+pub fn image_rect(rec: &ImageRecord) -> Rect {
+    Rect::new(rec.dest.x0 as f64, rec.dest.y0 as f64, rec.dest.x1 as f64, rec.dest.y1 as f64)
+}
+
+/// The transform that maps image pixels onto the frame so that `rec.src` covers `rec.dest`.
+pub fn image_paint_transform(rec: &ImageRecord) -> Affine {
+    let (dw, dh) = ((rec.dest.x1 - rec.dest.x0) as f64, (rec.dest.y1 - rec.dest.y0) as f64);
+    let (sw, sh) = ((rec.src.x1 - rec.src.x0) as f64, (rec.src.y1 - rec.src.y0) as f64);
+    let scale = Affine::scale_non_uniform(dw / sw.max(1e-6), dh / sh.max(1e-6));
+    let to_dest = Affine::translate((rec.dest.x0 as f64, rec.dest.y0 as f64));
+    to_dest * scale * Affine::translate((-rec.src.x0 as f64, -rec.src.y0 as f64))
 }
 
 /// The glyph transform for synthetic italic: a 12 degree slant.

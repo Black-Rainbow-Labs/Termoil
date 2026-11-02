@@ -74,7 +74,7 @@ Source: "..\..\THIRD-PARTY-NOTICES.md"; DestDir: "{app}\licenses"; Flags: ignore
 #endif
 
 [Icons]
-Name: "{group}\{#AppName}"; Filename: "{app}\{#GuiExe}"
+Name: "{group}\{#AppName}"; Filename: "{app}\{#GuiExe}"; AppUserModelID: "Terminus.Terminus"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#GuiExe}"; Tasks: desktopicon
 
 [Registry]

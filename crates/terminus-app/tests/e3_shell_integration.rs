@@ -218,7 +218,7 @@ fn powershell_spec(name: &'static str, program: &str) -> Spec {
         shell: detect(program),
         args: vec!["-NoLogo"],
         cd: |p| format!("cd '{}'", p.display()),
-        fail: "cmd /c exit 7",
+        fail: if cfg!(windows) { "cmd /c exit 7" } else { "sh -c 'exit 7'" },
         ok: "Get-Date | Out-Null",
         commands_marked: true,
         wsl: false,

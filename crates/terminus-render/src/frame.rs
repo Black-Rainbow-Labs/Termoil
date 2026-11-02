@@ -4,7 +4,11 @@
 //! drawn, so the vello GPU, vello CPU and (if ever built) atlas renderers differ only in how they
 //! draw these records, and the builder can be tested as data (R1).
 
+use std::sync::Arc;
+
 use terminus_font::FaceId;
+
+use crate::images::ImageData;
 
 /// An RGBA colour, straight alpha.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
@@ -161,6 +165,32 @@ pub struct CursorFrame {
     pub color: Rgba,
 }
 
+/// A rectangle in pixels: left, top, right and bottom edges.
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub struct Area {
+    /// Left edge.
+    pub x0: f32,
+    /// Top edge.
+    pub y0: f32,
+    /// Right edge.
+    pub x1: f32,
+    /// Bottom edge.
+    pub y1: f32,
+}
+
+/// One image to draw: a rectangle of a decoded image stretched over a rectangle of the frame.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ImageRecord {
+    /// The decoded pixels, shared with the renderer's cache (keyed by id and generation).
+    pub image: Arc<ImageData>,
+    /// Where it is drawn in frame pixels, already clipped to the grid and offset by the padding.
+    pub dest: Area,
+    /// The part of the image drawn, in image pixels. Its size relative to `dest` gives the scale.
+    pub src: Area,
+    /// The z index the program gave the placement.
+    pub z: i32,
+}
+
 /// A whole frame.
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct Frame {
@@ -182,11 +212,25 @@ pub struct Frame {
     pub cursor_text: Option<GlyphRun>,
     /// Padding around the grid in pixels.
     pub padding: (u32, u32),
+    /// Images drawn above the window background and below the cell backgrounds (z below -1073741824).
+    pub images_below: Vec<ImageRecord>,
+    /// Images drawn above the cell backgrounds and below the text (negative z).
+    pub images_mid: Vec<ImageRecord>,
+    /// Images drawn above the text (z of zero or more), below the cursor.
+    pub images_above: Vec<ImageRecord>,
+    /// Id and generation of every image the terminal still holds, on screen or not. A renderer
+    /// drops cached copies of images that no frame lists here.
+    pub live_images: Vec<(u32, u64)>,
 }
 
 impl Frame {
     /// Number of glyphs in the frame (for stats and tests).
     pub fn glyph_count(&self) -> usize {
         self.rows.iter().flat_map(|r| &r.runs).map(|r| r.glyphs.len()).sum()
+    }
+
+    /// Whether the frame draws any image under the text, which changes how the rows are drawn.
+    pub fn has_images_under_text(&self) -> bool {
+        !self.images_below.is_empty() || !self.images_mid.is_empty()
     }
 }

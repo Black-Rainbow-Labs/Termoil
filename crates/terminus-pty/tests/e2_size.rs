@@ -10,6 +10,7 @@ use std::time::Instant;
 use terminus_pty::Pty;
 
 /// PowerShell that prints `SIZE=<w>x<h>` once the console is `want_w` by `want_h`.
+#[cfg(windows)]
 fn size_script(want_w: u16, want_h: u16) -> String {
     format!(
         "$d=(Get-Date).AddSeconds(25); do {{ $s=$Host.UI.RawUI.WindowSize; if ($s.Width -eq {want_w} -and $s.Height -eq {want_h}) {{ break }}; Start-Sleep -Milliseconds 50 }} while ((Get-Date) -lt $d); Write-Host ('SIZE=' + $s.Width + 'x' + $s.Height + '.')"

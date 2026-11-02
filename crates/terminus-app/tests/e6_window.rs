@@ -129,7 +129,7 @@ fn press_binding(gui: &mut Gui, action: &str) -> Result<(), String> {
     let chords = gui
         .bound
         .iter()
-        .find(|b| b.action == action && b.args.is_empty())
+        .find(|b| b.action == action)
         .map(|b| b.chords.clone())
         .ok_or(format!("no binding for {action}"))?;
     for chord in chords {
@@ -155,7 +155,12 @@ fn layout(gui: &Gui) -> (usize, Vec<u64>) {
 /// The script.
 fn steps() -> Vec<(&'static str, Step)> {
     vec![
-        ("the shell shows a prompt", Box::new(|g: &mut Gui, _: &ActiveEventLoop| Ok(screen(g).contains('>')))),
+        (
+            "the shell shows a prompt",
+            Box::new(|g: &mut Gui, _: &ActiveEventLoop| {
+                Ok(screen(g).contains(|c| c == '>' || (!cfg!(windows) && (c == '$' || c == '#'))))
+            }),
+        ),
         (
             "typing reaches the shell",
             Box::new(|g: &mut Gui, _: &ActiveEventLoop| {
@@ -277,6 +282,13 @@ fn steps() -> Vec<(&'static str, Step)> {
                 Ok(ws.views.len() == 2 && ws.views.values().all(|v| v.frame.is_some()))
             }),
         ),
+        ("the split resizes from its keys and by dragging", Box::new(resize_step)),
+        ("hints label the links on screen", Box::new(hints_step)),
+        ("the theme switcher previews and keeps a theme", Box::new(theme_step)),
+        ("the command palette runs an action", Box::new(palette_step)),
+        ("the search bar finds text as it is typed", Box::new(search_step)),
+        ("the quick terminal opens", Box::new(quick_open_step)),
+        ("the quick terminal is shown and then hidden", Box::new(quick_toggle_step)),
         (
             "quit",
             Box::new(|g: &mut Gui, _: &ActiveEventLoop| {
@@ -298,6 +310,12 @@ fn e6_window_input_ime_paste_tabs_splits() {
     let mut builder = EventLoop::<UserEvent>::with_user_event();
     #[cfg(windows)]
     winit::platform::windows::EventLoopBuilderExtWindows::with_any_thread(&mut builder, true);
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        // The test harness runs each test on a thread other than the main thread.
+        winit::platform::x11::EventLoopBuilderExtX11::with_any_thread(&mut builder, true);
+        winit::platform::wayland::EventLoopBuilderExtWayland::with_any_thread(&mut builder, true);
+    }
     let Ok(event_loop) = builder.build() else { return println!("no display; skipping E6") };
     let socket = if cfg!(windows) {
         format!(r"\\.\pipe\terminus-e6-{}", std::process::id())
@@ -310,4 +328,160 @@ fn e6_window_input_ime_paste_tabs_splits() {
     event_loop.run_app(&mut h).unwrap();
     assert!(h.failure.is_none(), "{}", h.failure.unwrap_or_default());
     assert!(h.finished, "the script stopped at step {}", h.current);
+    println!("E6: {} of {} steps passed", h.current, h.steps.len());
+}
+
+/// Opens the palette from its key, filters to zoom-pane and runs it with Enter.
+fn palette_step(g: &mut Gui, el: &ActiveEventLoop) -> Result<bool, String> {
+    press_binding(g, "command-palette")?;
+    g.flush(el);
+    let (win, _) = focus(g).ok_or("window")?;
+    if g.windows[&win].overlay.is_none() {
+        return Err("the palette did not open".into());
+    }
+    type_text(g, "zoompane");
+    let before = g.app.model.windows[0].tab().zoomed.is_some();
+    press(g, RawKey::new(Key::Named(NamedKey::Enter), Modifiers::NONE));
+    let after = g.app.model.windows[0].tab().zoomed.is_some();
+    if g.windows[&win].overlay.is_some() || before == after {
+        return Err("Enter in the palette did not run zoom-pane and close".into());
+    }
+    Ok(true)
+}
+
+/// Opens the search bar from its key, types a word on screen, checks it was found and selected,
+/// and closes the bar with Escape.
+fn search_step(g: &mut Gui, el: &ActiveEventLoop) -> Result<bool, String> {
+    press_binding(g, "search")?;
+    g.flush(el);
+    type_text(g, "e6typed");
+    let (win, pane) = focus(g).ok_or("window")?;
+    match &g.windows[&win].overlay {
+        Some(terminus_app::gui::overlay::Overlay::Search(s)) if s.found == Some(true) => {}
+        _ => return Err("the search bar did not find e6typed".into()),
+    }
+    if g.app.panes[&pane].selection.is_none() {
+        return Err("the match was not selected".into());
+    }
+    press(g, RawKey::new(Key::Named(NamedKey::Escape), Modifiers::NONE));
+    if g.windows[&win].overlay.is_some() {
+        return Err("Escape did not close the search bar".into());
+    }
+    Ok(true)
+}
+
+/// Runs the quick-terminal action, which creates the quick terminal window the first time.
+fn quick_open_step(g: &mut Gui, el: &ActiveEventLoop) -> Result<bool, String> {
+    g.app.run_named("quick-terminal").map_err(|e| e.to_string())?;
+    g.flush(el);
+    Ok(true)
+}
+
+/// The quick terminal window exists, the action hides it (closing its window and keeping its
+/// session), and a third press shows it again with the same pane.
+fn quick_toggle_step(g: &mut Gui, el: &ActiveEventLoop) -> Result<bool, String> {
+    let Some(id) = g.quick else { return Ok(false) };
+    let Some(ws) = g.windows.get_mut(&id) else { return Ok(false) };
+    ws.focused = true;
+    let wi = g.app.model.window_index(id).ok_or("the quick terminal has no model window")?;
+    let pane = g.app.model.windows[wi].tab().focus;
+    g.app.run_named("quick-terminal").map_err(|e| e.to_string())?;
+    g.flush(el);
+    if g.windows.contains_key(&id) {
+        return Err("a second quick-terminal did not hide the window".into());
+    }
+    if !g.app.panes.contains_key(&pane) {
+        return Err("hiding the quick terminal ended its session".into());
+    }
+    g.app.run_named("quick-terminal").map_err(|e| e.to_string())?;
+    g.flush(el);
+    if !g.windows.contains_key(&id) {
+        return Err("a third quick-terminal did not show the window again".into());
+    }
+    Ok(true)
+}
+
+/// The resize keys move the divider of the split made earlier, and so does dragging it.
+fn resize_step(g: &mut Gui, el: &ActiveEventLoop) -> Result<bool, String> {
+    let ratio = |g: &Gui| match &g.app.model.windows[0].tab().root {
+        terminus_app::model::Node::Split { ratio, .. } => Some(*ratio),
+        _ => None,
+    };
+    if g.app.model.windows[0].tab().zoomed.is_some() {
+        g.app.run_named("zoom-pane").map_err(|e| e.to_string())?;
+        g.flush(el);
+    }
+    let before = ratio(g).ok_or("no split to resize")?;
+    press_binding(g, "resize-split")?;
+    g.flush(el);
+    let after_key = ratio(g).ok_or("the split went away")?;
+    if (after_key - before).abs() < 0.01 {
+        return Err(format!("the resize key left the ratio at {before}"));
+    }
+    let (win, _) = focus(g).ok_or("window")?;
+    let Gui { app, windows, .. } = g;
+    let ws = windows.get_mut(&win).ok_or("window")?;
+    let (first, r) = ws.layout.first().copied().ok_or("no layout")?;
+    let (x, y) = ((r.x + r.w) as f64 + 1.0, (r.y + r.h / 2.0) as f64);
+    if ws.divider_at(x, y).map(|(p, _)| p) != Some(first) {
+        return Err(format!("no divider found at ({x}, {y})"));
+    }
+    handle::cursor_moved(ws, app, x, y);
+    handle::button(ws, app, winit::event::ElementState::Pressed, winit::event::MouseButton::Left);
+    handle::cursor_moved(ws, app, x + 120.0, y);
+    handle::button(ws, app, winit::event::ElementState::Released, winit::event::MouseButton::Left);
+    let after_drag = ratio(g).ok_or("the split went away")?;
+    if after_drag <= after_key + 0.01 {
+        return Err(format!("dragging the divider right left the ratio at {after_drag}"));
+    }
+    Ok(true)
+}
+
+/// Prints a URL, then shows hints: the URL gets a label, and Escape closes the labels.
+fn hints_step(g: &mut Gui, el: &ActiveEventLoop) -> Result<bool, String> {
+    if !screen(g).contains("https://example.com/e6") {
+        if !sent(g).ends_with(b"echo https://example.com/e6\r") {
+            type_text(g, "echo https://example.com/e6\r");
+        }
+        return Ok(false);
+    }
+    g.app.run_named("show-hints").map_err(|e| e.to_string())?;
+    g.flush(el);
+    let (win, _) = focus(g).ok_or("window")?;
+    match &g.windows[&win].overlay {
+        Some(terminus_app::gui::overlay::Overlay::Hints(h))
+            if h.items
+                .iter()
+                .any(|(_, l, ..)| matches!(l, terminus_app::links::Link::Url(u) if u == "https://example.com/e6")) => {}
+        _ => return Err("show-hints did not label the URL".into()),
+    }
+    press(g, RawKey::new(Key::Named(NamedKey::Escape), Modifiers::NONE));
+    if g.windows[&win].overlay.is_some() {
+        return Err("Escape did not close the hints".into());
+    }
+    Ok(true)
+}
+
+/// Opens the theme switcher, filters to Terminus Light, sees it previewed, and keeps it with Enter,
+/// which writes it to the configuration file.
+fn theme_step(g: &mut Gui, el: &ActiveEventLoop) -> Result<bool, String> {
+    g.app.run_named("choose-theme").map_err(|e| e.to_string())?;
+    g.flush(el);
+    type_text(g, "terminus light");
+    g.flush(el);
+    if g.app.config.theme.name != "Terminus Light" {
+        return Err(format!("the preview shows {}", g.app.config.theme.name));
+    }
+    press(g, RawKey::new(Key::Named(NamedKey::Enter), Modifiers::NONE));
+    g.flush(el);
+    let text = std::fs::read_to_string(&g.app.config_path).map_err(|e| e.to_string())?;
+    if !text.contains("theme = \"Terminus Light\"") {
+        return Err(format!("the config file was not updated: {text}"));
+    }
+    let (win, _) = focus(g).ok_or("window")?;
+    let bg = g.windows[&win].colors.background;
+    if bg.r < 128 {
+        return Err("the window kept the dark background".into());
+    }
+    Ok(true)
 }

@@ -8,7 +8,9 @@ pub mod chrome;
 pub mod handle;
 pub mod input;
 pub mod look;
+pub mod overlay;
 pub mod paint;
+pub mod quick;
 pub mod window;
 
 use std::collections::HashMap;
@@ -61,6 +63,8 @@ pub enum UserEvent {
     Ipc(ActionCall, Sender<Outcome>),
     /// The configuration file changed.
     Config(Box<LoadResult>),
+    /// The quick terminal's global hotkey was pressed.
+    QuickTerminal,
 }
 
 /// The front end's state.
@@ -78,6 +82,10 @@ pub struct Gui {
     probe_done: bool,
     /// The latency benchmark, when running one.
     pub bench: Option<bench::LatencyBench>,
+    /// The quick terminal's window, once created.
+    pub quick: Option<WinId>,
+    /// A window being opened as the quick terminal.
+    pending_quick: Option<WinId>,
 }
 
 /// Wakers that send one user event per burst of output.
@@ -130,6 +138,11 @@ impl Gui {
         })
         .ok();
         let bound = resolve(&config.resolved_keybindings(Platform::current()));
+        if let Ok(chord) = crate::keymap::parse_chord(&config.window.quick_terminal_hotkey)
+            && let Err(e) = quick::listen(&chord, proxy.clone())
+        {
+            eprintln!("terminus: no quick terminal hotkey: {e}");
+        }
         let app = App::new(config, config_path, Box::new(crate::platform::SystemClipboard), proxy_wakers(proxy));
         Ok(Some(Gui {
             app,
@@ -141,6 +154,8 @@ impl Gui {
             _watcher: watcher,
             probe_done: false,
             bench: None,
+            quick: None,
+            pending_quick: None,
         }))
     }
 
@@ -189,6 +204,9 @@ impl Gui {
         match e {
             Effect::OpenWindow(id) => self.open_window(el, id),
             Effect::CloseWindow(id) => {
+                if self.quick == Some(id) {
+                    self.quick = None;
+                }
                 if let Some(ws) = self.windows.remove(&id) {
                     self.by_winit.remove(&ws.window.id());
                 }
@@ -215,9 +233,58 @@ impl Gui {
                 }
                 el.exit();
             }
-            Effect::ShowPalette(_) | Effect::ShowSearch(_) | Effect::ToggleQuickTerminal => {
-                eprintln!("terminus: the command palette, search bar and quick terminal arrive at M4")
+            Effect::ShowPalette(id) => {
+                let entries = crate::palette::entries(&self.app.config.resolved_keybindings(Platform::current()));
+                self.with_window(id, |ws, _| {
+                    ws.overlay = Some(overlay::Overlay::Palette(overlay::PaletteUi::new(entries)));
+                    ws.window.request_redraw();
+                });
             }
+            Effect::ShowSearch(id) => self.with_window(id, |ws, app| {
+                if let Some(pane) = handle::focus_of(ws, app) {
+                    let query = app
+                        .panes
+                        .get(&pane)
+                        .and_then(|p| p.search.as_ref())
+                        .map(|s| s.pattern.clone())
+                        .unwrap_or_default();
+                    ws.overlay = Some(overlay::Overlay::Search(overlay::SearchUi {
+                        query,
+                        case_sensitive: false,
+                        pane,
+                        found: None,
+                        error: None,
+                    }));
+                    ws.window.request_redraw();
+                }
+            }),
+            Effect::ToggleQuickTerminal => self.toggle_quick(el),
+            Effect::ShowThemes(id) => {
+                let original = self.app.config.theme.name.clone();
+                self.with_window(id, |ws, _| {
+                    ws.overlay = Some(overlay::Overlay::Themes(overlay::ThemesUi {
+                        query: String::new(),
+                        selected: 0,
+                        original,
+                    }));
+                    ws.window.request_redraw();
+                });
+            }
+            Effect::ShowHints(id, pane) => self.with_window(id, |ws, app| {
+                let Some(p) = app.panes.get(&pane) else { return };
+                let links = {
+                    let t = p.session.lock();
+                    let top = t.screen().pages.active_y(0).saturating_sub(p.scroll);
+                    crate::links::visible_links(&t, top, t.rows() as usize)
+                };
+                if links.is_empty() {
+                    return;
+                }
+                let labels = crate::links::hint_labels(links.len());
+                let items = labels.into_iter().zip(links).map(|(l, (link, y, c))| (l, link, y, c)).collect();
+                ws.overlay = Some(overlay::Overlay::Hints(overlay::HintsUi { pane, items, typed: String::new() }));
+                ws.window.request_redraw();
+            }),
         }
     }
 
@@ -230,7 +297,12 @@ impl Gui {
 
     /// Creates the window for a model window.
     fn open_window(&mut self, el: &ActiveEventLoop, id: WinId) {
-        match WinState::create(el, &self.app, id, self.os_dark) {
+        let edge = (self.pending_quick == Some(id)).then_some(self.app.config.window.quick_terminal_edge);
+        if edge.is_some() {
+            self.pending_quick = None;
+            self.quick = Some(id);
+        }
+        match WinState::create(el, &self.app, id, self.os_dark, edge) {
             Ok(ws) => {
                 self.os_dark = ws.window.theme().is_none_or(|t| t == winit::window::Theme::Dark);
                 self.by_winit.insert(ws.window.id(), id);
@@ -276,6 +348,39 @@ impl Gui {
             }
         }
         update_title(ws, &self.app);
+    }
+
+    /// Shows the quick terminal, creating it the first time, or hides it when it is showing.
+    fn toggle_quick(&mut self, el: &ActiveEventLoop) {
+        if let Some(id) = self.quick {
+            match self.windows.get(&id) {
+                // Hiding closes the window and keeps its sessions: hiding a window is not
+                // supported on Wayland, and closing works the same everywhere.
+                Some(ws) if ws.focused || !cfg!(windows) => {
+                    if let Some(ws) = self.windows.remove(&id) {
+                        self.by_winit.remove(&ws.window.id());
+                    }
+                }
+                Some(ws) => {
+                    ws.window.focus_window();
+                    self.app.model.focused = Some(id);
+                }
+                None if self.app.model.window_index(id).is_some() => {
+                    self.pending_quick = Some(id);
+                    self.open_window(el, id);
+                    self.app.model.focused = Some(id);
+                }
+                None => {
+                    self.quick = None;
+                    self.toggle_quick(el);
+                }
+            }
+            return;
+        }
+        match crate::actions::new_window(&mut self.app, None, None) {
+            Ok(v) => self.pending_quick = v["window"].as_u64(),
+            Err(e) => eprintln!("terminus: the quick terminal could not start: {e}"),
+        }
     }
 
     /// Changes a window's font size by points, or resets it.
@@ -325,13 +430,60 @@ impl Gui {
     /// Acts on the notices a pane's events produced.
     fn notices(&mut self, notices: Vec<Notice>) {
         for n in notices {
-            if let Notice::Bell(pane) = n
-                && let Some(ws) = self.app.window_of(pane).and_then(|w| self.windows.get(&w))
-                && !ws.focused
-            {
-                ws.window.request_user_attention(Some(winit::window::UserAttentionType::Informational));
+            match n {
+                Notice::Bell(pane) => self.bell(pane),
+                Notice::Notification { title, body } => {
+                    if !self.any_focused() {
+                        crate::platform::notify(if title.is_empty() { "Terminus" } else { &title }, &body);
+                    }
+                }
+                Notice::CommandFinished { pane, code, seconds } => self.command_finished(pane, code, seconds),
             }
         }
+    }
+
+    /// True when any Terminus window has the keyboard focus.
+    fn any_focused(&self) -> bool {
+        self.windows.values().any(|w| w.focused)
+    }
+
+    /// The bell: a flash of the window (and the taskbar when unfocused), a sound, or nothing, as
+    /// `notify.on_bell` says.
+    fn bell(&mut self, pane: PaneId) {
+        let mode = self.app.config.notify.on_bell;
+        let Some(ws) = self.app.window_of(pane).and_then(|w| self.windows.get_mut(&w)) else { return };
+        match mode {
+            crate::config::BellMode::Visual => {
+                if !ws.focused {
+                    ws.window.request_user_attention(Some(winit::window::UserAttentionType::Informational));
+                }
+                ws.bell_until = Some(Instant::now() + std::time::Duration::from_millis(120));
+                ws.window.request_redraw();
+            }
+            crate::config::BellMode::Audible => crate::platform::beep(),
+            crate::config::BellMode::None => {}
+        }
+    }
+
+    /// Notifies that a command finished, when no Terminus window has focus and it ran at least
+    /// `notify.after_seconds`.
+    fn command_finished(&mut self, pane: PaneId, code: Option<i32>, seconds: u64) {
+        let n = &self.app.config.notify;
+        if !n.command_finished || seconds < n.after_seconds || self.any_focused() {
+            return;
+        }
+        let title = self
+            .app
+            .window_of(pane)
+            .and_then(|w| self.app.model.window_index(w))
+            .map(|wi| crate::view::tab_title(&self.app, self.app.model.windows[wi].tab()))
+            .unwrap_or_default();
+        let result = match code {
+            Some(0) => "succeeded".to_string(),
+            Some(c) => format!("failed with exit code {c}"),
+            None => "finished".to_string(),
+        };
+        crate::platform::notify("Command finished", &format!("{title}: {result} after {seconds} s"));
     }
 
     /// Injects the next benchmark key when it is due, writes the report when every key is measured,
@@ -455,6 +607,7 @@ impl ApplicationHandler<UserEvent> for Gui {
                 let _ = reply.send(self.app.run_action(&call));
             }
             UserEvent::Config(r) => self.config_loaded(*r),
+            UserEvent::QuickTerminal => self.toggle_quick(el),
         }
         self.apply_effects(el);
     }
@@ -512,6 +665,7 @@ impl ApplicationHandler<UserEvent> for Gui {
             WindowEvent::CursorMoved { position, .. } => handle::cursor_moved(ws, app, position.x, position.y),
             WindowEvent::MouseInput { state, button, .. } => handle::button(ws, app, state, button),
             WindowEvent::MouseWheel { delta, .. } => handle::wheel(ws, app, delta),
+            WindowEvent::DroppedFile(path) => handle::dropped_file(ws, app, &path),
             WindowEvent::ThemeChanged(t) => {
                 self.os_dark = t == winit::window::Theme::Dark;
                 app.effects.push(Effect::ConfigChanged);

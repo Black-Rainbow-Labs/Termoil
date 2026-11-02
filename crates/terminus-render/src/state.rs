@@ -4,6 +4,7 @@
 //! frame (their dirty flag is cleared as they are copied) plus the cursor, selection, colours and
 //! image placements. Shaping and building the frame happen afterwards, outside the lock.
 
+use crate::images::{ImagePlacement, ImageTracker, PxRect, collect_images};
 use terminus_vt::Terminal;
 use terminus_vt::cell::{Semantic, Wide, row_flags};
 use terminus_vt::modes::Mode;
@@ -152,6 +153,11 @@ pub struct RenderState {
     pub cursor: Option<CursorState>,
     /// Selected cells as (row, first column, last column) per visible row.
     pub selection: Vec<(u16, u16, u16)>,
+    /// The link under the pointer, underlined, as (row, first column, last column) per visible row.
+    pub link_hover: Vec<(u16, u16, u16)>,
+    /// Search matches on screen, as (row, first column, last column); drawn behind the text in the
+    /// palette's yellow. The current match is the selection, which draws over them.
+    pub search_hits: Vec<(u16, u16, u16)>,
     /// The colours in effect: the defaults with the program's OSC changes applied.
     pub colors: Colors,
     /// The configured colours, which an OSC reset (110 to 119) returns to.
@@ -165,6 +171,16 @@ pub struct RenderState {
     /// Serial of the row shown at the top last time; when it changes the screen scrolled and
     /// every visible row shows different content, whatever the rows' dirty flags say.
     pub top_serial: Option<u64>,
+    /// Image placements that touch the viewport, as pixel rectangles relative to the grid origin in
+    /// units of `image_cell_px`, in drawing order.
+    pub images: Vec<ImagePlacement>,
+    /// Id and generation of every image the terminal holds (on screen or not).
+    pub live_images: Vec<(u32, u64)>,
+    /// The terminal's cell size in pixels that the rectangles in `images` use. The app sets it with
+    /// `Terminal::set_cell_pixels`; the frame builder scales to the font's cell size.
+    pub image_cell_px: (u16, u16),
+    /// Generations given to images.
+    pub image_tracker: ImageTracker,
 }
 
 impl RenderState {
@@ -183,12 +199,18 @@ impl RenderState {
             lines: vec![row; rows as usize],
             cursor: None,
             selection: Vec::new(),
+            link_hover: Vec::new(),
+            search_hits: Vec::new(),
             defaults: colors.clone(),
             colors,
             reverse_video: false,
             focused: true,
             needs_full: true,
             top_serial: None,
+            images: Vec::new(),
+            live_images: Vec::new(),
+            image_cell_px: (10, 20),
+            image_tracker: ImageTracker::default(),
         }
     }
 
@@ -213,6 +235,7 @@ impl RenderState {
         self.needs_full = false;
         self.copy_cursor(term, scroll);
         self.copy_colors(term);
+        self.copy_images(term, top);
         self.reverse_video = term.mode(Mode::ReverseVideo);
     }
 
@@ -268,6 +291,21 @@ impl RenderState {
         }
     }
 
+    /// Copies the image placements that touch the viewport. Rows covered by a placement that
+    /// changed, appeared or went away are marked dirty (without changing their content, so cached
+    /// row frames stay valid).
+    fn copy_images(&mut self, term: &Terminal, top: u64) {
+        let found = collect_images(&mut self.image_tracker, term, top, &self.lines);
+        let cell_px = term.cell_pixels();
+        if found.placements != self.images || cell_px != self.image_cell_px {
+            mark_image_rows(&mut self.lines, &self.images, self.image_cell_px);
+            mark_image_rows(&mut self.lines, &found.placements, cell_px);
+        }
+        self.images = found.placements;
+        self.live_images = found.live;
+        self.image_cell_px = cell_px;
+    }
+
     /// Applies the terminal's palette and dynamic colour overrides.
     fn copy_colors(&mut self, term: &Terminal) {
         let dynamic = term.dynamic_colors();
@@ -286,6 +324,19 @@ impl RenderState {
                 l.dirty = true;
                 l.content_changed = true;
             });
+        }
+    }
+}
+
+/// Marks dirty every row a placement's visible rectangle covers.
+fn mark_image_rows(lines: &mut [RowState], placements: &[ImagePlacement], cell_px: (u16, u16)) {
+    let ch = cell_px.1.max(1) as i64;
+    for p in placements {
+        let PxRect { y, h, .. } = p.clip.unwrap_or(p.dest);
+        let first = y.div_euclid(ch).max(0);
+        let last = (y + h - 1).div_euclid(ch).min(lines.len() as i64 - 1);
+        for r in first..=last {
+            lines[r as usize].dirty = true;
         }
     }
 }

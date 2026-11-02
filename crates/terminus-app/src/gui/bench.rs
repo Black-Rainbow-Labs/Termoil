@@ -204,13 +204,13 @@ fn raw_console() -> RawIo {
     }
 }
 
-/// Standard input and output, for Unix (raw mode arrives with the macOS and Linux apps at M4).
-#[cfg(not(windows))]
+/// Standard input and output on Unix, with the terminal in raw mode.
+#[cfg(unix)]
 struct RawIo;
 
-#[cfg(not(windows))]
+#[cfg(unix)]
 impl RawIo {
-    /// Reads bytes from standard input.
+    /// Reads bytes from standard input as they arrive.
     fn read(&self, buf: &mut [u8]) -> std::io::Result<usize> {
         use std::io::Read;
         std::io::stdin().read(buf)
@@ -225,8 +225,16 @@ impl RawIo {
     }
 }
 
-/// Standard input and output on Unix.
-#[cfg(not(windows))]
+/// Puts standard input's terminal in raw mode (no line editing, no echo, no signal characters)
+/// and keeps output processing on, so a line feed still returns the cursor to column one.
+#[cfg(unix)]
 fn raw_console() -> RawIo {
+    use rustix::termios::{OptionalActions, OutputModes, tcgetattr, tcsetattr};
+    let stdin = rustix::stdio::stdin();
+    if let Ok(mut modes) = tcgetattr(stdin) {
+        modes.make_raw();
+        modes.output_modes.insert(OutputModes::OPOST | OutputModes::ONLCR);
+        let _ = tcsetattr(stdin, OptionalActions::Now, &modes);
+    }
     RawIo
 }

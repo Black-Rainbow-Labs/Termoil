@@ -353,6 +353,19 @@ impl Model {
     }
 }
 
+/// Moves tab `from` to position `to` in a window, keeping the same tab active. Returns false when
+/// nothing moved.
+pub fn move_tab(w: &mut Window, from: usize, to: usize) -> bool {
+    if from == to || from >= w.tabs.len() || to >= w.tabs.len() {
+        return false;
+    }
+    let active = w.tabs[w.active].id;
+    let tab = w.tabs.remove(from);
+    w.tabs.insert(to, tab);
+    w.active = w.tabs.iter().position(|t| t.id == active).unwrap_or(0);
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -399,6 +412,22 @@ mod tests {
         assert_eq!(m.windows[0].tabs.len(), 1);
         assert_eq!(m.remove_pane(11), Some(w));
         assert!(m.windows.is_empty());
+    }
+
+    #[test]
+    fn tabs_move_and_keep_the_active_one() {
+        let mut m = Model::default();
+        m.add_window(1);
+        for p in [2, 3] {
+            let t = m.new_tab(p, None);
+            m.windows[0].tabs.push(t);
+        }
+        m.windows[0].active = 2;
+        assert!(move_tab(&mut m.windows[0], 2, 0));
+        let order: Vec<PaneId> = m.windows[0].tabs.iter().map(|t| t.focus).collect();
+        assert_eq!(order, vec![3, 1, 2]);
+        assert_eq!(m.windows[0].active, 0);
+        assert!(!move_tab(&mut m.windows[0], 1, 1));
     }
 
     #[test]

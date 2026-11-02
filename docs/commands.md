@@ -18,8 +18,11 @@ or the IPC socket asked for it.
 | [`focus-up`](#focus-up) | no | yes | a window | Moves focus to the pane above. |
 | [`focus-down`](#focus-down) | no | yes | a window | Moves focus to the pane below. |
 | [`next-tab`](#next-tab) | no | yes | a window | Switches to the next tab. |
+| [`move-tab-to-window`](#move-tab-to-window) | yes | yes | a pane | Moves the tab holding a pane into a new window of its own. |
 | [`previous-tab`](#previous-tab) | no | yes | a window | Switches to the previous tab. |
 | [`zoom-pane`](#zoom-pane) | no | yes | a pane | Shows the focused pane alone in its tab, or restores the split. |
+| [`resize-split`](#resize-split) | yes | yes | a pane | Moves the divider next to a pane in a direction, growing or shrinking the pane. |
+| [`show-hints`](#show-hints) | no | yes | a pane | Labels every link on the screen of a pane; typing a label opens that link. |
 | [`send-text`](#send-text) | yes | no | a pane | Types text into a pane's program, as if pasted without bracketing. |
 | [`send-key`](#send-key) | yes | no | a pane | Presses a key in a pane, encoded for the program's keyboard mode. |
 | [`screen`](#screen) | yes | no | a pane | Returns the visible screen of a pane as text, or as JSON cells with styles. |
@@ -31,6 +34,8 @@ or the IPC socket asked for it.
 | [`run-action`](#run-action) | yes | no | nothing | Runs any action by name with JSON arguments, the way a keybinding does. |
 | [`show-config`](#show-config) | yes | no | nothing | Prints the effective configuration, or the documented default file. |
 | [`reload-config`](#reload-config) | yes | yes | nothing | Reads the configuration file again and applies it. |
+| [`set-theme`](#set-theme) | yes | yes | nothing | Switches to a bundled colour theme and writes it to the configuration file. |
+| [`choose-theme`](#choose-theme) | no | yes | a window | Lists the bundled themes, previewing each as it is highlighted; Enter keeps one. |
 | [`open-config`](#open-config) | no | yes | nothing | Opens the configuration file in the configured editor. |
 | [`install-shell-integration`](#install-shell-integration) | yes | yes | nothing | Installs the shell integration scripts and hooks them into the named shells' startup files. |
 | [`version`](#version) | yes | yes | nothing | Prints the version and build date. |
@@ -178,6 +183,20 @@ Switches to the next tab.
 
 No parameters.
 
+## move-tab-to-window
+
+Moves the tab holding a pane into a new window of its own.
+
+```
+terminus +move-tab-to-window [--pane <pane id>]
+```
+
+Over IPC: `{"id":1,"action":"move-tab-to-window","args":{...}}`. MCP tool: `terminus_move_tab_to_window`.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `pane` | pane id | no | The pane to act on; the focused pane when omitted. |
+
 ## previous-tab
 
 Switches to the previous tab.
@@ -189,6 +208,30 @@ No parameters.
 Shows the focused pane alone in its tab, or restores the split.
 
 No parameters.
+
+## resize-split
+
+Moves the divider next to a pane in a direction, growing or shrinking the pane.
+
+```
+terminus +resize-split [--pane <pane id>] --direction <left|right|up|down> [--percent <integer>]
+```
+
+Over IPC: `{"id":1,"action":"resize-split","args":{...}}`. MCP tool: `terminus_resize_split`.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `pane` | pane id | no | The pane to act on; the focused pane when omitted. |
+| `direction` | left|right|up|down | yes | Which way the divider moves. |
+| `percent` | integer | no | How far, as a percent of the split; 5 when omitted. |
+
+## show-hints
+
+Labels every link on the screen of a pane; typing a label opens that link.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `pane` | pane id | no | The pane to act on; the focused pane when omitted. |
 
 ## send-text
 
@@ -346,6 +389,26 @@ terminus +reload-config
 ```
 
 Over IPC: `{"id":1,"action":"reload-config","args":{...}}`. MCP tool: `terminus_reload_config`.
+
+No parameters.
+
+## set-theme
+
+Switches to a bundled colour theme and writes it to the configuration file.
+
+```
+terminus +set-theme --name <text>
+```
+
+Over IPC: `{"id":1,"action":"set-theme","args":{...}}`. MCP tool: `terminus_set_theme`.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `name` | text | yes | The theme's name, as `choose-theme` lists it. |
+
+## choose-theme
+
+Lists the bundled themes, previewing each as it is highlighted; Enter keeps one.
 
 No parameters.
 

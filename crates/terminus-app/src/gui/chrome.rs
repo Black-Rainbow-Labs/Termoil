@@ -32,17 +32,20 @@ impl Strip {
         }
     }
 
-    /// The frame for `content` at `cols` columns, rebuilt only when the content, size or colours
-    /// changed.
+    /// The frame for `content` at `cols` columns and `rows` rows, rebuilt only when the content, size
+    /// or colours changed.
     pub fn frame(
-        &mut self, cols: u16, content: &[u8], colors: &Colors, grid: &mut FontGrid, opts: &BuildOptions,
+        &mut self, cols: u16, rows: u16, content: &[u8], colors: &Colors, grid: &mut FontGrid, opts: &BuildOptions,
     ) -> &Frame {
-        let cols = cols.max(1);
-        let changed =
-            self.frame.is_none() || self.last != content || self.term.cols() != cols || self.state.defaults != *colors;
+        let (cols, rows) = (cols.max(1), rows.max(1));
+        let changed = self.frame.is_none()
+            || self.last != content
+            || self.term.cols() != cols
+            || self.term.rows() != rows
+            || self.state.defaults != *colors;
         if changed {
-            if self.term.cols() != cols {
-                self.term.resize(cols, self.term.rows());
+            if self.term.cols() != cols || self.term.rows() != rows {
+                self.term.resize(cols, rows);
             }
             self.state.defaults = colors.clone();
             self.state.needs_full = true;

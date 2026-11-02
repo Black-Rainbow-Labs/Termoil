@@ -284,6 +284,11 @@ fn default_keybindings_are_the_prd_list() {
         ("f11", "toggle-fullscreen"),
         ("ctrl+shift+n", "new-window"),
         ("ctrl+shift+k", "clear-scrollback"),
+        ("ctrl+shift+h", "show-hints"),
+        ("ctrl+shift+alt+left", "resize-split"),
+        ("ctrl+shift+alt+right", "resize-split"),
+        ("ctrl+shift+alt+up", "resize-split"),
+        ("ctrl+shift+alt+down", "resize-split"),
     ];
     let got: Vec<(&str, &str)> = defaults.iter().map(|b| (b.keys.as_str(), b.action.as_str())).collect();
     assert_eq!(got, expected);

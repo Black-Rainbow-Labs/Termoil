@@ -39,6 +39,10 @@ pub struct SessionOptions {
     pub exit_poll: Duration,
     /// Keep a copy of every byte written to the program, for tests.
     pub record_input: bool,
+    /// Quiet time after output before cold scrollback pages are compressed.
+    pub idle_compress: Duration,
+    /// Pages next to the screen kept uncompressed.
+    pub keep_live_pages: usize,
 }
 
 impl SessionOptions {
@@ -53,6 +57,8 @@ impl SessionOptions {
             lock_slice: 64 << 10,
             exit_poll: Duration::from_millis(100),
             record_input: false,
+            idle_compress: Duration::from_secs(2),
+            keep_live_pages: 4,
         }
     }
 }
@@ -72,6 +78,10 @@ pub struct PromptState {
     pub commands: u64,
     /// The shell has sent any OSC 133 mark (shell integration is active).
     pub integrated: bool,
+    /// When the running command's output started.
+    pub started: Option<Instant>,
+    /// How long the last finished command ran, from its output start to its end.
+    pub last_duration: Option<Duration>,
 }
 
 /// State the threads share.
@@ -136,6 +146,7 @@ impl Session {
             session.shared.clone(),
             opts.lock_slice.max(1024),
             waker.clone(),
+            (opts.idle_compress, opts.keep_live_pages),
         )?;
         spawn_exit_watcher(session.pty.clone(), session.shared.clone(), opts.exit_poll, waker)?;
         Ok(session)
@@ -298,10 +309,22 @@ fn spawn_reader(
 /// Starts the thread that applies PTY output to the terminal.
 fn spawn_parser(
     rx: Receiver<Vec<u8>>, term: Arc<Mutex<Terminal>>, writer: Arc<Mutex<Box<dyn Write + Send>>>, pty: Arc<Mutex<Pty>>,
-    shared: Arc<Shared>, slice: usize, waker: Waker,
+    shared: Arc<Shared>, slice: usize, waker: Waker, idle: (Duration, usize),
 ) -> std::io::Result<()> {
     thread::Builder::new().name("terminus parser".into()).spawn(move || {
-        while let Ok(first) = rx.recv() {
+        let mut since_compress = false;
+        loop {
+            let first = match rx.recv_timeout(idle.0) {
+                Ok(b) => b,
+                Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
+                    if std::mem::take(&mut since_compress) {
+                        lock(&term).primary_mut().pages.compress_cold(idle.1);
+                    }
+                    continue;
+                }
+                Err(crossbeam_channel::RecvTimeoutError::Disconnected) => break,
+            };
+            since_compress = true;
             apply_chunk(&first, &term, &writer, &shared, slice);
             while let Ok(more) = rx.try_recv() {
                 apply_chunk(&more, &term, &writer, &shared, slice);
@@ -380,9 +403,13 @@ fn track_prompts(events: &[Event], shared: &Shared) {
         p.integrated = true;
         changed = true;
         match pe {
-            PromptEvent::OutputStart => p.running = true,
+            PromptEvent::OutputStart => {
+                p.running = true;
+                p.started = Some(Instant::now());
+            }
             PromptEvent::CommandFinished(code) => {
                 p.running = false;
+                p.last_duration = p.started.take().map(|s| s.elapsed());
                 p.last_exit = *code;
                 p.commands += 1;
                 p.settled_at = p.enter_count;

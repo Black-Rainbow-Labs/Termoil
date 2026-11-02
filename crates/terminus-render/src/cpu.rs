@@ -2,16 +2,22 @@
 //! usable, when the configuration asks for it, and by the pixel tests. The app presents the pixmap
 //! with `softbuffer`.
 
+use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Instant;
 
 use terminus_font::FontGrid;
 use vello_common::color::AlphaColor;
 use vello_common::kurbo::{BezPath, Rect};
-use vello_common::peniko::FontData;
-use vello_cpu::{Level, Pixmap, RenderContext, RenderMode, RenderSettings, Resources};
+use vello_common::peniko::{FontData, ImageAlphaType, ImageSampler};
+use vello_common::pixmap::PixelMetadata;
+use vello_cpu::{
+    Image as PaintImage, ImageSource, Level, Pixmap, RenderContext, RenderMode, RenderSettings, Resources,
+};
 
-use crate::draw::{Canvas, Layer, draw_layers, hint_enabled, skew_transform};
-use crate::frame::{GlyphRun, Rgba};
+use crate::draw::{Canvas, Layer, draw_layers, hint_enabled, image_paint_transform, image_rect, skew_transform};
+use crate::frame::{GlyphRun, ImageRecord, Rgba};
+use crate::images::ImageData;
 use crate::{FrameStats, Image, RenderError, Renderer};
 
 /// The CPU renderer.
@@ -20,6 +26,7 @@ pub struct VelloCpuRenderer {
     resources: Resources,
     pixmap: Pixmap,
     atlas: bool,
+    images: HashMap<(u32, u64), Arc<Pixmap>>,
 }
 
 impl VelloCpuRenderer {
@@ -33,7 +40,13 @@ impl VelloCpuRenderer {
             resources: Resources::new(),
             pixmap: Pixmap::new(w, h),
             atlas,
+            images: HashMap::new(),
         }
+    }
+
+    /// How many decoded images the renderer holds (for tests).
+    pub fn cached_images(&self) -> usize {
+        self.images.len()
     }
 
     /// The rendered pixels, premultiplied RGBA8, for presenting.
@@ -57,6 +70,17 @@ struct CpuCanvas<'a> {
     ctx: &'a mut RenderContext,
     resources: &'a mut Resources,
     atlas: bool,
+    images: &'a mut HashMap<(u32, u64), Arc<Pixmap>>,
+}
+
+/// A premultiplied pixmap of an image, or None when the image is empty or too large for vello.
+fn pixmap_of(image: &ImageData) -> Option<Arc<Pixmap>> {
+    let (w, h) = (u16::try_from(image.width).ok()?, u16::try_from(image.height).ok()?);
+    if w == 0 || h == 0 || image.rgba.len() != w as usize * h as usize * 4 {
+        return None;
+    }
+    let meta = PixelMetadata { may_have_transparency: true, alpha_type: ImageAlphaType::Alpha };
+    Some(Arc::new(Pixmap::from_parts(image.rgba.as_ref().clone(), w, h, meta)))
 }
 
 impl Canvas for CpuCanvas<'_> {
@@ -98,6 +122,27 @@ impl Canvas for CpuCanvas<'_> {
     fn transform(&mut self, t: vello_common::kurbo::Affine) {
         self.ctx.set_transform(t);
     }
+
+    /// Fills the destination rectangle with the image as a paint, decoding it once per generation.
+    fn image(&mut self, rec: &ImageRecord) {
+        let key = (rec.image.id, rec.image.generation);
+        let pixmap = match self.images.entry(key) {
+            std::collections::hash_map::Entry::Occupied(e) => e.get().clone(),
+            std::collections::hash_map::Entry::Vacant(e) => {
+                let Some(pixmap) = pixmap_of(&rec.image) else { return };
+                e.insert(pixmap).clone()
+            }
+        };
+        self.ctx.set_paint(PaintImage { image: ImageSource::Pixmap(pixmap), sampler: ImageSampler::default() });
+        self.ctx.set_paint_transform(image_paint_transform(rec));
+        self.ctx.fill_rect(&image_rect(rec));
+        self.ctx.reset_paint_transform();
+    }
+
+    /// Drops cached images the terminal no longer holds.
+    fn retain_images(&mut self, live: &[(u32, u64)]) {
+        self.images.retain(|k, _| live.contains(k));
+    }
 }
 
 impl Renderer for VelloCpuRenderer {
@@ -116,7 +161,12 @@ impl Renderer for VelloCpuRenderer {
         self.ctx.reset();
         let size = (self.pixmap.width() as u32, self.pixmap.height() as u32);
         {
-            let mut canvas = CpuCanvas { ctx: &mut self.ctx, resources: &mut self.resources, atlas: self.atlas };
+            let mut canvas = CpuCanvas {
+                ctx: &mut self.ctx,
+                resources: &mut self.resources,
+                atlas: self.atlas,
+                images: &mut self.images,
+            };
             draw_layers(&mut canvas, size, background, layers, grid);
         }
         self.ctx.flush();

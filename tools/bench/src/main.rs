@@ -9,6 +9,7 @@
 //! `_agent_output/bench/` with the machine, build and commit.
 
 mod gpuinit;
+mod memory;
 mod render;
 mod streams;
 
@@ -206,6 +207,21 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     match args.get(1).map(String::as_str) {
         Some("parse") => parse_only(),
+        Some("memory") => {
+            let rows: Vec<serde_json::Value> = memory::measure()
+                .into_iter()
+                .map(|mut r| {
+                    r["machine"] = machine();
+                    r
+                })
+                .collect();
+            record("p3.jsonl", &rows);
+        }
+        Some("memory-one") => memory::run_one(
+            args[2].parse().unwrap_or(100_000),
+            args.get(3).is_some_and(|k| k == "dense"),
+            args.get(4).and_then(|t| t.parse().ok()).unwrap_or(1),
+        ),
         Some("gpu-init") => gpuinit::run(args.get(2).map(String::as_str).unwrap_or("every")),
         Some("render") => {
             let frames = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(1200);

@@ -102,7 +102,11 @@ fn encode_char(event: &KeyEvent, c: char, mods: Modifiers, modes: &KeyboardModes
     }
     let (shift, ctrl, alt) =
         (mods.contains(Modifiers::SHIFT), mods.contains(Modifiers::CTRL), mods.contains(Modifiers::ALT));
-    let needs_csi_u = mods.intersects(Modifiers::EXTENDED) || (ctrl && shift && c != ' ') || (ctrl && !c.is_ascii());
+    // Ctrl+Shift+letter is Ctrl+letter, as in xterm: shift does not change a control byte. Other
+    // keys with Ctrl and Shift have no control byte of their own and keep the CSI u form.
+    let letter = c.is_ascii_alphabetic();
+    let needs_csi_u =
+        mods.intersects(Modifiers::EXTENDED) || (ctrl && shift && c != ' ' && !letter) || (ctrl && !c.is_ascii());
     if needs_csi_u {
         push_csi_u(out, key_code(c), mods.wire_value());
         return true;

@@ -74,6 +74,20 @@ pub fn injection(shell: Shell, dir: &Path, user_args: &[String]) -> Option<Injec
     Some(Injection { args, env })
 }
 
+/// Applies the integration for `shell` to `spawn`: the arguments and environment from
+/// `injection`, and for bash a change from a login shell started through argv[0] to
+/// `--rcfile` with `TERMINUS_BASH_LOGIN=1`. A bash whose argv[0] begins with a dash is a login
+/// shell and ignores `--rcfile`, so the wrapper reads the login files itself instead.
+pub fn apply_injection(spawn: &mut terminus_pty::SpawnOptions, shell: Shell, dir: &Path) {
+    let Some(inj) = injection(shell, dir, &spawn.args) else { return };
+    spawn.args = inj.args;
+    spawn.env.extend(inj.env);
+    if shell == Shell::Bash && spawn.login {
+        spawn.login = false;
+        spawn.env.push(("TERMINUS_BASH_LOGIN".to_string(), "1".to_string()));
+    }
+}
+
 /// The variables every integrated shell gets: the switch the scripts check and the folder they
 /// were loaded from.
 fn base_env(dir: &Path) -> Vec<(String, String)> {
@@ -372,12 +386,23 @@ fn is_script_folder(dir: &Path) -> bool {
     dir.join("bash").join("terminus.bash").is_file()
 }
 
-/// The scripts' source folder: `shell-integration` next to the executable (the installed layout)
-/// or, in a development build, the repository's `shell-integration` folder, found by looking in
-/// each parent of the executable and then relative to this crate's sources.
+/// The scripts' source folder for the running executable. See `source_dir_from`.
 pub fn source_dir() -> Option<PathBuf> {
-    let exe = std::env::current_exe().ok()?;
-    let mut candidates: Vec<PathBuf> = exe.ancestors().skip(1).take(6).map(|a| a.join("shell-integration")).collect();
+    source_dir_from(&std::env::current_exe().ok()?)
+}
+
+/// The scripts' source folder for an executable at `exe`: `shell-integration` or
+/// `share/terminus/shell-integration` in any of its parent folders (the Windows installer layout
+/// and the Linux package layout), `Resources/shell-integration` (the macOS app bundle, whose
+/// executable is in `Contents/MacOS`), or, in a development build, the repository's
+/// `shell-integration` folder, found relative to this crate's sources.
+pub fn source_dir_from(exe: &Path) -> Option<PathBuf> {
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    for ancestor in exe.ancestors().skip(1).take(6) {
+        candidates.push(ancestor.join("shell-integration"));
+        candidates.push(ancestor.join("share").join("terminus").join("shell-integration"));
+        candidates.push(ancestor.join("Resources").join("shell-integration"));
+    }
     if let Some(manifest) = option_env!("CARGO_MANIFEST_DIR") {
         candidates.push(Path::new(manifest).join("..").join("..").join("shell-integration"));
     }
@@ -463,7 +488,8 @@ mod tests {
         assert_eq!(inj.args[0], "-NoLogo");
         assert!(!inj.args.iter().any(|a| a == "-NoProfile"));
         assert_eq!(&inj.args[1..3], ["-NoExit", "-Command"]);
-        assert!(inj.args[3].contains("powershell\\terminus.ps1"), "{}", inj.args[3]);
+        let script = Path::new("powershell").join("terminus.ps1");
+        assert!(inj.args[3].contains(script.to_string_lossy().as_ref()), "{}", inj.args[3]);
         assert!(injection(Shell::Pwsh, dir, &["-Command".to_string(), "dir".to_string()]).is_none());
     }
 
@@ -479,6 +505,36 @@ mod tests {
         assert_eq!(env_of(&login, "TERMINUS_BASH_LOGIN").as_deref(), Some("1"));
         assert!(injection(Shell::Bash, dir, &["-c".to_string(), "ls".to_string()]).is_none());
         assert!(injection(Shell::Bash, dir, &["build.sh".to_string()]).is_none());
+    }
+
+    /// A login bash (argv[0] with a dash, which ignores `--rcfile`) becomes a plain interactive
+    /// bash with `TERMINUS_BASH_LOGIN=1`, and other shells keep their login flag.
+    #[test]
+    fn apply_injection_turns_a_login_bash_into_an_rcfile_bash() {
+        let size = terminus_pty::PtySize { cols: 80, rows: 24, pixel_width: 0, pixel_height: 0 };
+        let mut bash = terminus_pty::SpawnOptions::default_shell(size);
+        bash.login = true;
+        apply_injection(&mut bash, Shell::Bash, Path::new("/opt/ti"));
+        assert!(!bash.login);
+        assert_eq!(&bash.args[..1], ["--rcfile"]);
+        assert!(bash.env.iter().any(|(k, v)| k == "TERMINUS_BASH_LOGIN" && v == "1"));
+        let mut zsh = terminus_pty::SpawnOptions::default_shell(size);
+        zsh.login = true;
+        apply_injection(&mut zsh, Shell::Zsh, Path::new("/opt/ti"));
+        assert!(zsh.login);
+        assert!(!zsh.env.iter().any(|(k, _)| k == "TERMINUS_BASH_LOGIN"));
+    }
+
+    /// An executable in `<prefix>/bin` finds the scripts in `<prefix>/share/terminus/shell-integration`,
+    /// which is where the Linux packages put them.
+    #[test]
+    fn source_dir_finds_the_linux_package_layout() {
+        let prefix = TempDir::new("pkglayout");
+        let scripts = prefix.0.join("share").join("terminus").join("shell-integration");
+        fs::create_dir_all(scripts.join("bash")).unwrap();
+        fs::write(scripts.join("bash").join("terminus.bash"), "").unwrap();
+        let exe = prefix.0.join("bin").join("terminus-gui");
+        assert_eq!(source_dir_from(&exe), Some(scripts));
     }
 
     /// zsh, fish, nushell and cmd each use their own mechanism.

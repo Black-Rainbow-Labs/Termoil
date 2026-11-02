@@ -22,6 +22,7 @@ serde.workspace = true
 serde_json.workspace = true
 crossbeam-channel.workspace = true
 toml = "1"
+regex.workspace = true
 winit = "0.30"
 softbuffer = "0.4"
 wgpu = "30"
@@ -42,7 +43,13 @@ windows = { version = "0.62", features = [
     "Win32_System_DataExchange",
     "Win32_System_Memory",
     "Win32_System_Ole",
+    "Win32_UI_Input_KeyboardAndMouse",
     "Win32_UI_Shell",
+    "Win32_System_WinRT",
+    "Win32_System_Diagnostics_Debug",
+    "UI_Notifications",
+    "Data_Xml_Dom",
+    "Foundation",
     "Win32_UI_WindowsAndMessaging",
 ] }
 
@@ -52,3 +59,12 @@ embed-resource = "3"
 [dev-dependencies]
 terminus-vt.workspace = true
 terminus-pty.workspace = true
+
+[target.'cfg(not(windows))'.dependencies]
+# The clipboard on macOS, Wayland and X11. Windows uses the Win32 API directly because arboard's
+# Windows dependency clipboard-win is BSL 1.0. Default features are off to leave out image support.
+arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
+
+[target.'cfg(unix)'.dependencies]
+# Raw terminal mode for the latency echo child.
+rustix = { version = "1", features = ["termios", "stdio"] }

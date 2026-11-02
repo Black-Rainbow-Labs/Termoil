@@ -297,9 +297,12 @@ fn legacy_text_key_example_encodings() {
         ("alt+ctrl", A | C),
         ("ctrl+shift", C | S),
     ];
-    // Rows of the table: i, 3 and semicolon.
+    // Rows of the table: i, 3 and semicolon. One cell differs from the protocol document on
+    // purpose: ctrl+shift+i is the control byte, as ctrl+i, because legacy mode follows xterm (where
+    // Ctrl+Shift+R equals Ctrl+R; docs/research/testing-corpora.md and TEST-SUITE section 7, I1).
+    // A shell at a prompt prints a CSI u form as text. Keys with no control byte keep CSI u.
     let table: [(char, [&[u8]; 7]); 3] = [
-        ('i', [b"i", b"I", b"\x1bi", b"\t", b"\x1bI", b"\x1b\t", b"\x1b[105;6u"]),
+        ('i', [b"i", b"I", b"\x1bi", b"\t", b"\x1bI", b"\x1b\t", b"\t"]),
         ('3', [b"3", b"#", b"\x1b3", b"\x1b", b"\x1b#", b"\x1b\x1b", b"\x1b[51;6u"]),
         (';', [b";", b":", b"\x1b;", b";", b"\x1b:", b"\x1b;", b"\x1b[59;6u"]),
     ];

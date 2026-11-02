@@ -308,3 +308,39 @@ fn r2_layers_match_frames_drawn_alone() {
         );
     }
 }
+
+/// The link under the pointer is underlined over exactly its cells, in the text colour.
+#[test]
+fn r1_hovered_link_is_underlined() {
+    let mut g = grid(16.0);
+    let mut t = Terminal::new(10, 2, TerminalConfig::default());
+    t.advance(b"go here ok");
+    let mut state = RenderState::new(10, 2, Colors::dark_default());
+    state.update(&mut t, 0);
+    state.link_hover = vec![(0, 3, 6)];
+    let f = build_frame(&state, &mut g, &BuildOptions::default());
+    let m = f.cell_width as f32;
+    let under: Vec<_> = f.rows[0].decorations.iter().filter(|d| d.kind == DecorationKind::Underline).collect();
+    assert_eq!(under.len(), 1);
+    assert_eq!((under[0].x0, under[0].x1), (f.padding.0 as f32 + 3.0 * m, f.padding.0 as f32 + 7.0 * m));
+    assert!(f.rows[1].decorations.is_empty());
+}
+
+/// Search matches get the palette's yellow behind the text; the selection still wins over them.
+#[test]
+fn r1_search_hits_are_highlighted() {
+    let mut g = grid(16.0);
+    let mut t = Terminal::new(10, 1, TerminalConfig::default());
+    t.advance(b"ab ab ab");
+    let colors = Colors::dark_default();
+    let yellow = colors.palette[3];
+    let mut state = RenderState::new(10, 1, colors);
+    state.update(&mut t, 0);
+    state.search_hits = vec![(0, 0, 1), (0, 3, 4)];
+    state.selection = vec![(0, 3, 4)];
+    let f = build_frame(&state, &mut g, &BuildOptions::default());
+    let spans = &f.rows[0].backgrounds;
+    let y = Rgba::rgb(yellow.r, yellow.g, yellow.b);
+    assert!(spans.iter().any(|s| s.color == y && s.x0 == f.padding.0 as f32), "{spans:?}");
+    assert_eq!(spans.iter().filter(|s| s.color == y).count(), 1, "the selected match is drawn as the selection");
+}

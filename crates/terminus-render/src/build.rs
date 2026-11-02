@@ -11,6 +11,8 @@ use terminus_vt::terminal::CursorShape;
 use crate::frame::{
     BgSpan, CursorFrame, CursorStyle, Decoration, DecorationKind, Frame, GlyphPos, GlyphRun, Rgba, RowFrame, SpriteCell,
 };
+use crate::images::{RecordGeometry, image_records};
+use crate::placeholder::PLACEHOLDER;
 use crate::state::{CellState, CellText, CellWidth, RenderState};
 
 /// Settings the frame builder takes from the configuration.
@@ -79,6 +81,15 @@ fn frame_shell(state: &RenderState, grid: &mut FontGrid, opts: &BuildOptions) ->
         padding: opts.padding,
         ..Frame::default()
     };
+    let geometry = RecordGeometry {
+        state_cell: state.image_cell_px,
+        font_cell: (cw, ch),
+        grid: (state.cols, state.rows),
+        padding: opts.padding,
+    };
+    let groups = image_records(&state.images, geometry);
+    (frame.images_below, frame.images_mid, frame.images_above) = (groups.below, groups.mid, groups.above);
+    frame.live_images = state.live_images.clone();
     if let Some(c) = state.cursor.filter(|c| c.visible) {
         let (cursor, text) = build_cursor(state, c, grid, opts);
         frame.cursor = Some(cursor);
@@ -160,7 +171,8 @@ fn build_row(state: &RenderState, r: u16, grid: &mut FontGrid, opts: &BuildOptio
     let window_bg = rgba(if state.reverse_video { state.colors.foreground } else { state.colors.background });
     let mut row = RowFrame { row: r, y, ..RowFrame::default() };
     row.backgrounds = background_spans(&colors, window_bg, m.width, opts);
-    row.decorations = decorations(line.cells.as_slice(), &colors, y, grid, opts);
+    let hover = state.link_hover.iter().find(|&&(row, _, _)| row == r).map(|&(_, a, b)| (a, b));
+    row.decorations = decorations(line.cells.as_slice(), &colors, y, hover, grid, opts);
     text_runs(&mut row, line.cells.as_slice(), &colors, y, grid, opts);
     row
 }
@@ -185,6 +197,10 @@ fn cell_colors(state: &RenderState, cell: &CellState, r: u16, col: u16, opts: &B
     }
     if s.has(attr::FAINT) {
         fg = mix(fg, bg, 0.5);
+    }
+    if state.search_hits.iter().any(|&(row, a, b)| row == r && col >= a && col <= b) {
+        bg = c.palette[3];
+        fg = c.background;
     }
     if state.selection.iter().any(|&(row, a, b)| row == r && col >= a && col <= b) {
         bg = c.selection_background;
@@ -255,8 +271,9 @@ fn background_spans(colors: &[CellColors], window: Rgba, cw: u32, opts: &BuildOp
 }
 
 /// Underlines, strike through and overlines, merged across cells with the same kind and colour.
+/// Cells in `hover` (the link under the pointer) get a single underline when they have none.
 fn decorations(
-    cells: &[CellState], colors: &[CellColors], y: f32, grid: &FontGrid, opts: &BuildOptions,
+    cells: &[CellState], colors: &[CellColors], y: f32, hover: Option<(u16, u16)>, grid: &FontGrid, opts: &BuildOptions,
 ) -> Vec<Decoration> {
     let m = grid.metrics();
     let mut out: Vec<Decoration> = Vec::new();
@@ -270,6 +287,8 @@ fn decorations(
         };
         if let Some(kind) = underline_kind(s.underline) {
             push(kind, y + m.underline_position, m.underline_thickness, colors[col].underline);
+        } else if hover.is_some_and(|(a, b)| (a as usize..=b as usize).contains(&col)) {
+            push(DecorationKind::Underline, y + m.underline_position, m.underline_thickness, colors[col].fg);
         }
         if s.has(attr::STRIKE) {
             push(DecorationKind::Strike, y + m.strike_position, m.strike_thickness, colors[col].fg);
@@ -315,6 +334,11 @@ fn text_runs(
             flush(row, &mut pending, y, grid, opts);
             continue;
         };
+        if first == PLACEHOLDER {
+            // The cell stands for a piece of an image, drawn from the image records.
+            flush(row, &mut pending, y, grid, opts);
+            continue;
+        }
         if first == ' ' && !matches!(cell.text, CellText::Cluster(_)) {
             flush(row, &mut pending, y, grid, opts);
             continue;

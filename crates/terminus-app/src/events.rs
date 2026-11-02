@@ -13,6 +13,8 @@ pub enum Notice {
     Bell(PaneId),
     /// A desktop notification.
     Notification { title: String, body: String },
+    /// A command finished in a pane, with its exit code and how long it ran.
+    CommandFinished { pane: PaneId, code: Option<i32>, seconds: u64 },
 }
 
 /// Applies the queued events of a pane. Returns the notices for the window layer. A pane whose
@@ -68,6 +70,11 @@ fn apply(app: &mut App, pane: PaneId, e: Event, os_dark: bool, notices: &mut Vec
             }
         }
         Event::Bell => notices.push(Notice::Bell(pane)),
+        Event::Prompt(terminus_vt::terminal::PromptEvent::CommandFinished(code)) => {
+            let seconds =
+                app.panes.get(&pane).and_then(|p| p.session.prompt_state().last_duration).map_or(0, |d| d.as_secs());
+            notices.push(Notice::CommandFinished { pane, code, seconds });
+        }
         Event::Notification { title, body } => notices.push(Notice::Notification { title, body }),
         _ => {}
     }

@@ -162,6 +162,9 @@ fn run_action_args(name: &str, pane: u64) -> Value {
         "send-text" => json!({ "pane": pane, "text": "" }),
         "send-key" => json!({ "pane": pane, "key": "escape" }),
         "resize" => json!({ "pane": pane, "cols": 80, "rows": 24 }),
+        "resize-split" => json!({ "pane": pane, "direction": "right" }),
+        "move-tab-to-window" => json!({ "pane": pane }),
+        "set-theme" => json!({ "name": "Terminus Light" }),
         "set-title" => json!({ "pane": pane, "title": "run-action" }),
         "run-action" => json!({ "name": "version" }),
         "wait-prompt" => json!({ "pane": pane, "timeout": 20 }),
@@ -225,6 +228,11 @@ fn more_commands(inst: &Instance, p2: &str, covered: &mut BTreeSet<String>) {
     assert_eq!(pane_entry(&inst.json(&["+list"]), p2.parse().unwrap())["tab_title"], "renamed");
     let p3 = inst.json(&["+split", "--pane", p2, "--direction", "down"])["pane"].as_u64().unwrap().to_string();
     seen("split");
+    assert_eq!(inst.json(&["+resize-split", "--pane", p2, "--direction", "down", "--percent", "10"])["moved"], true);
+    seen("resize-split");
+    let moved = inst.json(&["+move-tab-to-window", "--pane", &p3]);
+    assert_eq!(moved["moved"], true, "{moved}");
+    seen("move-tab-to-window");
     inst.ok(&["+focus", "--pane", &p3, "--direction", "up"]);
     seen("focus");
     assert_eq!(pane_entry(&inst.json(&["+list"]), p2.parse().unwrap())["focused"], true);
@@ -243,6 +251,10 @@ fn more_commands(inst: &Instance, p2: &str, covered: &mut BTreeSet<String>) {
     seen("reload-config");
     assert!(inst.ok(&["+show-config"]).contains("7654321"), "reload-config did not apply the new file");
     seen("show-config");
+    inst.ok(&["+set-theme", "Terminus Light"]);
+    assert!(std::fs::read_to_string(&inst.config).unwrap().contains("theme = \"Terminus Light\""));
+    assert!(inst.ok(&["+show-config"]).contains("Terminus Light"));
+    seen("set-theme");
     inst.ok(&["+install-shell-integration", "--shells", "bash", "--dry-run"]);
     seen("install-shell-integration");
     inst.ok(&["+run-action", "--name", "version"]);
@@ -289,7 +301,12 @@ fn owner_only(inst: &Instance) {
     if cfg!(windows) {
         assert!(access.starts_with("D:P"), "the DACL is not protected: {access}");
         assert_eq!(access.matches("(A;").count(), 1, "more than one allow entry: {access}");
-        assert!(access.contains(";;;S-1-5-21-"), "the entry is not for a user account: {access}");
+        // A user account's SID, which SDDL writes as LA for the built in Administrator (as on CI
+        // runners) and in full for every other account.
+        assert!(
+            access.contains(";;;S-1-5-21-") || access.ends_with(";;;LA)"),
+            "the entry is not for a user account: {access}"
+        );
     } else {
         assert_eq!(access, "600");
     }

@@ -43,6 +43,10 @@ pub enum Effect {
     ShowPalette(WinId),
     /// Open the search bar.
     ShowSearch(WinId),
+    /// Open the theme switcher.
+    ShowThemes(WinId),
+    /// Label the links of a pane for the keyboard.
+    ShowHints(WinId, PaneId),
     /// Show or hide the quick terminal.
     ToggleQuickTerminal,
     /// Open a file with the platform opener.
@@ -340,12 +344,9 @@ impl App {
 /// Starts the shell with the integration scripts loaded, when the shell has them and they are
 /// installed beside the executable or in the data folder.
 fn inject_shell_integration(spawn: &mut terminus_pty::SpawnOptions) {
-    use crate::shell_integration::{detect, injection, source_dir};
+    use crate::shell_integration::{apply_injection, detect, source_dir};
     let Some(dir) = source_dir() else { return };
-    if let Some(inj) = injection(detect(&spawn.program), &dir, &spawn.args) {
-        spawn.args = inj.args;
-        spawn.env.extend(inj.env);
-    }
+    apply_injection(spawn, detect(&spawn.program), &dir);
 }
 
 /// Splits a command line into words, honouring double quotes.

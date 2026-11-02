@@ -33,6 +33,10 @@ pub fn focus_of(ws: &WinState, app: &App) -> Option<PaneId> {
 /// Handles one raw key: bindings first, then the terminal.
 pub fn raw_key(ws: &mut WinState, app: &mut App, bound: &[Bound], raw: &RawKey) {
     for ev in ws.normalizer.feed(raw) {
+        if ws.overlay.is_some() {
+            overlay_key(ws, app, &ev);
+            continue;
+        }
         if ev.kind != terminus_input::KeyEventKind::Release && binding(ws, app, bound, &ev) {
             continue;
         }
@@ -40,6 +44,23 @@ pub fn raw_key(ws: &mut WinState, app: &mut App, bound: &[Bound], raw: &RawKey) 
             send_key(app, pane, &ev);
         }
     }
+}
+
+/// Gives a key to the open palette or search bar; releases are ignored.
+fn overlay_key(ws: &mut WinState, app: &mut App, ev: &KeyEvent) {
+    if ev.kind == terminus_input::KeyEventKind::Release || matches!(ev.key, Key::Named(n) if n.is_modifier_key()) {
+        return;
+    }
+    let Some(ov) = ws.overlay.as_mut() else { return };
+    if crate::gui::overlay::key(ov, app, ev) == crate::gui::overlay::After::Close {
+        // Closing the search bar ends the highlighting of its matches.
+        if let Some(crate::gui::overlay::Overlay::Search(s)) = ws.overlay.take()
+            && let Some(p) = app.panes.get_mut(&s.pane)
+        {
+            p.search = None;
+        }
+    }
+    ws.window.request_redraw();
 }
 
 /// Checks a press against the bindings. Returns true when the key was taken (it ran an action or
@@ -66,6 +87,7 @@ fn binding(ws: &mut WinState, app: &mut App, bound: &[Bound], ev: &KeyEvent) -> 
 
 /// Encodes a key for the pane's keyboard mode and writes it, returning the view to the bottom.
 pub fn send_key(app: &mut App, pane: PaneId, ev: &KeyEvent) {
+    crate::gui::window::BLINK_RESET.store(true, std::sync::atomic::Ordering::Relaxed);
     let Some(p) = app.panes.get_mut(&pane) else { return };
     let modes = inspect::keyboard_modes(&p.session.lock());
     let mut out = Vec::new();
@@ -159,10 +181,76 @@ fn report(
     true
 }
 
+/// A file dropped on the window: its path is pasted into the focused pane, quoted for the shell
+/// when it has spaces, followed by a space.
+pub fn dropped_file(ws: &mut WinState, app: &mut App, path: &std::path::Path) {
+    let Some(pane) = focus_of(ws, app) else { return };
+    let text = quote_path(&path.to_string_lossy());
+    let _ = view::paste_text(app, pane, &format!("{text} "));
+}
+
+/// Quotes a path for the shell when it needs it: double quotes on Windows, single quotes elsewhere.
+pub fn quote_path(p: &str) -> String {
+    if !p.contains([' ', '\'', '"', '&', '(', ')', ';', '$']) {
+        return p.to_string();
+    }
+    if cfg!(windows) { format!("\"{p}\"") } else { format!("'{}'", p.replace('\'', "'\\''")) }
+}
+
+/// Moves the split being dragged by the pointer's movement since the last move, as a share of the
+/// window. Returns true while a divider is being dragged.
+fn drag_divider(ws: &mut WinState, app: &mut App, x: f64, y: f64) -> bool {
+    let Some((pane, axis, (lx, ly))) = ws.mouse.divider else { return false };
+    let size = ws.window.inner_size();
+    let delta = match axis {
+        crate::model::Axis::Horizontal => (x - lx) / size.width.max(1) as f64,
+        crate::model::Axis::Vertical => (y - ly) / size.height.max(1) as f64,
+    };
+    if delta.abs() < 0.002 {
+        return true;
+    }
+    if let Some(at) = app.model.locate(pane) {
+        app.model.windows[at.win].tabs[at.tab].root.resize(pane, axis, delta as f32);
+        app.effects.push(crate::app::Effect::Relayout(ws.id));
+    }
+    ws.mouse.divider = Some((pane, axis, (x, y)));
+    true
+}
+
+/// Underlines the link under the pointer: an OSC 8 hyperlink always, a URL or path in the text
+/// while Ctrl is held (Ctrl+click opens it).
+fn update_hover(ws: &mut WinState, app: &App, pane: PaneId, row: u16, col: u16) {
+    let Some(p) = app.panes.get(&pane) else { return };
+    let span = {
+        let t = p.session.lock();
+        let y = t.screen().pages.active_y(0).saturating_sub(p.scroll) + row as usize;
+        crate::links::span_at(&t, y, col, ws.mods.control_key()).map(|(rows, _)| (pane, rows))
+    };
+    set_hover(ws, span);
+}
+
+/// Sets the hovered link, redrawing when it changed.
+fn set_hover(ws: &mut WinState, hover: Option<crate::links::Hover>) {
+    if ws.hover != hover {
+        ws.hover = hover;
+        ws.window.request_redraw();
+    }
+}
+
 /// The pointer moved: extend a selection being dragged, or report motion.
 pub fn cursor_moved(ws: &mut WinState, app: &mut App, x: f64, y: f64) {
     ws.mouse.pos = (x, y);
-    let Some((pane, col, row, px)) = ws.pane_at(x, y) else { return };
+    if drag_divider(ws, app, x, y) {
+        return;
+    }
+    let Some((pane, col, row, px)) = ws.pane_at(x, y) else {
+        set_hover(ws, None);
+        return;
+    };
+    update_hover(ws, app, pane, row, col);
+    if app.config.mouse.focus_follows_mouse && ws.mouse.selecting.is_none() && focus_of(ws, app) != Some(pane) {
+        let _ = crate::actions::focus_pane(app, pane);
+    }
     if let Some(sel_pane) = ws.mouse.selecting {
         if sel_pane == pane {
             let ay = absolute_row(app, pane, row);
@@ -190,8 +278,26 @@ pub fn cursor_moved(ws: &mut WinState, app: &mut App, x: f64, y: f64) {
 pub fn button(ws: &mut WinState, app: &mut App, state: ElementState, b: winit::event::MouseButton) {
     let (x, y) = ws.mouse.pos;
     if state == ElementState::Pressed && y < ws.tab_bar_h as f64 {
+        ws.mouse.tab_drag = tab_index_at(ws, x);
         click_tab(ws, app, x);
         return;
+    }
+    if state == ElementState::Released
+        && let Some(from) = ws.mouse.tab_drag.take()
+    {
+        drop_tab(ws, app, from, x);
+        return;
+    }
+    if b == winit::event::MouseButton::Left {
+        if state == ElementState::Released && ws.mouse.divider.take().is_some() {
+            return;
+        }
+        if state == ElementState::Pressed
+            && let Some((pane, axis)) = ws.divider_at(x, y)
+        {
+            ws.mouse.divider = Some((pane, axis, (x, y)));
+            return;
+        }
     }
     let Some((pane, col, row, px)) = ws.pane_at(x, y) else { return };
     let (mb, bit) = match b {
@@ -203,6 +309,9 @@ pub fn button(ws: &mut WinState, app: &mut App, state: ElementState, b: winit::e
         winit::event::MouseButton::Other(_) => return,
     };
     let pressed = state == ElementState::Pressed;
+    if pressed && mb == MouseButton::Left && ws.mods.control_key() && open_link(app, pane, row, col) {
+        return;
+    }
     if pressed {
         ws.mouse.buttons |= bit;
         if focus_of(ws, app) != Some(pane) {
@@ -219,11 +328,25 @@ pub fn button(ws: &mut WinState, app: &mut App, state: ElementState, b: winit::e
         (MouseButton::Left, true) => start_selection(ws, app, pane, col, row),
         (MouseButton::Left, false) => finish_selection(ws, app),
         (MouseButton::Right, true) => right_click(app, pane),
-        (MouseButton::Middle, true) if !cfg!(windows) => {
-            let _ = app.run_action(&terminus_protocol::ActionCall { action: "paste".into(), args: Map::new() });
-        }
+        (MouseButton::Middle, true) if !cfg!(windows) => middle_click_paste(app, pane),
         _ => {}
     }
+}
+
+/// Opens the link under a Ctrl+click: an OSC 8 hyperlink, a URL or a path. Returns false when the
+/// cell has no link, so the click goes on to the program or the selection.
+fn open_link(app: &App, pane: PaneId, row: u16, col: u16) -> bool {
+    let Some(p) = app.panes.get(&pane) else { return false };
+    let link = {
+        let t = p.session.lock();
+        let y = t.screen().pages.active_y(0).saturating_sub(p.scroll) + row as usize;
+        crate::links::link_at(&t, y, col)
+    };
+    let Some(link) = link else { return false };
+    let cwd = p.cwd.as_deref().and_then(crate::app::cwd_path).or_else(|| p.session.start_cwd().cloned());
+    let opener = app.config.openers.path_command(crate::platform::on_path("unluminous"));
+    let opener = if matches!(link, crate::links::Link::Url(_)) { String::new() } else { opener };
+    crate::links::open(&link, &opener, cwd.as_deref()).is_some()
 }
 
 /// Starts a selection: one click by cell, two by word, three by line, alt for a rectangle.
@@ -268,7 +391,26 @@ fn finish_selection(ws: &mut WinState, app: &mut App) {
     {
         app.clipboard.set(&text);
     }
+    if cfg!(target_os = "linux")
+        && let Some(text) = view::selected_text(app, pane)
+    {
+        crate::platform::set_primary_selection(&text);
+    }
     ws.window.request_redraw();
+}
+
+/// Middle click pastes the primary selection on Linux, which holds the text most recently
+/// selected in any program, and the clipboard on other platforms.
+fn middle_click_paste(app: &mut App, pane: PaneId) {
+    let primary = if cfg!(target_os = "linux") { crate::platform::primary_selection() } else { None };
+    match primary.filter(|t| !t.is_empty()) {
+        Some(text) => {
+            let _ = view::paste_text(app, pane, &text);
+        }
+        None => {
+            let _ = app.run_action(&terminus_protocol::ActionCall { action: "paste".into(), args: Map::new() });
+        }
+    }
 }
 
 /// Right click copies the selection when there is one, and pastes otherwise.
@@ -284,12 +426,27 @@ fn right_click(app: &mut App, pane: PaneId) {
 
 /// A click in the tab bar switches to the tab under it.
 fn click_tab(ws: &mut WinState, app: &mut App, x: f64) {
-    let (cw, _) = ws.cell();
-    let col = (x / cw as f64) as u16;
-    let Some(i) = ws.tab_spans.iter().position(|s| col >= s.start && col < s.end) else { return };
+    let Some(i) = tab_index_at(ws, x) else { return };
     let Some(wi) = app.model.window_index(ws.id) else { return };
     let focus = app.model.windows[wi].tabs[i].focus;
     let _ = crate::actions::focus_pane(app, focus);
+}
+
+/// The tab under a window x in the tab bar.
+fn tab_index_at(ws: &WinState, x: f64) -> Option<usize> {
+    let (cw, _) = ws.cell();
+    let col = (x / cw as f64) as u16;
+    ws.tab_spans.iter().position(|s| col >= s.start && col < s.end)
+}
+
+/// Ends a tab drag: the tab moves to the place under the pointer (the end when past the last tab).
+fn drop_tab(ws: &mut WinState, app: &mut App, from: usize, x: f64) {
+    let Some(wi) = app.model.window_index(ws.id) else { return };
+    let n = app.model.windows[wi].tabs.len();
+    let to = tab_index_at(ws, x).unwrap_or(n - 1);
+    if crate::model::move_tab(&mut app.model.windows[wi], from, to) {
+        app.effects.push(crate::app::Effect::Relayout(ws.id));
+    }
 }
 
 /// The wheel: reports to a tracking program, arrow keys on the alternate screen (mode 1007), and
@@ -325,4 +482,21 @@ pub fn wheel(ws: &mut WinState, app: &mut App, delta: MouseScrollDelta) {
         return;
     }
     view::scroll_by(app, pane, lines as isize);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::quote_path;
+
+    /// Paths with spaces are quoted for the shell; plain paths are left alone.
+    #[test]
+    fn dropped_paths_are_quoted_when_needed() {
+        assert_eq!(quote_path("notes.txt"), "notes.txt");
+        let quoted = quote_path("my notes.txt");
+        if cfg!(windows) {
+            assert_eq!(quoted, "\"my notes.txt\"");
+        } else {
+            assert_eq!(quoted, "'my notes.txt'");
+        }
+    }
 }

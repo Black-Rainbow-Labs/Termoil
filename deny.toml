@@ -2,6 +2,16 @@
 # MIT, Apache 2.0, BSD, Zlib, Unicode, and OFL for fonts.
 [graph]
 all-features = false
+# arboard (the clipboard on macOS and Linux) is a dependency of the non Windows targets only. Its
+# Windows only dependency clipboard-win is BSL 1.0. cargo deny keeps a crate when any listed target
+# reaches the dependency edge that names it, so the Windows target is left out of this list and is
+# checked on its own with `cargo deny --target x86_64-pc-windows-msvc check licenses`, which passes.
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+    "wasm32-unknown-unknown",
+]
 
 [licenses]
 allow = [

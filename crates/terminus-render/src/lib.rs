@@ -13,6 +13,8 @@ mod draw;
 mod frame;
 pub mod golden;
 mod gpu;
+mod images;
+mod placeholder;
 mod readback;
 mod state;
 
@@ -22,9 +24,12 @@ pub use build::{BuildOptions, FrameBuilder, build_frame, contrast};
 pub use cpu::VelloCpuRenderer;
 pub use draw::Layer;
 pub use frame::{
-    BgSpan, CursorFrame, CursorStyle, Decoration, DecorationKind, Frame, GlyphPos, GlyphRun, Rgba, RowFrame, SpriteCell,
+    Area, BgSpan, CursorFrame, CursorStyle, Decoration, DecorationKind, Frame, GlyphPos, GlyphRun, ImageRecord, Rgba,
+    RowFrame, SpriteCell,
 };
 pub use gpu::{GpuContext, VelloGpuRenderer, request_device};
+pub use images::{ImageData, ImagePlacement, PxRect, Z_BELOW_BACKGROUND, drawn_size};
+pub use placeholder::{PLACEHOLDER, diacritic_for, diacritic_number};
 pub use state::{CellState, CellText, CellWidth, Colors, CursorState, RenderState, RowState};
 
 /// An RGBA8 image (straight alpha), what [`Renderer::read_pixels`] returns.

@@ -81,7 +81,27 @@ pub fn list(app: &App) -> Value {
 
 /// A tab's title: the one set by `set-title`, or its focused pane's.
 pub fn tab_title(app: &App, t: &crate::model::Tab) -> String {
-    t.title.clone().or_else(|| app.panes.get(&t.focus).map(|p| p.title.clone())).unwrap_or_default()
+    if let Some(title) = &t.title {
+        return title.clone();
+    }
+    let Some(p) = app.panes.get(&t.focus) else { return String::new() };
+    pane_title(&p.title, p.cwd.as_deref(), app.config.window.title_follows_cwd)
+}
+
+/// A pane's title as shown. A program that sets only its own executable path as the title (pwsh and
+/// cmd under ConPTY do) shows the working directory instead when the configuration asks for it and
+/// the shell reported one, and otherwise the program's name.
+pub fn pane_title(title: &str, cwd: Option<&str>, follow_cwd: bool) -> String {
+    let lower = title.to_ascii_lowercase();
+    let is_exe_path = (title.contains('\\') || title.contains('/')) && lower.ends_with(".exe");
+    if !is_exe_path {
+        return title.to_string();
+    }
+    if follow_cwd && let Some(dir) = cwd.and_then(crate::app::cwd_path) {
+        return dir.to_string_lossy().into_owned();
+    }
+    let name = title.rsplit(['\\', '/']).next().unwrap_or(title);
+    name.strip_suffix(".exe").or_else(|| name.strip_suffix(".EXE")).unwrap_or(name).to_string()
 }
 
 /// One pane in the `list` output.
@@ -378,4 +398,21 @@ pub fn open_config(app: &mut App) -> Result<Value, ActionError> {
     }
     app.effects.push(Effect::OpenPath(path.clone()));
     Ok(json!({ "path": path }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::pane_title;
+
+    /// An executable path as the title becomes the working directory, or the program's name.
+    #[test]
+    fn exe_path_titles_are_shortened() {
+        let pwsh = r"C:\Program Files\WindowsApps\Microsoft.PowerShell_7.6.9.0_x64__8wekyb3d8bbwe\pwsh.exe";
+        assert_eq!(pane_title(pwsh, None, true), "pwsh");
+        assert_eq!(pane_title(r"C:\Windows\SYSTEM32\cmd.exe", None, false), "cmd");
+        let temp = std::env::temp_dir();
+        let url = format!("file://host/{}", temp.to_string_lossy().replace('\\', "/"));
+        assert_eq!(pane_title(pwsh, Some(&url), true), crate::app::cwd_path(&url).unwrap().to_string_lossy());
+        assert_eq!(pane_title("vim notes.txt", None, true), "vim notes.txt");
+    }
 }

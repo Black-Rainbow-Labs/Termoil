@@ -15,7 +15,8 @@ pub fn dispatch(app: &mut App, name: &str, args: &Map<String, Value>) -> Outcome
     match name {
         "new-window" | "new-tab" | "split" | "split-right" | "split-down" | "close" => layout_action(app, name, args),
         "focus" | "focus-left" | "focus-right" | "focus-up" | "focus-down" | "next-tab" | "previous-tab"
-        | "zoom-pane" => focus_action(app, name, args),
+        | "zoom-pane" | "resize-split" => focus_action(app, name, args),
+        "move-tab-to-window" => done(app.arg_pane(args).and_then(|p| move_tab_to_window(app, p))),
         "send-text" | "send-key" | "screen" | "scrollback" | "wait-prompt" | "resize" | "set-title"
         | "reset-terminal" => pane_io_action(app, name, args),
         "list"
@@ -33,6 +34,23 @@ pub fn dispatch(app: &mut App, name: &str, args: &Map<String, Value>) -> Outcome
             crate::view::scroll_action(app, name, args)
         }
         "search" | "search-next" | "search-previous" => crate::view::search_action(app, name, args),
+        "set-theme" => done(
+            req_str(args, "name")
+                .map(String::from)
+                .and_then(|n| crate::themes::set(app, &n).map(|_| json!({ "theme": n })).map_err(ActionError::Failed)),
+        ),
+        "choose-theme" => done(match app.model.focused_index() {
+            Some(wi) => {
+                app.effects.push(Effect::ShowThemes(app.model.windows[wi].id));
+                Ok(Value::Null)
+            }
+            None => Err(ActionError::NotFound("no window".into())),
+        }),
+        "show-hints" => done(app.arg_pane(args).and_then(|p| {
+            let win = app.window_of(p).ok_or_else(|| ActionError::NotFound(format!("pane {p} has no window")))?;
+            app.effects.push(Effect::ShowHints(win, p));
+            Ok(Value::Null)
+        })),
         "increase-font-size" | "decrease-font-size" | "reset-font-size" | "toggle-fullscreen" | "command-palette" => {
             window_action(app, name)
         }
@@ -171,9 +189,48 @@ fn focus_action(app: &mut App, name: &str, args: &Map<String, Value>) -> Outcome
     done(match name {
         "next-tab" | "previous-tab" => cycle_tab(app, name == "next-tab"),
         "zoom-pane" => zoom(app),
+        "resize-split" => app.arg_pane(args).and_then(|p| resize_split(app, p, args)),
         _ if dir.is_some() => app.arg_pane(args).and_then(|p| focus_dir(app, p, dir.unwrap_or(Dir::Right))),
         _ => app.arg_pane(args).and_then(|p| focus_pane(app, p)),
     })
+}
+
+/// Moves the divider of the nearest split beside a pane: right and down move it right or down,
+/// left and up move it back, by `percent` of the split (5 by default).
+fn resize_split(app: &mut App, pane: PaneId, args: &Map<String, Value>) -> Result<Value, ActionError> {
+    let dir = req_str(args, "direction").and_then(|d| {
+        Dir::parse(d).ok_or_else(|| ActionError::BadArgs(format!("direction '{d}' is not left, right, up or down")))
+    })?;
+    let percent = arg_int(args, "percent")?.unwrap_or(5).clamp(1, 80) as f32 / 100.0;
+    let (axis, delta) = match dir {
+        Dir::Left => (crate::model::Axis::Horizontal, -percent),
+        Dir::Right => (crate::model::Axis::Horizontal, percent),
+        Dir::Up => (crate::model::Axis::Vertical, -percent),
+        Dir::Down => (crate::model::Axis::Vertical, percent),
+    };
+    let at = app.model.locate(pane).ok_or_else(|| ActionError::NotFound(format!("pane {pane}")))?;
+    let moved = app.model.windows[at.win].tabs[at.tab].root.resize(pane, axis, delta);
+    let win = app.model.windows[at.win].id;
+    app.effects.push(Effect::Relayout(win));
+    Ok(json!({ "moved": moved }))
+}
+
+/// Moves the tab holding a pane out of its window into a new window. A window's only tab stays.
+fn move_tab_to_window(app: &mut App, pane: PaneId) -> Result<Value, ActionError> {
+    let at = app.model.locate(pane).ok_or_else(|| ActionError::NotFound(format!("pane {pane}")))?;
+    let w = &mut app.model.windows[at.win];
+    if w.tabs.len() == 1 {
+        return Ok(json!({ "window": w.id, "moved": false }));
+    }
+    let tab = w.tabs.remove(at.tab);
+    w.active = w.active.min(w.tabs.len() - 1);
+    let old = w.id;
+    let id = app.model.next_id();
+    app.model.windows.push(crate::model::Window { id, tabs: vec![tab], active: 0 });
+    app.model.focused = Some(id);
+    app.effects.push(Effect::Relayout(old));
+    app.effects.push(Effect::OpenWindow(id));
+    Ok(json!({ "window": id, "moved": true }))
 }
 
 /// Focuses a pane: its window, its tab, and the pane in the tab.

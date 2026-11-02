@@ -220,8 +220,23 @@ pub fn default_keybindings() -> Vec<Binding> {
         ("f11", "toggle-fullscreen"),
         ("ctrl+shift+n", "new-window"),
         ("ctrl+shift+k", "clear-scrollback"),
+        ("ctrl+shift+h", "show-hints"),
     ];
-    table.iter().map(|(k, a)| Binding::new(k, a)).collect()
+    let mut out: Vec<Binding> = table.iter().map(|(k, a)| Binding::new(k, a)).collect();
+    out.extend(resize_bindings("ctrl+shift+alt"));
+    out
+}
+
+/// Bindings that move a split's divider with the arrow keys and the given modifiers.
+fn resize_bindings(mods: &str) -> Vec<Binding> {
+    ["left", "right", "up", "down"]
+        .iter()
+        .map(|dir| {
+            let mut b = Binding::new(&format!("{mods}+{dir}"), "resize-split");
+            b.args.insert("direction".into(), toml::Value::String((*dir).into()));
+            b
+        })
+        .collect()
 }
 
 /// The default bindings on macOS: the same actions with Cmd in place of Ctrl+Shift where the two would
@@ -256,7 +271,10 @@ pub fn default_keybindings_macos() -> Vec<Binding> {
         ("cmd+n", "new-window"),
         ("cmd+k", "clear-scrollback"),
     ];
-    table.iter().map(|(k, a)| Binding::new(k, a)).collect()
+    let mut out: Vec<Binding> = table.iter().map(|(k, a)| Binding::new(k, a)).collect();
+    out.extend(resize_bindings("cmd+ctrl"));
+    out.push(Binding::new("cmd+shift+h", "show-hints"));
+    out
 }
 
 /// The default bindings for a platform.

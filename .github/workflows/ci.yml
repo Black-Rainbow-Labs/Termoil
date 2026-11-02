@@ -16,6 +16,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Linux libraries for the window and font crates
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev libfreetype-dev libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev pkg-config
       - run: rustup show
       - name: Format
         run: cargo fmt --all -- --check
@@ -24,6 +27,11 @@ jobs:
       - name: Licences (D1)
         uses: EmbarkStudios/cargo-deny-action@v2
         with:
+          command: check licenses
+      - name: Licences on Windows (D1; deny.toml lists the other targets, see its comment)
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          arguments: --target x86_64-pc-windows-msvc
           command: check licenses
 
   test:
@@ -34,6 +42,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - name: Linux libraries for the window and font crates
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev libfreetype-dev libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev pkg-config
       - run: rustup show
       - name: Fetch the bundled ConPTY pair (Windows)
         if: runner.os == 'Windows'
@@ -53,6 +64,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Linux libraries for the window and font crates
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev libfreetype-dev libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev pkg-config
       - run: rustup toolchain install nightly --profile minimal
       - run: cargo install cargo-fuzz --locked
       - name: Every fuzz target for 60 seconds
@@ -79,6 +93,9 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
+      - name: Linux libraries for the window and font crates
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev libfreetype-dev libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev pkg-config
       - run: rustup show
       - run: cargo run --release -p terminus-bench -- throughput 1
       - run: cargo run --release -p terminus-bench -- alloc

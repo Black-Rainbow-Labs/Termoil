@@ -16,7 +16,7 @@
     6. Compiles the Inno Setup installer into installer/dist/.
     7. Installs it silently on this machine and checks that the installed `terminus.exe +version`
        prints the new version.
-    8. Builds the macOS and Linux packages (not built until M4).
+    8. Builds the Linux AppImage and .deb in WSL (the macOS dmg is not built until M4).
     9. Commits Cargo.toml and Cargo.lock as `Release v<version>`, tags `v<version>`, and pushes the
        branch and the tag.
    10. Creates the GitHub release with the installers attached, then downloads each asset back and
@@ -314,11 +314,41 @@ function Build-MacosPackage {
 
 <#
 .SYNOPSIS
-  Builds the Linux AppImage and .deb. Not built until M4.
+  Turns a Windows path on a drive into the path WSL sees, such as C:\a\b into /mnt/c/a/b.
+.PARAMETER Path
+  The Windows path.
 #>
-function Build-LinuxPackages {
-    Write-Host 'Linux AppImage and .deb: not built until M4, skipping.'
-    return @()
+function ConvertTo-WslPath([string] $Path) {
+    $full = [System.IO.Path]::GetFullPath($Path)
+    return '/mnt/' + $full.Substring(0, 1).ToLower() + $full.Substring(2).Replace('\', '/')
+}
+
+<#
+.SYNOPSIS
+  Builds the Linux AppImage and .deb in WSL with installer/linux/build.sh and returns their paths.
+.DESCRIPTION
+  The script runs under wsl.exe from the Windows checkout (as /mnt/c/...), builds the release
+  binaries with the Linux toolchain into a target folder on the Linux file system, and writes both
+  packages to installer/dist. Without WSL the step is skipped with a message and returns nothing.
+.PARAMETER Version
+  The version being released, which names the two packages.
+.PARAMETER BuildDate
+  The date text the About box shows, passed to the build as TERMINUS_BUILD_DATE.
+#>
+function Build-LinuxPackages([string] $Version, [string] $BuildDate) {
+    if (-not (Get-Command wsl.exe -ErrorAction SilentlyContinue)) {
+        Write-Host 'Linux AppImage and .deb: wsl.exe is not available, skipping.'
+        return @()
+    }
+    Write-Step 'Building the Linux AppImage and .deb in WSL'
+    $script = ConvertTo-WslPath (Join-Path $Repo 'installer/linux/build.sh')
+    $env:TERMINUS_BUILD_DATE = $BuildDate
+    $env:TERMINUS_VERSION = $Version
+    $env:WSLENV = 'TERMINUS_BUILD_DATE:TERMINUS_VERSION'
+    Invoke-Checked 'installer/linux/build.sh' { & wsl.exe -e bash $script }
+    $packages = @("terminus-$Version-x86_64.AppImage", "terminus_${Version}_amd64.deb") | ForEach-Object { Join-Path $DistDir $_ }
+    foreach ($p in $packages) { if (-not (Test-Path -LiteralPath $p)) { throw "The Linux build did not produce $p." } }
+    return $packages
 }
 
 <#
@@ -412,7 +442,7 @@ if ($WhatIf) {
     Write-Host '    4. cargo build --release -p terminus-cli -p terminus-app'
     Write-Host '    5. fetch ConPTY if missing, compile installer/windows/terminus.iss with ISCC'
     Write-Host "    6. $(if ($SkipInstall) { 'skip the install on this machine' } else { "install silently into $InstallDir and check terminus.exe +version prints $next" })"
-    Write-Host '    7. macOS dmg and Linux AppImage/.deb: not built until M4'
+    Write-Host '    7. macOS dmg: not built until M4; Linux AppImage and .deb: built in WSL by installer/linux/build.sh when wsl.exe exists'
     Write-Host "    8. commit 'Release v$next', tag v$next, push the branch and the tag"
     Write-Host "    9. gh release create v$next with $(Join-Path $DistDir "TerminusSetup-$next-x64.exe") ($kind)"
     Write-Host '   10. download each asset back and compare SHA256 with the local file'
@@ -449,7 +479,7 @@ Build-WindowsBinaries $buildDate
 $installer = Build-WindowsInstaller $next
 if (-not $SkipInstall) { Install-OnThisMachine $installer $next }
 
-$assets = @($installer) + (Build-MacosPackage) + (Build-LinuxPackages)
+$assets = @($installer) + (Build-MacosPackage) + (Build-LinuxPackages $next $buildDate)
 
 Publish-Tag $next
 if ($SkipPublish) { Write-Host "Tagged v$next locally. Skipped the push and GitHub because of -SkipPublish."; exit 0 }

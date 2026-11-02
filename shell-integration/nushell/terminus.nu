@@ -16,7 +16,7 @@ if (($env.TERMINUS_SHELL_INTEGRATION? | default "") == "1") and (($env.__TERMINU
 
     # Before each prompt: D for the command that ended, OSC 7 when the directory changed, then A.
     let pre_prompt = {||
-        let esc = (char escape)
+        let esc = (char -u '1b')
         let bel = (char bel)
         mut out = ""
         if ($env.__TERMINUS_CMD_RAN? | default "") == "1" {
@@ -28,7 +28,7 @@ if (($env.TERMINUS_SHELL_INTEGRATION? | default "") == "1") and (($env.__TERMINU
             let dir = ($env.PWD | str replace --all '\' '/')
             let dir = if ($dir | str starts-with '/') { $dir } else { $"/($dir)" }
             let host = (sys host | get hostname)
-            let encoded = ($dir | url encode --all | str replace --all '%2F' '/' | str replace --all '%3A' ':')
+            let encoded = ($dir | url encode --all | str replace --all '%2F' '/' | str replace --all '%3A' ':' | str replace --all '%2D' '-' | str replace --all '%2E' '.' | str replace --all '%5F' '_' | str replace --all '%7E' '~')
             $out = $"($out)($esc)]7;file://($host)($encoded)($bel)"
         }
         print -n $"($out)($esc)]133;A($bel)"
@@ -37,14 +37,14 @@ if (($env.TERMINUS_SHELL_INTEGRATION? | default "") == "1") and (($env.__TERMINU
     # Before a command runs: OSC 133;C.
     let pre_execution = {||
         $env.__TERMINUS_CMD_RAN = "1"
-        print -n $"(char escape)]133;C(char bel)"
+        print -n $"(char -u '1b')]133;C(char bel)"
     }
 
     # B marks where input starts: it is added to the end of the prompt indicator.
     let old_indicator = ($env.PROMPT_INDICATOR? | default "> ")
     $env.PROMPT_INDICATOR = {||
         let base = if ($old_indicator | describe) == "closure" { do $old_indicator } else { $old_indicator }
-        $"($base)(char escape)]133;B(char bel)"
+        $"($base)(char -u '1b')]133;B(char bel)"
     }
 
     let hooks = ($env.config.hooks? | default {})

@@ -1,16 +1,21 @@
 //! `VelloGpuRenderer`: draws frames with `vello_gpu` on wgpu 30. Renders into an offscreen texture
 //! (tests, the M2 measurement) or, in the app, into a window surface's texture.
 
+use std::collections::HashMap;
 use std::time::Instant;
 
 use terminus_font::FontGrid;
 use vello_common::color::AlphaColor;
 use vello_common::kurbo::{BezPath, Rect};
-use vello_common::peniko::FontData;
-use vello_gpu::{RenderSize, RenderTargetConfig, Resources, Scene};
+use vello_common::peniko::{FontData, ImageSampler};
+use vello_gpu::{
+    Image as PaintImage, ImageSource, RectU16, RenderSize, RenderTargetConfig, Resources, Scene, TextureBindings,
+    TextureId,
+};
 
-use crate::draw::{Canvas, Layer, draw_layers, hint_enabled, skew_transform};
-use crate::frame::{GlyphRun, Rgba};
+use crate::draw::{Canvas, Layer, draw_layers, hint_enabled, image_paint_transform, image_rect, skew_transform};
+use crate::frame::{GlyphRun, ImageRecord, Rgba};
+use crate::images::ImageData;
 use crate::{FrameStats, Image, RenderError, Renderer};
 
 /// Where frames go: an offscreen texture (tests, measurements) or a window's surface.
@@ -33,6 +38,77 @@ pub struct VelloGpuRenderer {
     depth: wgpu::TextureView,
     size: (u16, u16),
     atlas: bool,
+    images: GpuImages,
+}
+
+/// Images uploaded as textures of their own, keyed by image id and generation. vello samples them
+/// through the texture bindings passed with each render.
+#[derive(Default)]
+struct GpuImages {
+    textures: HashMap<(u32, u64), (TextureId, wgpu::Texture)>,
+    bindings: TextureBindings,
+    next_id: u64,
+}
+
+impl GpuImages {
+    /// The texture id of an image, uploading the pixels on first use. None when the image is empty
+    /// or larger than the device's texture size limit.
+    fn texture_for(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, image: &ImageData) -> Option<TextureId> {
+        let key = (image.id, image.generation);
+        if let Some((id, _)) = self.textures.get(&key) {
+            return Some(*id);
+        }
+        let limit = device.limits().max_texture_dimension_2d;
+        let ok = image.width > 0 && image.height > 0 && image.width <= limit && image.height <= limit;
+        if !ok || image.width > u16::MAX as u32 || image.height > u16::MAX as u32 {
+            return None;
+        }
+        if image.rgba.len() != image.width as usize * image.height as usize * 4 {
+            return None;
+        }
+        let texture = upload_image(device, queue, image);
+        self.next_id += 1;
+        let id = TextureId(self.next_id);
+        self.bindings.insert(id, texture.create_view(&wgpu::TextureViewDescriptor::default()));
+        self.textures.insert(key, (id, texture));
+        Some(id)
+    }
+
+    /// Drops the textures of images the terminal no longer holds.
+    fn retain(&mut self, live: &[(u32, u64)]) {
+        let bindings = &mut self.bindings;
+        self.textures.retain(|k, (id, _)| {
+            let keep = live.contains(k);
+            if !keep {
+                bindings.remove(*id);
+            }
+            keep
+        });
+    }
+}
+
+/// Creates a texture holding the image premultiplied, the form vello blends.
+fn upload_image(device: &wgpu::Device, queue: &wgpu::Queue, image: &ImageData) -> wgpu::Texture {
+    let size = wgpu::Extent3d { width: image.width, height: image.height, depth_or_array_layers: 1 };
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("terminus image"),
+        size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    let mut pixels = image.rgba.as_ref().clone();
+    vello_common::pixmap::premultiply_rgba8(&mut pixels);
+    let layout = wgpu::TexelCopyBufferLayout {
+        offset: 0,
+        bytes_per_row: Some(image.width * 4),
+        rows_per_image: Some(image.height),
+    };
+    queue.write_texture(texture.as_image_copy(), &pixels, layout, size);
+    texture
 }
 
 /// A GPU device the windows share: the instance, the adapter and its device and queue.
@@ -221,7 +297,13 @@ impl VelloGpuRenderer {
             depth,
             size: (w, h),
             atlas,
+            images: GpuImages::default(),
         }
+    }
+
+    /// How many image textures the renderer holds (for tests).
+    pub fn cached_images(&self) -> usize {
+        self.images.textures.len()
     }
 
     /// The adapter the renderer runs on.
@@ -250,7 +332,7 @@ impl VelloGpuRenderer {
                 &size,
                 view,
                 Some(&self.depth),
-                &vello_gpu::TextureBindings::new(),
+                &self.images.bindings,
                 init,
             )
             .map_err(|e| RenderError::Gpu(format!("{e:?}")))?;
@@ -296,6 +378,9 @@ struct GpuCanvas<'a> {
     scene: &'a mut Scene,
     resources: &'a mut Resources,
     atlas: bool,
+    images: &'a mut GpuImages,
+    device: &'a wgpu::Device,
+    queue: &'a wgpu::Queue,
 }
 
 impl Canvas for GpuCanvas<'_> {
@@ -337,6 +422,23 @@ impl Canvas for GpuCanvas<'_> {
     fn transform(&mut self, t: vello_common::kurbo::Affine) {
         self.scene.set_transform(t);
     }
+
+    /// Fills the destination rectangle with the image's texture, uploading it on first use.
+    fn image(&mut self, rec: &ImageRecord) {
+        let Some(id) = self.images.texture_for(self.device, self.queue, &rec.image) else { return };
+        let region = RectU16::new(0, 0, rec.image.width as u16, rec.image.height as u16);
+        let image =
+            PaintImage { image: ImageSource::external_texture(id, region, true), sampler: ImageSampler::default() };
+        self.scene.set_paint(image);
+        self.scene.set_paint_transform(image_paint_transform(rec));
+        self.scene.fill_rect(&image_rect(rec));
+        self.scene.reset_paint_transform();
+    }
+
+    /// Drops the textures of images the terminal no longer holds.
+    fn retain_images(&mut self, live: &[(u32, u64)]) {
+        self.images.retain(live);
+    }
 }
 
 impl Renderer for VelloGpuRenderer {
@@ -365,7 +467,14 @@ impl Renderer for VelloGpuRenderer {
         let start = Instant::now();
         self.scene.reset();
         {
-            let mut canvas = GpuCanvas { scene: &mut self.scene, resources: &mut self.resources, atlas: self.atlas };
+            let mut canvas = GpuCanvas {
+                scene: &mut self.scene,
+                resources: &mut self.resources,
+                atlas: self.atlas,
+                images: &mut self.images,
+                device: &self.device,
+                queue: &self.queue,
+            };
             draw_layers(&mut canvas, (self.size.0.into(), self.size.1.into()), background, layers, grid);
         }
         let encode = start.elapsed();

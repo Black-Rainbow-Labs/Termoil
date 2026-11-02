@@ -64,6 +64,8 @@ fn bench_setup(args: &mut Args) -> Option<LatencyBench> {
 /// Entry point.
 fn main() -> ExitCode {
     terminus_app::gui::mark_start();
+    terminus_app::platform::set_app_id();
+    terminus_app::crash::install();
     let mut args = match parse_args() {
         Ok(a) => a,
         Err(e) => {
