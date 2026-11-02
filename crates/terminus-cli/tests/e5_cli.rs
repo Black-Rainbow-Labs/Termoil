@@ -54,18 +54,27 @@ impl Instance {
     /// Starts the instance with a config that runs a fast shell with shell integration.
     fn start(tag: &str) -> Instance {
         let dir = std::env::temp_dir().join(format!("terminus-e5-{tag}-{}", std::process::id()));
+        Instance::start_in(dir, tag, config_text(1_000_000))
+    }
+
+    /// Starts an instance in `dir` (kept if it exists, so a second instance can reuse the data folder)
+    /// with the given configuration text.
+    fn start_in(dir: PathBuf, tag: &str, config_file: String) -> Instance {
         std::fs::create_dir_all(&dir).unwrap();
         let config = dir.join("config.toml");
-        std::fs::write(&config, config_text(1_000_000)).unwrap();
+        std::fs::write(&config, config_file).unwrap();
         let socket = if cfg!(windows) {
             format!(r"\\.\pipe\terminus-e5-{tag}-{}", std::process::id())
         } else {
-            dir.join("t.sock").to_string_lossy().into_owned()
+            dir.join(format!("t{}.sock", std::time::UNIX_EPOCH.elapsed().unwrap().as_nanos()))
+                .to_string_lossy()
+                .into_owned()
         };
         let child = Command::new(gui_exe())
             .arg("--headless")
             .env("TERMINUS_SOCKET", &socket)
             .env("TERMINUS_CONFIG", &config)
+            .env("TERMINUS_DATA_DIR", dir.join("data"))
             .spawn()
             .expect("start terminus-gui");
         let inst = Instance { child, socket, config, dir };
@@ -171,6 +180,7 @@ fn run_action_args(name: &str, pane: u64) -> Value {
         "wait-prompt" => json!({ "pane": pane, "timeout": 20 }),
         "search" => json!({ "pane": pane, "pattern": "E5" }),
         "install-shell-integration" => json!({ "shells": "bash", "dry-run": true }),
+        "save-session" => json!({}),
         "new-window"
         | "new-tab"
         | "show-config"
@@ -265,6 +275,12 @@ fn more_commands(inst: &Instance, p2: &str, covered: &mut BTreeSet<String>) {
     assert!(std::fs::read_to_string(&inst.config).unwrap().contains("theme = \"Terminus Light\""));
     assert!(inst.ok(&["+show-config"]).contains("Terminus Light"));
     seen("set-theme");
+    let saved = inst.json(&["+save-session"]);
+    seen("save-session");
+    let session_file = inst.dir.join("data").join("session.json");
+    assert_eq!(PathBuf::from(saved["path"].as_str().unwrap()), session_file);
+    let text = std::fs::read_to_string(&session_file).expect("save-session wrote the session file");
+    assert!(serde_json::from_str::<Value>(&text).is_ok_and(|v| v["version"] == 1 && v["windows"].is_array()));
     inst.ok(&["+install-shell-integration", "--shells", "bash", "--dry-run"]);
     seen("install-shell-integration");
     inst.ok(&["+run-action", "--name", "version"]);
@@ -348,6 +364,47 @@ fn e5_every_command_through_the_cli() {
     assert!(out.status.success());
     covered.insert("run-action:quit".into());
     a1_coverage(&covered);
+}
+
+#[test]
+fn e5_session_is_restored_after_a_restart() {
+    let dir = std::env::temp_dir().join(format!("terminus-e5-restore-{}", std::process::id()));
+    let config = format!(
+        "{}
+[session]
+restore = true
+",
+        config_text(1_000_000)
+    );
+    let work = dir.join("work");
+    std::fs::create_dir_all(&work).unwrap();
+    let first = Instance::start_in(dir.clone(), "restore1", config.clone());
+    let p1 = first.json(&["+new-window", "--cwd", work.to_str().unwrap()])["pane"].as_u64().unwrap().to_string();
+    first.ok(&["+wait-prompt", "--pane", &p1, "--timeout", "30"]);
+    first.ok(&["+send-text", "--pane", &p1, "echo RESTORE_ME\\n"]);
+    first.wait_screen(&p1, "RESTORE_ME");
+    first.ok(&["+new-tab", "--name", "kept tab"]);
+    first.ok(&["+split", "--pane", &p1, "--direction", "down"]);
+    first.ok(&["+run-action", "--name", "quit"]);
+    let mut first = first;
+    let _ = first.child.wait();
+    let session_file = dir.join("data").join("session.json");
+    assert!(session_file.is_file(), "quit did not write the session file");
+    let second = Instance::start_in(dir.clone(), "restore2", config);
+    assert!(!session_file.exists(), "the session file was not removed after restoring");
+    let list = second.json(&["+list"]);
+    assert_eq!(pane_ids(&list).len(), 3, "{list}");
+    let panes = pane_ids(&list);
+    let titles: Vec<String> =
+        list["windows"][0]["tabs"].as_array().unwrap().iter().map(|t| t["title"].to_string()).collect();
+    assert!(titles.iter().any(|t| t.contains("kept tab")), "{titles:?}");
+    let pane = panes[0].to_string();
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while !second.ok(&["+scrollback", "--pane", &pane, "--lines", "200"]).contains("RESTORE_ME") {
+        assert!(Instant::now() < deadline, "the restored pane never showed the saved output");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    second.ok(&["+run-action", "--name", "quit"]);
 }
 
 #[test]

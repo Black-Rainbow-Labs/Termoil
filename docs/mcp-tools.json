@@ -470,6 +470,20 @@
         "type": "object"
       },
       "name": "terminus_quick_terminal"
+    },
+    {
+      "description": "Writes the open windows, tabs, splits, working directories and recent output to the session file now.",
+      "inputSchema": {
+        "properties": {
+          "path": {
+            "description": "File to write; the session file in the data folder when omitted.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "terminus_save_session"
     }
   ]
 }

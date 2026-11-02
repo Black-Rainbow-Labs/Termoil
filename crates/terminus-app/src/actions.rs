@@ -27,6 +27,7 @@ pub fn dispatch(app: &mut App, name: &str, args: &Map<String, Value>) -> Outcome
         | "install-shell-integration"
         | "version"
         | "quit"
+        | "save-session"
         | "quick-terminal" => global_action(app, name, args),
         "copy" | "paste" | "select-all" | "clear-selection" => crate::view::clipboard_action(app, name, args),
         "scroll-page-up" | "scroll-page-down" | "scroll-line-up" | "scroll-line-down" | "scroll-to-top"
@@ -405,11 +406,19 @@ fn global_action(app: &mut App, name: &str, args: &Map<String, Value>) -> Outcom
             app.effects.push(Effect::ToggleQuickTerminal);
             Ok(Value::Null)
         }
+        "save-session" => save_session(app, args),
         _ => {
             app.effects.push(Effect::Quit);
             Ok(Value::Null)
         }
     })
+}
+
+/// save-session: writes the open windows to the session file (or to `--path`) now.
+fn save_session(app: &mut App, args: &Map<String, Value>) -> Result<Value, ActionError> {
+    let (path, windows, panes) = crate::restore::save_session(app, arg_str(args, "path").map(PathBuf::from), None)
+        .map_err(ActionError::Failed)?;
+    Ok(json!({ "path": path.to_string_lossy(), "windows": windows, "panes": panes }))
 }
 
 /// run-action: runs another action from its name and a JSON object of arguments.

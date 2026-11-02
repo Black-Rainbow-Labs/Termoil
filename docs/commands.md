@@ -66,6 +66,7 @@ or the IPC socket asked for it.
 | [`command-palette`](#command-palette) | no | no | a window | Opens the command palette, which lists every action with its binding. |
 | [`quick-terminal`](#quick-terminal) | yes | yes | nothing | Shows or hides the quick terminal that slides in from a screen edge. |
 | [`reset-terminal`](#reset-terminal) | no | yes | a pane | Resets the pane's terminal state (RIS), keeping the shell running. |
+| [`save-session`](#save-session) | yes | yes | nothing | Writes the open windows, tabs, splits, working directories and recent output to the session file now. |
 | [`quit`](#quit) | no | yes | nothing | Closes every window and exits. |
 
 ## new-window
@@ -687,6 +688,20 @@ Resets the pane's terminal state (RIS), keeping the shell running.
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
 | `pane` | pane id | no | The pane to act on; the focused pane when omitted. |
+
+## save-session
+
+Writes the open windows, tabs, splits, working directories and recent output to the session file now.
+
+```
+terminus +save-session [--path <path>]
+```
+
+Over IPC: `{"id":1,"action":"save-session","args":{...}}`. MCP tool: `terminus_save_session`.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `path` | path | no | File to write; the session file in the data folder when omitted. |
 
 ## quit
 

@@ -271,6 +271,7 @@ impl Gui {
             Effect::OpenPath(p) => crate::platform::open(&p.to_string_lossy()),
             Effect::ConfigChanged => self.config_changed(),
             Effect::LastWindowClosed | Effect::Quit => {
+                crate::restore::save_on_quit(&self.app, self.quick);
                 for id in self.app.panes.keys().copied().collect::<Vec<_>>() {
                     self.app.close_pane(id);
                 }
@@ -643,6 +644,19 @@ fn bench_after_paint(b: &mut bench::LatencyBench, ws: &WinState, app: &App) {
     b.after_paint(painted, cell, prompt);
 }
 
+/// Records a window's position and size in the app, for session restore. A minimized or hidden
+/// window reports no position or a zero size, and is left as it was.
+fn note_geometry(ws: &WinState, app: &mut App) {
+    let size = ws.window.inner_size();
+    let Ok(pos) = ws.window.outer_position() else { return };
+    if size.width == 0 || size.height == 0 || ws.window.is_minimized() == Some(true) || ws.window.fullscreen().is_some()
+    {
+        return;
+    }
+    let g = crate::restore::WindowGeometry { x: pos.x, y: pos.y, width: size.width, height: size.height };
+    app.geometry.insert(ws.id, g);
+}
+
 /// Sets the window title to the active tab's title.
 fn update_title(ws: &WinState, app: &App) {
     let Some(wi) = app.model.window_index(ws.id) else { return };
@@ -659,6 +673,11 @@ impl ApplicationHandler<UserEvent> for Gui {
     fn resumed(&mut self, el: &ActiveEventLoop) {
         if let Some((cwd, command)) = self.initial.take() {
             phase("resumed");
+            let plain_start = cwd.is_none() && command.is_none() && !crate::app::instance_mode().separate;
+            if plain_start && crate::restore::restore_on_start(&mut self.app) {
+                self.apply_effects(el);
+                return;
+            }
             if let Err(e) = crate::actions::new_window(&mut self.app, cwd.map(PathBuf::from), command.as_deref()) {
                 eprintln!("terminus: {e}");
                 el.exit();
@@ -701,6 +720,9 @@ impl ApplicationHandler<UserEvent> for Gui {
         let app = &mut self.app;
         match ev {
             WindowEvent::CloseRequested => {
+                if app.model.windows.len() == 1 {
+                    crate::restore::save_on_quit(app, None);
+                }
                 let panes: Vec<PaneId> = app
                     .model
                     .windows
@@ -715,8 +737,12 @@ impl ApplicationHandler<UserEvent> for Gui {
             WindowEvent::Resized(size) => {
                 ws.painter.resize(size.width, size.height);
                 ws.relayout(app);
+                note_geometry(ws, app);
             }
-            WindowEvent::Moved(_) => ws.refresh_frame_interval(),
+            WindowEvent::Moved(_) => {
+                ws.refresh_frame_interval();
+                note_geometry(ws, app);
+            }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 ws.scale = scale_factor;
                 ws.refont(app);

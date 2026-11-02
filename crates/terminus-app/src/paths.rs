@@ -22,8 +22,11 @@ pub fn config_dir() -> Option<PathBuf> {
 
 /// The folder for data Terminus keeps (crash reports, logs): `%LOCALAPPDATA%\terminus` on Windows,
 /// `~/Library/Application Support/terminus` on macOS, `$XDG_DATA_HOME/terminus` or
-/// `~/.local/share/terminus` elsewhere.
+/// `~/.local/share/terminus` elsewhere. `TERMINUS_DATA_DIR` replaces it when set (the tests use it).
 pub fn data_dir() -> Option<PathBuf> {
+    if let Some(custom) = env_path("TERMINUS_DATA_DIR") {
+        return Some(custom);
+    }
     let base = if cfg!(windows) {
         env_path("LOCALAPPDATA")
     } else if cfg!(target_os = "macos") {

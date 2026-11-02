@@ -148,6 +148,16 @@ pub struct WinState {
     pub upgrade: Option<crate::gui::paint::GpuUpgrade>,
 }
 
+/// True when a saved window's top left area is on one of the connected monitors, so a window saved
+/// on a monitor that has since been unplugged is not placed where it cannot be reached.
+fn on_a_monitor(el: &ActiveEventLoop, g: &crate::restore::WindowGeometry) -> bool {
+    let (px, py) = (g.x as i64 + 40, g.y as i64 + 40);
+    el.available_monitors().any(|m| {
+        let (p, s) = (m.position(), m.size());
+        px >= p.x as i64 && px < p.x as i64 + s.width as i64 && py >= p.y as i64 && py < p.y as i64 + s.height as i64
+    })
+}
+
 impl WinState {
     /// Creates the window for model window `id`, sized for the configured columns and rows, hidden
     /// until its first frame.
@@ -182,9 +192,15 @@ impl WinState {
         let (w, h) = look::window_size(config, grid.metrics(), &opts);
         match quick {
             Some(edge) => crate::gui::quick::place(&window, edge),
-            None => {
-                let _ = window.request_inner_size(PhysicalSize::new(w, h));
-            }
+            None => match app.geometry.get(&id).filter(|g| on_a_monitor(el, g)) {
+                Some(g) => {
+                    let _ = window.request_inner_size(PhysicalSize::new(g.width.max(100), g.height.max(60)));
+                    window.set_outer_position(winit::dpi::PhysicalPosition::new(g.x, g.y));
+                }
+                None => {
+                    let _ = window.request_inner_size(PhysicalSize::new(w, h));
+                }
+            },
         }
         let (mut painter, upgrade) = if translucent {
             (crate::gui::paint::translucent_painter(&window)?, None)

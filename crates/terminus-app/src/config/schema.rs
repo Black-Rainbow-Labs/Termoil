@@ -101,6 +101,17 @@ pub static SECTIONS: &[Section] = &[
         ],
     },
     Section {
+        path: "session",
+        doc: "Saving the open windows, tabs and splits on exit and reopening them on start.",
+        keys: &[
+            e(
+                "restore",
+                "Save windows, tabs, splits, working directories and recent output on quit, and reopen them on start.",
+            ),
+            e("scrollback_lines", "Lines of each pane's history saved for restore."),
+        ],
+    },
+    Section {
         path: "shell",
         doc: "The program a new pane runs.",
         keys: &[

@@ -144,6 +144,8 @@ pub struct Pane {
     pub cwd: Option<String>,
     /// The progress from OSC 9;4, until the program removes it.
     pub progress: Option<Progress>,
+    /// The command the pane was started with, None for the configured shell. Session restore saves it.
+    pub command: Option<String>,
 }
 
 /// A program's progress (OSC 9;4): state 1 normal, 2 error, 3 indeterminate, 4 paused, and the
@@ -201,6 +203,8 @@ pub struct App {
     pub record_input: bool,
     /// The active key tables, oldest first (`activate-key-table`).
     pub key_tables: Vec<crate::keymap::ActiveTable>,
+    /// Where each window is on screen, kept current by the window layer and read by session restore.
+    pub geometry: HashMap<WinId, crate::restore::WindowGeometry>,
     wakers: WakerFactory,
 }
 
@@ -218,6 +222,7 @@ impl App {
             clipboard,
             record_input: false,
             key_tables: Vec::new(),
+            geometry: HashMap::new(),
             wakers,
         }
     }
@@ -242,8 +247,17 @@ impl App {
     pub fn spawn_pane(
         &mut self, grid: Grid, cwd: Option<PathBuf>, command: Option<&str>,
     ) -> Result<PaneId, ActionError> {
+        self.spawn_pane_with_history(grid, cwd, command, Vec::new())
+    }
+
+    /// Like `spawn_pane`, and feeds `history` (text with escape sequences) into the pane's terminal
+    /// before the program's first output, so saved output shows above the new prompt.
+    pub fn spawn_pane_with_history(
+        &mut self, grid: Grid, cwd: Option<PathBuf>, command: Option<&str>, history: Vec<u8>,
+    ) -> Result<PaneId, ActionError> {
         let id = self.model.next_id();
-        let opts = self.session_options(grid, cwd, command);
+        let mut opts = self.session_options(grid, cwd, command);
+        opts.history = history;
         let waker = (self.wakers)(id);
         let session =
             Session::spawn(opts, waker).map_err(|e| ActionError::Failed(format!("could not start the shell: {e}")))?;
@@ -261,6 +275,7 @@ impl App {
                 title: String::new(),
                 cwd,
                 progress: None,
+                command: command.map(String::from),
             },
         );
         Ok(id)
