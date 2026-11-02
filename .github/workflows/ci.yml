@@ -72,6 +72,20 @@ jobs:
       - name: Every fuzz target for 60 seconds
         run: node tools/fuzz-corpus.cjs run 60
 
+  vttest:
+    # C2: vttest menus 1, 2 and 8 compared with the reviewed goldens in corpus/vttest.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup show
+      - name: vttest against terminus-headless
+        run: bash tools/vttest/run.sh
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: vttest-screens
+          path: _agent_output/vttest/
+
   esctest:
     # C2 starts as a report; it becomes a gate when the ratchet file holds no surprises.
     runs-on: ubuntu-latest

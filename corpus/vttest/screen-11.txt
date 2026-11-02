@@ -1,0 +1,49 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+This line should be the one above the bottom of the screen. Push <RETURN>
+Origin mode test. This line should be at the bottom of the screen.
+--- cells
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+"T" w=1 | "h" w=1 | "i" w=1 | "s" w=1 | " " w=1 | "l" w=1 | "i" w=1 | "n" w=1 | "e" w=1 | " " w=1 | "s" w=1 | "h" w=1 | "o" w=1 | "u" w=1 | "l" w=1 | "d" w=1 | " " w=1 | "b" w=1 | "e" w=1 | " " w=1 | "t" w=1 | "h" w=1 | "e" w=1 | " " w=1 | "o" w=1 | "n" w=1 | "e" w=1 | " " w=1 | "a" w=1 | "b" w=1 | "o" w=1 | "v" w=1 | "e" w=1 | " " w=1 | "t" w=1 | "h" w=1 | "e" w=1 | " " w=1 | "b" w=1 | "o" w=1 | "t" w=1 | "t" w=1 | "o" w=1 | "m" w=1 | " " w=1 | "o" w=1 | "f" w=1 | " " w=1 | "t" w=1 | "h" w=1 | "e" w=1 | " " w=1 | "s" w=1 | "c" w=1 | "r" w=1 | "e" w=1 | "e" w=1 | "n" w=1 | "." w=1 | " " w=1 | "P" w=1 | "u" w=1 | "s" w=1 | "h" w=1 | " " w=1 | "<" w=1 | "R" w=1 | "E" w=1 | "T" w=1 | "U" w=1 | "R" w=1 | "N" w=1 | ">" w=1
+"O" w=1 | "r" w=1 | "i" w=1 | "g" w=1 | "i" w=1 | "n" w=1 | " " w=1 | "m" w=1 | "o" w=1 | "d" w=1 | "e" w=1 | " " w=1 | "t" w=1 | "e" w=1 | "s" w=1 | "t" w=1 | "." w=1 | " " w=1 | "T" w=1 | "h" w=1 | "i" w=1 | "s" w=1 | " " w=1 | "l" w=1 | "i" w=1 | "n" w=1 | "e" w=1 | " " w=1 | "s" w=1 | "h" w=1 | "o" w=1 | "u" w=1 | "l" w=1 | "d" w=1 | " " w=1 | "b" w=1 | "e" w=1 | " " w=1 | "a" w=1 | "t" w=1 | " " w=1 | "t" w=1 | "h" w=1 | "e" w=1 | " " w=1 | "b" w=1 | "o" w=1 | "t" w=1 | "t" w=1 | "o" w=1 | "m" w=1 | " " w=1 | "o" w=1 | "f" w=1 | " " w=1 | "t" w=1 | "h" w=1 | "e" w=1 | " " w=1 | "s" w=1 | "c" w=1 | "r" w=1 | "e" w=1 | "e" w=1 | "n" w=1 | "." w=1

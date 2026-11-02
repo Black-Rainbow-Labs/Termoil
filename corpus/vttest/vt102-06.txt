@@ -1,0 +1,49 @@
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+The right column should be staggered
+by one.  Push <RETURN>EEEEEEEEEEEEE
+FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG
+HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
+IIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+JJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ
+KKKKKKKKKKKKKKKKKKKKKKKKKKKKK
+LLLLLLLLLLLLLLLLLLLLLLLLLLLL
+MMMMMMMMMMMMMMMMMMMMMMMMMMM
+NNNNNNNNNNNNNNNNNNNNNNNNNN
+OOOOOOOOOOOOOOOOOOOOOOOOO
+PPPPPPPPPPPPPPPPPPPPPPPP
+QQQQQQQQQQQQQQQQQQQQQQQ
+RRRRRRRRRRRRRRRRRRRRRR
+SSSSSSSSSSSSSSSSSSSSS
+TTTTTTTTTTTTTTTTTTTT
+UUUUUUUUUUUUUUUUUUU
+VVVVVVVVVVVVVVVVVV
+WWWWWWWWWWWWWWWWW
+XXXXXXXXXXXXXXXX
+--- cells
+"A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1 | "A" w=1
+"B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1 | "B" w=1
+"C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1 | "C" w=1
+"T" w=1 | "h" w=1 | "e" w=1 | " " w=1 | "r" w=1 | "i" w=1 | "g" w=1 | "h" w=1 | "t" w=1 | " " w=1 | "c" w=1 | "o" w=1 | "l" w=1 | "u" w=1 | "m" w=1 | "n" w=1 | " " w=1 | "s" w=1 | "h" w=1 | "o" w=1 | "u" w=1 | "l" w=1 | "d" w=1 | " " w=1 | "b" w=1 | "e" w=1 | " " w=1 | "s" w=1 | "t" w=1 | "a" w=1 | "g" w=1 | "g" w=1 | "e" w=1 | "r" w=1 | "e" w=1 | "d" w=1 | " " w=1
+"b" w=1 | "y" w=1 | " " w=1 | "o" w=1 | "n" w=1 | "e" w=1 | "." w=1 | " " w=1 | " " w=1 | "P" w=1 | "u" w=1 | "s" w=1 | "h" w=1 | " " w=1 | "<" w=1 | "R" w=1 | "E" w=1 | "T" w=1 | "U" w=1 | "R" w=1 | "N" w=1 | ">" w=1 | "E" w=1 | "E" w=1 | "E" w=1 | "E" w=1 | "E" w=1 | "E" w=1 | "E" w=1 | "E" w=1 | "E" w=1 | "E" w=1 | "E" w=1 | "E" w=1 | "E" w=1
+"F" w=1 | "F" w=1 | "F" w=1 | "F" w=1 | "F" w=1 | "F" w=1 | "F" w=1 | "F" w=1 | "F" w=1 | "F" w=1 | "F" w=1 | "F" w=1 | "F" w=1 | "F" w=1 | "F" w=1 | "F" w=1 | "F" w=1 | "F" w=1 | "F" w=1 | "F" w=1 | "F" w=1 | "F" w=1 | "F" w=1 | "F" w=1 | "F" w=1 | "F" w=1 | "F" w=1 | "F" w=1 | "F" w=1 | "F" w=1 | "F" w=1 | "F" w=1 | "F" w=1 | "F" w=1
+"G" w=1 | "G" w=1 | "G" w=1 | "G" w=1 | "G" w=1 | "G" w=1 | "G" w=1 | "G" w=1 | "G" w=1 | "G" w=1 | "G" w=1 | "G" w=1 | "G" w=1 | "G" w=1 | "G" w=1 | "G" w=1 | "G" w=1 | "G" w=1 | "G" w=1 | "G" w=1 | "G" w=1 | "G" w=1 | "G" w=1 | "G" w=1 | "G" w=1 | "G" w=1 | "G" w=1 | "G" w=1 | "G" w=1 | "G" w=1 | "G" w=1 | "G" w=1 | "G" w=1
+"H" w=1 | "H" w=1 | "H" w=1 | "H" w=1 | "H" w=1 | "H" w=1 | "H" w=1 | "H" w=1 | "H" w=1 | "H" w=1 | "H" w=1 | "H" w=1 | "H" w=1 | "H" w=1 | "H" w=1 | "H" w=1 | "H" w=1 | "H" w=1 | "H" w=1 | "H" w=1 | "H" w=1 | "H" w=1 | "H" w=1 | "H" w=1 | "H" w=1 | "H" w=1 | "H" w=1 | "H" w=1 | "H" w=1 | "H" w=1 | "H" w=1 | "H" w=1
+"I" w=1 | "I" w=1 | "I" w=1 | "I" w=1 | "I" w=1 | "I" w=1 | "I" w=1 | "I" w=1 | "I" w=1 | "I" w=1 | "I" w=1 | "I" w=1 | "I" w=1 | "I" w=1 | "I" w=1 | "I" w=1 | "I" w=1 | "I" w=1 | "I" w=1 | "I" w=1 | "I" w=1 | "I" w=1 | "I" w=1 | "I" w=1 | "I" w=1 | "I" w=1 | "I" w=1 | "I" w=1 | "I" w=1 | "I" w=1 | "I" w=1
+"J" w=1 | "J" w=1 | "J" w=1 | "J" w=1 | "J" w=1 | "J" w=1 | "J" w=1 | "J" w=1 | "J" w=1 | "J" w=1 | "J" w=1 | "J" w=1 | "J" w=1 | "J" w=1 | "J" w=1 | "J" w=1 | "J" w=1 | "J" w=1 | "J" w=1 | "J" w=1 | "J" w=1 | "J" w=1 | "J" w=1 | "J" w=1 | "J" w=1 | "J" w=1 | "J" w=1 | "J" w=1 | "J" w=1 | "J" w=1
+"K" w=1 | "K" w=1 | "K" w=1 | "K" w=1 | "K" w=1 | "K" w=1 | "K" w=1 | "K" w=1 | "K" w=1 | "K" w=1 | "K" w=1 | "K" w=1 | "K" w=1 | "K" w=1 | "K" w=1 | "K" w=1 | "K" w=1 | "K" w=1 | "K" w=1 | "K" w=1 | "K" w=1 | "K" w=1 | "K" w=1 | "K" w=1 | "K" w=1 | "K" w=1 | "K" w=1 | "K" w=1 | "K" w=1
+"L" w=1 | "L" w=1 | "L" w=1 | "L" w=1 | "L" w=1 | "L" w=1 | "L" w=1 | "L" w=1 | "L" w=1 | "L" w=1 | "L" w=1 | "L" w=1 | "L" w=1 | "L" w=1 | "L" w=1 | "L" w=1 | "L" w=1 | "L" w=1 | "L" w=1 | "L" w=1 | "L" w=1 | "L" w=1 | "L" w=1 | "L" w=1 | "L" w=1 | "L" w=1 | "L" w=1 | "L" w=1
+"M" w=1 | "M" w=1 | "M" w=1 | "M" w=1 | "M" w=1 | "M" w=1 | "M" w=1 | "M" w=1 | "M" w=1 | "M" w=1 | "M" w=1 | "M" w=1 | "M" w=1 | "M" w=1 | "M" w=1 | "M" w=1 | "M" w=1 | "M" w=1 | "M" w=1 | "M" w=1 | "M" w=1 | "M" w=1 | "M" w=1 | "M" w=1 | "M" w=1 | "M" w=1 | "M" w=1
+"N" w=1 | "N" w=1 | "N" w=1 | "N" w=1 | "N" w=1 | "N" w=1 | "N" w=1 | "N" w=1 | "N" w=1 | "N" w=1 | "N" w=1 | "N" w=1 | "N" w=1 | "N" w=1 | "N" w=1 | "N" w=1 | "N" w=1 | "N" w=1 | "N" w=1 | "N" w=1 | "N" w=1 | "N" w=1 | "N" w=1 | "N" w=1 | "N" w=1 | "N" w=1
+"O" w=1 | "O" w=1 | "O" w=1 | "O" w=1 | "O" w=1 | "O" w=1 | "O" w=1 | "O" w=1 | "O" w=1 | "O" w=1 | "O" w=1 | "O" w=1 | "O" w=1 | "O" w=1 | "O" w=1 | "O" w=1 | "O" w=1 | "O" w=1 | "O" w=1 | "O" w=1 | "O" w=1 | "O" w=1 | "O" w=1 | "O" w=1 | "O" w=1
+"P" w=1 | "P" w=1 | "P" w=1 | "P" w=1 | "P" w=1 | "P" w=1 | "P" w=1 | "P" w=1 | "P" w=1 | "P" w=1 | "P" w=1 | "P" w=1 | "P" w=1 | "P" w=1 | "P" w=1 | "P" w=1 | "P" w=1 | "P" w=1 | "P" w=1 | "P" w=1 | "P" w=1 | "P" w=1 | "P" w=1 | "P" w=1
+"Q" w=1 | "Q" w=1 | "Q" w=1 | "Q" w=1 | "Q" w=1 | "Q" w=1 | "Q" w=1 | "Q" w=1 | "Q" w=1 | "Q" w=1 | "Q" w=1 | "Q" w=1 | "Q" w=1 | "Q" w=1 | "Q" w=1 | "Q" w=1 | "Q" w=1 | "Q" w=1 | "Q" w=1 | "Q" w=1 | "Q" w=1 | "Q" w=1 | "Q" w=1
+"R" w=1 | "R" w=1 | "R" w=1 | "R" w=1 | "R" w=1 | "R" w=1 | "R" w=1 | "R" w=1 | "R" w=1 | "R" w=1 | "R" w=1 | "R" w=1 | "R" w=1 | "R" w=1 | "R" w=1 | "R" w=1 | "R" w=1 | "R" w=1 | "R" w=1 | "R" w=1 | "R" w=1 | "R" w=1
+"S" w=1 | "S" w=1 | "S" w=1 | "S" w=1 | "S" w=1 | "S" w=1 | "S" w=1 | "S" w=1 | "S" w=1 | "S" w=1 | "S" w=1 | "S" w=1 | "S" w=1 | "S" w=1 | "S" w=1 | "S" w=1 | "S" w=1 | "S" w=1 | "S" w=1 | "S" w=1 | "S" w=1
+"T" w=1 | "T" w=1 | "T" w=1 | "T" w=1 | "T" w=1 | "T" w=1 | "T" w=1 | "T" w=1 | "T" w=1 | "T" w=1 | "T" w=1 | "T" w=1 | "T" w=1 | "T" w=1 | "T" w=1 | "T" w=1 | "T" w=1 | "T" w=1 | "T" w=1 | "T" w=1
+"U" w=1 | "U" w=1 | "U" w=1 | "U" w=1 | "U" w=1 | "U" w=1 | "U" w=1 | "U" w=1 | "U" w=1 | "U" w=1 | "U" w=1 | "U" w=1 | "U" w=1 | "U" w=1 | "U" w=1 | "U" w=1 | "U" w=1 | "U" w=1 | "U" w=1
+"V" w=1 | "V" w=1 | "V" w=1 | "V" w=1 | "V" w=1 | "V" w=1 | "V" w=1 | "V" w=1 | "V" w=1 | "V" w=1 | "V" w=1 | "V" w=1 | "V" w=1 | "V" w=1 | "V" w=1 | "V" w=1 | "V" w=1 | "V" w=1
+"W" w=1 | "W" w=1 | "W" w=1 | "W" w=1 | "W" w=1 | "W" w=1 | "W" w=1 | "W" w=1 | "W" w=1 | "W" w=1 | "W" w=1 | "W" w=1 | "W" w=1 | "W" w=1 | "W" w=1 | "W" w=1 | "W" w=1
+"X" w=1 | "X" w=1 | "X" w=1 | "X" w=1 | "X" w=1 | "X" w=1 | "X" w=1 | "X" w=1 | "X" w=1 | "X" w=1 | "X" w=1 | "X" w=1 | "X" w=1 | "X" w=1 | "X" w=1 | "X" w=1

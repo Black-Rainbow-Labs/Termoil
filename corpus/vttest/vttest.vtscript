@@ -1,0 +1,125 @@
+# vttest driver for the goldens (docs/TEST-SUITE.md section 5). Run by tools/vttest/run.sh.
+# Each menu below is entered from the main menu, every hold screen ("Push <RETURN>") is saved,
+# and the menu returns to the main menu on its own after its last screen.
+wait "Enter choice number"
+snap main-menu
+
+# Menu 1: cursor (6 screens).
+send "1\r"
+wait "Push <RETURN>"
+snap cursor-01
+send "\r"
+wait "Push <RETURN>"
+snap cursor-02
+send "\r"
+wait "Push <RETURN>"
+snap cursor-03
+send "\r"
+wait "Push <RETURN>"
+snap cursor-04
+send "\r"
+wait "Push <RETURN>"
+snap cursor-05
+send "\r"
+wait "Push <RETURN>"
+snap cursor-06
+send "\r"
+wait "Enter choice number"
+
+# Menu 2: screen (15 screens).
+send "2\r"
+wait "Push <RETURN>"
+snap screen-01
+send "\r"
+wait "Push <RETURN>"
+snap screen-02
+send "\r"
+wait "Push <RETURN>"
+snap screen-03
+send "\r"
+wait "Push <RETURN>"
+snap screen-04
+send "\r"
+wait "Push <RETURN>"
+snap screen-05
+send "\r"
+wait "Push <RETURN>"
+snap screen-06
+send "\r"
+wait "Push <RETURN>"
+snap screen-07
+send "\r"
+wait "Push <RETURN>"
+snap screen-08
+send "\r"
+wait "Push <RETURN>"
+snap screen-09
+send "\r"
+wait "Push <RETURN>"
+snap screen-10
+send "\r"
+wait "Push <RETURN>"
+snap screen-11
+send "\r"
+wait "Push <RETURN>"
+snap screen-12
+send "\r"
+wait "Push <RETURN>"
+snap screen-13
+send "\r"
+wait "Push <RETURN>"
+snap screen-14
+send "\r"
+wait "Push <RETURN>"
+snap screen-15
+send "\r"
+wait "Enter choice number"
+
+# Menu 8: vt102 (14 screens).
+send "8\r"
+wait "Push <RETURN>"
+snap vt102-01
+send "\r"
+wait "Push <RETURN>"
+snap vt102-02
+send "\r"
+wait "Push <RETURN>"
+snap vt102-03
+send "\r"
+wait "Push <RETURN>"
+snap vt102-04
+send "\r"
+wait "Push <RETURN>"
+snap vt102-05
+send "\r"
+wait "Push <RETURN>"
+snap vt102-06
+send "\r"
+wait "Push <RETURN>"
+snap vt102-07
+send "\r"
+wait "Push <RETURN>"
+snap vt102-08
+send "\r"
+wait "Push <RETURN>"
+snap vt102-09
+send "\r"
+wait "Push <RETURN>"
+snap vt102-10
+send "\r"
+wait "Push <RETURN>"
+snap vt102-11
+send "\r"
+wait "Push <RETURN>"
+snap vt102-12
+send "\r"
+wait "Push <RETURN>"
+snap vt102-13
+send "\r"
+wait "Push <RETURN>"
+snap vt102-14
+send "\r"
+wait "Enter choice number"
+
+# Exit.
+send "0\r"

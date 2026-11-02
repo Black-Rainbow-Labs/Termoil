@@ -1,9 +1,12 @@
 //! `terminus-headless`: a terminal with no window.
 //!
 //! ```text
-//! terminus-headless run [--cols N] [--rows N] [--record FILE] [--dump] -- PROGRAM [ARGS...]
+//! terminus-headless run [--cols N] [--rows N] [--record FILE] [--dump] [--script FILE --snaps DIR] -- PROGRAM [ARGS...]
 //! terminus-headless replay FILE [--cols N] [--rows N]
 //! ```
+//!
+//! `--script` drives the program with a script of waits, input and screen snapshots (see
+//! `script.rs`); the snapshots are written to `--snaps`. The run fails when a wait times out.
 //!
 //! `run` spawns the program under a pseudoterminal of the given size, feeds everything it prints
 //! into `terminus-vt`, and writes the terminal's replies (device attributes, cursor reports,
@@ -19,24 +22,31 @@ use std::time::{Duration, Instant};
 use terminus_pty::{Pty, PtySize, SpawnOptions};
 use terminus_vt::{Event, Terminal, TerminalConfig, dump};
 
+mod script;
+
 /// Parsed command line options.
 struct Options {
     cols: u16,
     rows: u16,
     record: Option<String>,
     dump: bool,
+    script: Option<String>,
+    snaps: Option<String>,
     rest: Vec<String>,
 }
 
-/// Reads `--cols`, `--rows`, `--record`, `--dump` and the words after `--` (or the remaining ones).
+/// Reads `--cols`, `--rows`, `--record`, `--dump`, `--script`, `--snaps` and the words after `--`
+/// (or the remaining ones).
 fn parse_options(args: &[String]) -> Options {
-    let mut o = Options { cols: 80, rows: 24, record: None, dump: false, rest: Vec::new() };
+    let mut o = Options { cols: 80, rows: 24, record: None, dump: false, script: None, snaps: None, rest: Vec::new() };
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
             "--cols" => o.cols = args.get(i + 1).and_then(|v| v.parse().ok()).unwrap_or(80),
             "--rows" => o.rows = args.get(i + 1).and_then(|v| v.parse().ok()).unwrap_or(24),
             "--record" => o.record = args.get(i + 1).cloned(),
+            "--script" => o.script = args.get(i + 1).cloned(),
+            "--snaps" => o.snaps = args.get(i + 1).cloned(),
             "--dump" => {
                 o.dump = true;
                 i += 1;
@@ -94,20 +104,64 @@ fn run(o: &Options) -> i32 {
     let mut term = Terminal::new(o.cols, o.rows, config);
     term.set_apply_resize_requests(true);
     let mut recording = Vec::new();
-    let code = pump(&mut pty, &rx, &mut *writer, &mut term, &mut recording);
+    let mut runner = match load_script(o) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("terminus-headless: {e}");
+            let _ = pty.kill();
+            return 2;
+        }
+    };
+    let code = pump(&mut pty, &rx, &mut *writer, &mut term, &mut recording, &mut runner);
     finish(o, &term, &recording);
     code
+}
+
+/// The script runner for `--script`, with its snapshot folder created.
+fn load_script(o: &Options) -> Result<Option<script::Runner>, String> {
+    let Some(path) = &o.script else { return Ok(None) };
+    let text = std::fs::read_to_string(path).map_err(|e| format!("cannot read {path}: {e}"))?;
+    let steps = script::parse(&text).map_err(|e| format!("{path}: {e}"))?;
+    let dir = std::path::PathBuf::from(o.snaps.clone().unwrap_or_else(|| ".".into()));
+    std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+    Ok(Some(script::Runner::new(steps, dir)))
+}
+
+/// A snapshot for a script: the screen as text, for a person reviewing it, then every row in the
+/// full cell dump format, so attributes and colours are compared as well.
+fn snapshot(term: &Terminal) -> Vec<String> {
+    let mut lines = dump::text_dump(term);
+    lines.push("--- cells".into());
+    lines.extend(dump::grid_dump(term));
+    lines
+}
+
+/// Gives the script the new output and runs its next steps. On failure prints why and the screen.
+fn drive_script(runner: &mut Option<script::Runner>, chunk: &[u8], term: &Terminal, writer: &mut dyn Write) -> bool {
+    let Some(r) = runner else { return true };
+    r.output(chunk);
+    match r.drive(&|| snapshot(term), writer) {
+        Ok(()) => true,
+        Err(e) => {
+            eprintln!("terminus-headless: script failed at {e}; the screen:");
+            for line in dump::text_dump(term) {
+                eprintln!("|{line}");
+            }
+            false
+        }
+    }
 }
 
 /// Applies output, resize requests and replies until the child has exited and its output has drained.
 fn pump(
     pty: &mut Pty, rx: &mpsc::Receiver<Vec<u8>>, writer: &mut dyn Write, term: &mut Terminal, recording: &mut Vec<u8>,
+    runner: &mut Option<script::Runner>,
 ) -> i32 {
     let mut exited: Option<(i32, Instant)> = None;
     let mut last_size = (term.cols(), term.rows());
     let mut clipboard: Vec<u8> = Vec::new();
     loop {
-        match rx.recv_timeout(Duration::from_millis(50)) {
+        let chunk = match rx.recv_timeout(Duration::from_millis(50)) {
             Ok(chunk) => {
                 recording.extend_from_slice(&chunk);
                 term.advance(&chunk);
@@ -117,9 +171,14 @@ fn pump(
                     let _ = writer.write_all(&replies);
                     let _ = writer.flush();
                 }
+                chunk
             }
-            Err(mpsc::RecvTimeoutError::Disconnected) => return exited.map(|e| e.0).unwrap_or(0),
-            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => return script_code(runner, exited.map(|e| e.0).unwrap_or(0)),
+            Err(mpsc::RecvTimeoutError::Timeout) => Vec::new(),
+        };
+        if !drive_script(runner, &chunk, term, writer) {
+            let _ = pty.kill();
+            return 1;
         }
         if exited.is_none()
             && let Ok(Some(status)) = pty.try_wait()
@@ -135,9 +194,18 @@ fn pump(
         if let Some((code, at)) = exited
             && at.elapsed() > Duration::from_millis(500)
         {
-            return code;
+            return script_code(runner, code);
         }
     }
+}
+
+/// The exit code once the program has ended: 1 when a script still had steps to run.
+fn script_code(runner: &Option<script::Runner>, code: i32) -> i32 {
+    if runner.as_ref().is_some_and(|r| !r.done()) {
+        eprintln!("terminus-headless: the program ended before the script did");
+        return 1;
+    }
+    code
 }
 
 /// Carries out what the terminal asked of its host. A resize request resizes the terminal when it
