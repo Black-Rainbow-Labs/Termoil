@@ -252,8 +252,21 @@ function Build-WindowsBinaries([string] $BuildDate) {
         Invoke-Checked 'cargo build' { & cargo build --release -p terminus-cli -p terminus-app --manifest-path $Manifest }
     }
     foreach ($name in 'terminus.exe', 'terminus-gui.exe') {
-        if (-not (Test-Path -LiteralPath (Join-Path $Repo "target/release/$name"))) { throw "The build did not produce $name." }
+        if (-not (Test-Path -LiteralPath (Join-Path (Get-BinDir) $name))) { throw "The build did not produce $name in $(Get-BinDir)." }
     }
+}
+
+<#
+.SYNOPSIS
+  The folder cargo writes release binaries to: cargo's own target directory, which a worktree's
+  .cargo/config.toml moves out of the checkout (task-2468), with release on the end.
+#>
+function Get-BinDir {
+    if (-not $script:BinDir) {
+        $meta = & cargo metadata --format-version 1 --no-deps --manifest-path $Manifest | ConvertFrom-Json
+        $script:BinDir = Join-Path $meta.target_directory 'release'
+    }
+    return $script:BinDir
 }
 
 <#
@@ -278,7 +291,7 @@ function Build-WindowsInstaller([string] $Version) {
     Ensure-Conpty
     $iscc = Get-InnoCompiler
     New-Item -ItemType Directory -Force -Path $DistDir | Out-Null
-    Invoke-Checked 'ISCC' { & $iscc "/DAppVersion=$Version" "/DOutDir=$DistDir" (Join-Path $InstallerDir 'terminus.iss') }
+    Invoke-Checked 'ISCC' { & $iscc "/DAppVersion=$Version" "/DOutDir=$DistDir" "/DBinDir=$(Get-BinDir)" (Join-Path $InstallerDir 'terminus.iss') }
     $installer = Join-Path $DistDir "TerminusSetup-$Version-x64.exe"
     if (-not (Test-Path -LiteralPath $installer)) { throw "ISCC did not produce $installer." }
     return $installer
