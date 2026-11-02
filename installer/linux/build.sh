@@ -157,7 +157,7 @@ Installed-Size: $(installed_size "$root")
 Depends: libc6 (>= 2.35), libfontconfig1, libxkbcommon0, libwayland-client0 | libx11-6
 Recommends: libvulkan1, libxkbcommon-x11-0, libxcursor1, libwayland-cursor0, libwayland-egl1, xdg-utils
 Maintainer: Terminus contributors <noreply@terminus.invalid>
-Homepage: https://github.com/jasonmcaffee/terminus
+Homepage: https://github.com/Black-Rainbow-Labs/Terminus
 Description: Terminal emulator
  A GPU accelerated terminal emulator with tabs and splits, shell integration for bash,
  zsh, fish, nushell and PowerShell, a command line client (terminus) that controls a

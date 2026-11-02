@@ -3,18 +3,18 @@ PackageIdentifier: Terminus.Terminus
 PackageVersion: 0.1.1
 PackageLocale: en-US
 Publisher: Terminus
-PublisherUrl: https://github.com/jasonmcaffee/terminus
-PublisherSupportUrl: https://github.com/jasonmcaffee/terminus/issues
+PublisherUrl: https://github.com/Black-Rainbow-Labs/Terminus
+PublisherSupportUrl: https://github.com/Black-Rainbow-Labs/Terminus/issues
 PackageName: Terminus
-PackageUrl: https://github.com/jasonmcaffee/terminus
+PackageUrl: https://github.com/Black-Rainbow-Labs/Terminus
 License: MIT OR Apache-2.0
-LicenseUrl: https://github.com/jasonmcaffee/terminus/blob/main/LICENSE-MIT
+LicenseUrl: https://github.com/Black-Rainbow-Labs/Terminus/blob/main/LICENSE-MIT
 ShortDescription: A GPU accelerated terminal emulator written in Rust.
 Moniker: terminus
 Tags:
 - terminal
 - terminal-emulator
 - rust
-ReleaseNotesUrl: https://github.com/jasonmcaffee/terminus/releases/tag/v0.1.1
+ReleaseNotesUrl: https://github.com/Black-Rainbow-Labs/Terminus/releases/tag/v0.1.1
 ManifestType: defaultLocale
 ManifestVersion: 1.10.0

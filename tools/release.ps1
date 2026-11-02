@@ -462,7 +462,7 @@ function Write-WingetManifest([string] $Version, [string] $InstallerUrl, [string
     New-Item -ItemType Directory -Force -Path $folder | Out-Null
     $hash = $Sha256.ToUpper()
     $date = (Get-Date).ToUniversalTime().ToString('yyyy-MM-dd')
-    $repoUrl = 'https://github.com/jasonmcaffee/terminus'
+    $repoUrl = 'https://github.com/Black-Rainbow-Labs/Terminus'
     $versionYaml = @"
 # yaml-language-server: `$schema=$schemaBase.version.$schema.schema.json
 PackageIdentifier: $id
@@ -594,7 +594,7 @@ Publish-Tag $next
 if ($SkipPublish) { Write-Host "Tagged v$next locally. Skipped the push and GitHub because of -SkipPublish."; exit 0 }
 Publish-GitHubRelease $gh $next $assets
 Write-Step 'Writing the winget manifest'
-$installerUrl = "https://github.com/jasonmcaffee/terminus/releases/download/v$next/$(Split-Path -Leaf $installer)"
+$installerUrl = "https://github.com/Black-Rainbow-Labs/Terminus/releases/download/v$next/$(Split-Path -Leaf $installer)"
 Write-WingetManifest $next $installerUrl (Get-FileHash -Algorithm SHA256 -LiteralPath $installer).Hash | Out-Null
 Write-Host ''
 Write-Host "Released Terminus v$next ($kind)." -ForegroundColor Green
