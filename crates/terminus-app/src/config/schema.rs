@@ -131,6 +131,14 @@ pub static SECTIONS: &[Section] = &[
         ],
     },
     Section {
+        path: "accessibility",
+        doc: "Screen reader access: the focused pane's screen is exposed as text.",
+        keys: &[
+            e("enabled", "Expose the screen to UI Automation, NSAccessibility and AT-SPI."),
+            e("update_interval_ms", "Shortest time between accessibility tree updates while the screen changes."),
+        ],
+    },
+    Section {
         path: "mouse",
         doc: "Pointer behaviour.",
         keys: &[

@@ -24,6 +24,9 @@ crossbeam-channel.workspace = true
 toml = "1"
 regex.workspace = true
 winit = "0.30"
+# Screen reader access: UI Automation on Windows, NSAccessibility on macOS and AT-SPI on Linux.
+accesskit = "0.24"
+accesskit_winit = "0.32"
 softbuffer = "0.4"
 wgpu = "30"
 
