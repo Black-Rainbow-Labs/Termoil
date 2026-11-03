@@ -81,7 +81,7 @@ impl PtyImpl {
     /// Resizes the pseudoconsole.
     pub fn resize(&self, size: PtySize) -> io::Result<()> {
         // SAFETY: `self.hpc` is a live pseudoconsole.
-        unsafe { (self.api.resize)(self.hpc, coord(size)) }.ok().map_err(io::Error::from)
+        unsafe { (self.api.resize)(self.hpc, coord(size)) }.ok().map_err(win32_error)
     }
 
     /// Reports the exit status when the child process has signalled.
@@ -105,7 +105,7 @@ impl PtyImpl {
         let job = unsafe { TerminateJobObject(handle_of(&self.job), 1) };
         // SAFETY: as above; terminating a process that already ended fails harmlessly.
         let _ = unsafe { TerminateProcess(handle_of(&self.process), 1) };
-        job.map_err(io::Error::from)
+        job.map_err(win32_error)
     }
 
     /// The child's process id.
@@ -122,7 +122,7 @@ impl PtyImpl {
     fn exit_status(&self) -> io::Result<ExitStatus> {
         let mut code = 0u32;
         // SAFETY: the process handle is owned and `code` is a valid out pointer.
-        unsafe { GetExitCodeProcess(handle_of(&self.process), &mut code) }.map_err(io::Error::from)?;
+        unsafe { GetExitCodeProcess(handle_of(&self.process), &mut code) }.map_err(win32_error)?;
         Ok(ExitStatus::Code(code as i32))
     }
 }
@@ -163,7 +163,7 @@ fn coord(size: PtySize) -> COORD {
 fn make_pipe(size: u32) -> io::Result<(OwnedHandle, OwnedHandle)> {
     let (mut read, mut write) = (HANDLE::default(), HANDLE::default());
     // SAFETY: both out pointers are valid; null attributes make the handles non inheritable.
-    unsafe { CreatePipe(&mut read, &mut write, None, size) }.map_err(io::Error::from)?;
+    unsafe { CreatePipe(&mut read, &mut write, None, size) }.map_err(win32_error)?;
     // SAFETY: CreatePipe returned two open handles that nothing else owns.
     unsafe { Ok((OwnedHandle::from_raw_handle(read.0), OwnedHandle::from_raw_handle(write.0))) }
 }
@@ -181,15 +181,15 @@ fn create_console(
     };
     match attempt(first) {
         Ok(hpc) => Ok(hpc),
-        Err(_) if flags.is_none() && first != 0 => attempt(0).map_err(io::Error::from),
-        Err(err) => Err(io::Error::from(err)),
+        Err(_) if flags.is_none() && first != 0 => attempt(0).map_err(win32_error),
+        Err(err) => Err(win32_error(err)),
     }
 }
 
 /// Creates a job object that kills every process in it when its last handle closes.
 fn create_kill_on_close_job() -> io::Result<OwnedHandle> {
     // SAFETY: null attributes and name create an anonymous job.
-    let job = unsafe { CreateJobObjectW(None, PCWSTR::null()) }.map_err(io::Error::from)?;
+    let job = unsafe { CreateJobObjectW(None, PCWSTR::null()) }.map_err(win32_error)?;
     // SAFETY: CreateJobObjectW returned an open handle that nothing else owns.
     let owned = unsafe { OwnedHandle::from_raw_handle(job.0) };
     let mut info = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
@@ -199,7 +199,7 @@ fn create_kill_on_close_job() -> io::Result<OwnedHandle> {
     unsafe {
         SetInformationJobObject(job, JobObjectExtendedLimitInformation, (&raw const info).cast::<c_void>(), size)
     }
-    .map_err(io::Error::from)?;
+    .map_err(win32_error)?;
     Ok(owned)
 }
 
@@ -221,7 +221,7 @@ impl AttributeList {
         let mut list = AttributeList { buffer: vec![0u64; size.div_ceil(8)], job_handles: Box::new([handle]) };
         // SAFETY: the buffer is at least `size` bytes and 8 byte aligned.
         unsafe { InitializeProcThreadAttributeList(Some(list.pointer()), count, None, &mut size) }
-            .map_err(io::Error::from)?;
+            .map_err(win32_error)?;
         // SAFETY: the pseudoconsole attribute value is the HPCON itself, passed by value.
         unsafe {
             UpdateProcThreadAttribute(
@@ -234,7 +234,7 @@ impl AttributeList {
                 None,
             )
         }
-        .map_err(io::Error::from)?;
+        .map_err(win32_error)?;
         if job.is_none() {
             return Ok(list);
         }
@@ -251,7 +251,7 @@ impl AttributeList {
                 None,
             )
         }
-        .map_err(io::Error::from)?;
+        .map_err(win32_error)?;
         Ok(list)
     }
 
@@ -317,6 +317,17 @@ fn resolve_program(program: &str) -> Option<std::path::PathBuf> {
 }
 
 /// True for the access denied error in its Win32, HRESULT and NTSTATUS forms.
+/// A Windows error as an `io::Error` carrying the Win32 code it wraps, so a missing program reads `os error 2`
+/// and `ErrorKind::NotFound` rather than the HRESULT `-2147024894` and `ErrorKind::Other` (task-2489).
+fn win32_error(err: windows::core::Error) -> io::Error {
+    let code = err.code().0 as u32;
+    if code & 0xFFFF_0000 == 0x8007_0000 {
+        io::Error::from_raw_os_error((code & 0xFFFF) as i32)
+    } else {
+        io::Error::from(err)
+    }
+}
+
 fn is_access_denied(err: &io::Error) -> bool {
     matches!(err.raw_os_error(), Some(5) | Some(-2147024891) | Some(-1073283067))
 }
@@ -355,7 +366,7 @@ fn create_process(opts: &SpawnOptions, hpc: HPCON, job: Option<&OwnedHandle>) ->
             &mut info,
         )
     }
-    .map_err(io::Error::from)?;
+    .map_err(win32_error)?;
     Ok(info)
 }
 
@@ -426,6 +437,22 @@ mod tests {
     use super::*;
     use std::os::windows::ffi::OsStringExt;
     use windows::Win32::System::Pipes::GetNamedPipeInfo;
+
+    /// A program that is not there is reported as the Win32 code, which reads as not found.
+    #[test]
+    fn a_missing_program_is_not_found_with_its_win32_code() {
+        let opts = SpawnOptions {
+            program: "C:\\no\\such\\program.exe".to_string(),
+            args: Vec::new(),
+            cwd: None,
+            env: Vec::new(),
+            size: PtySize { cols: 80, rows: 24, pixel_width: 0, pixel_height: 0 },
+            login: false,
+        };
+        let err = PtyImpl::spawn(&opts, &ConptyConfig::default()).err().expect("the spawn fails");
+        assert_eq!(err.kind(), io::ErrorKind::NotFound, "{err}");
+        assert_eq!(err.raw_os_error(), Some(2), "{err}");
+    }
 
     /// The buffer size Windows reports for a pipe end.
     fn pipe_buffer(end: &OwnedHandle) -> u32 {
