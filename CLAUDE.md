@@ -9,7 +9,7 @@ Read `docs/TDD.md` first, then the sections your ticket names. The requirements 
 ## Conventions
 
 - Rust, the toolchain in `rust-toolchain.toml`, `cargo fmt` and `cargo clippy` clean, `cargo deny` clean.
-- Licence MIT OR Apache-2.0. A dependency must be MIT, Apache 2.0, BSD, Zlib, Unicode or OFL. Nothing is read from Kitty's source; its protocols are implemented from the published specifications.
+- License MIT OR Apache-2.0. A dependency must be MIT, Apache 2.0, BSD, Zlib, Unicode or OFL. Nothing is read from Kitty's source; its protocols are implemented from the published specifications.
 - Functions have a doc comment stating intent, parameters on one line, and stay under about 50 lines. No `this` style state; pass state in.
 - `termoil-vt`, `termoil-input`, `termoil-pty` and `termoil-protocol` have no window, GPU or font dependency. CI builds `termoil-vt` for wasm to enforce it.
 - `unsafe` lives in the page arena module and the SIMD scan only, and both are covered by Miri and a fuzz target.
@@ -26,7 +26,7 @@ The suite is specified in `docs/TEST-SUITE.md`. Expected outputs change only wit
 
 ## Verification
 
-Functional verification runs here: the end to end suite spawns the real shell on this machine. Visual judgement of the window is done by looking at a release build installed on this machine, not at screenshots of a dev build.
+Functional verification runs here: the end to end suite spawns the real shell on this machine. Visual judgment of the window is done by looking at a release build installed on this machine, not at screenshots of a dev build.
 
 Each milestone ends with `pwsh tools/release.ps1`, which bumps, builds, installs here, tags, pushes and publishes the GitHub release.
 
