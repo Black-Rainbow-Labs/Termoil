@@ -30,6 +30,8 @@ accesskit = "0.24"
 accesskit_winit = "0.32"
 softbuffer = "0.4"
 wgpu = "30"
+# The SHA-256 of a downloaded update, checked against the release manifest before it runs.
+sha2 = "0.10"
 
 [lints]
 workspace = true

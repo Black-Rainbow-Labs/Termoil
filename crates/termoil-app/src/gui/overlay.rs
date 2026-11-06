@@ -321,7 +321,7 @@ fn run_search(s: &mut SearchUi, app: &mut App, action: &str, with_pattern: bool)
             s.error = None;
         }
         crate::app::Outcome::Done(Err(e)) => s.error = Some(e.to_string()),
-        crate::app::Outcome::Wait(..) => {}
+        crate::app::Outcome::Wait(..) | crate::app::Outcome::Later(_) => {}
     }
 }
 

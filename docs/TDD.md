@@ -194,7 +194,7 @@ Every action is a row in the catalogue (name, parameters, description, which con
 - The IPC socket is created with owner only permissions (a DACL on Windows, mode 0600 on Unix). No network listener.
 - Shell integration scripts are installed by explicit command only.
 - Image payloads are decoded with `image` in a thread with a size cap; a malformed PNG is dropped and counted.
-- No telemetry. The update check is off until turned on and then only fetches `releases/latest.json`.
+- No telemetry. The update check fetches one static file, `unluminous.com/termoil/stable.json` or `nightly.json`, once a day by default; `updates.check = "off"` sends nothing. A downloaded update runs only after its size and SHA-256 match the manifest (docs/decisions/updates.md).
 
 ### 4.11 Embedding in Unluminous and the Tasks board
 
@@ -230,7 +230,7 @@ Functional and end to end tests are favoured over unit tests. Every bug fix adds
 
 ## 7. Deployment and release
 
-- `tools/release.ps1` modelled on Unluminous: refuses a dirty tree, bumps `[workspace.package].version`, builds the Windows installer (Inno Setup) and installs it on this machine, builds the macOS dmg through the cross toolchain Unluminous already has (`installer/macos/build-on-windows.ps1` pattern, signed and notarised with the sealed credentials), builds the Linux AppImage and .deb in WSL or a container, commits the version bump, tags `v<version>`, pushes, creates the GitHub release with all installers, and verifies each download. Every release is a prerelease until promoted.
+- `tools/release.ps1` modelled on Unluminous: refuses a dirty tree, bumps `[workspace.package].version`, builds the Windows installer (Inno Setup) and installs it on this machine, builds the macOS dmg through the cross toolchain Unluminous already has (`installer/macos/build-on-windows.ps1` pattern, signed and notarised with the sealed credentials), builds the Linux AppImage and .deb in WSL or a container, commits the version bump, tags `v<version>`, pushes, creates the GitHub release with all installers, and verifies each download, then publishes unluminous.com/termoil with `scripts/termoil/publish-termoil.ps1` in the sites repository. Every release is a nightly (a GitHub prerelease, listed in `/termoil/nightly.json`) until `tools/promote.ps1` makes it stable; nothing is rebuilt to promote. Termoil checks its channel daily and installs a chosen version with `install-update` (docs/decisions/updates.md).
 - CI (`.github/workflows/ci.yml`): format, clippy, `cargo deny`, the headless crates' tests on Windows, Linux and macOS runners, the wasm build of `termoil-vt`, the CPU renderer pixel tests, bounded fuzzing, and the performance suite in report only mode.
 - Winget manifest and Homebrew cask after the first stable release.
 - `termoil +version` and the About dialog show the version and build date, so a person can tell which build has a fix.

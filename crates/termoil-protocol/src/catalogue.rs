@@ -80,6 +80,9 @@ use ParamKind::*;
 
 const PANE: ParamDef = p("pane", Pane, false, "The pane to act on; the focused pane when omitted.");
 const DIRS: &[&str] = &["left", "right", "up", "down"];
+const CHANNELS: &[&str] = &["stable", "nightly"];
+const CHANNEL: ParamDef =
+    p("channel", Choice(CHANNELS), false, "The release channel, stable or nightly; updates.channel when omitted.");
 
 /// Every action, in the order the command palette and `docs/commands.md` list them.
 pub const CATALOGUE: &[ActionDef] = &[
@@ -301,6 +304,52 @@ pub const CATALOGUE: &[ActionDef] = &[
         true,
     ),
     a("version", "Prints the version and build date.", &[], G, true, true),
+    a(
+        "check-for-updates",
+        "Asks the release channel for the newest version and says whether it is newer than this one.",
+        &[CHANNEL],
+        G,
+        true,
+        true,
+    ),
+    a(
+        "list-updates",
+        "Lists the newest five versions on the stable and nightly channels, marking the one running.",
+        &[p("channel", Choice(CHANNELS), false, "List only this channel; both when omitted.")],
+        G,
+        true,
+        false,
+    ),
+    a(
+        "install-update",
+        "Downloads a version, checks its size and SHA-256, then quits, installs it and reopens the same windows.",
+        &[
+            p(
+                "version",
+                Text,
+                false,
+                "The version to install, newer or older; the newest on the channel when omitted.",
+            ),
+            CHANNEL,
+            p(
+                "restart",
+                Bool,
+                false,
+                "Quit, install and start the new version; true when omitted. false only downloads and checks the file.",
+            ),
+        ],
+        G,
+        true,
+        true,
+    ),
+    a(
+        "skip-update",
+        "Stops the automatic check announcing a version, by writing it to updates.skip.",
+        &[p("version", Text, false, "The version to skip; the one the last check found when omitted.")],
+        G,
+        true,
+        true,
+    ),
     a("copy", "Copies the selection to the clipboard.", &[PANE], P, false, true),
     a("paste", "Pastes the clipboard into the pane, bracketed when the program asked for it.", &[PANE], P, false, true),
     a("select-all", "Selects the whole screen and scrollback.", &[PANE], P, false, true),

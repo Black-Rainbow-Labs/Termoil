@@ -45,6 +45,9 @@ pub fn dispatch(app: &mut App, name: &str, args: &Map<String, Value>) -> Outcome
                 .and_then(|n| crate::themes::set(app, &n).map(|_| json!({ "theme": n })).map_err(ActionError::Failed)),
         ),
         "list-themes" => done(Ok(list_themes(app))),
+        "check-for-updates" | "list-updates" | "install-update" | "skip-update" => {
+            crate::update::actions::dispatch(app, name, args)
+        }
         "choose-theme" => done(match app.model.focused_index() {
             Some(wi) => {
                 app.effects.push(Effect::ShowThemes(app.model.windows[wi].id));

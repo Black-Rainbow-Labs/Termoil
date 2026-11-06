@@ -531,3 +531,28 @@ fn the_parser_never_panics_on_odd_input() {
         let _ = Config::parse(s);
     }
 }
+
+/// `updates.check` reads its three words and the boolean it used to be, and refuses anything else on its
+/// line; it defaults to a daily check of the stable channel (`docs/decisions/updates.md`).
+#[test]
+fn update_check_reads_words_and_the_old_boolean() {
+    use termoil_app::config::{UpdateChannel, UpdateCheck};
+    assert_eq!(
+        (Config::default().updates.check, Config::default().updates.channel),
+        (UpdateCheck::Daily, UpdateChannel::Stable)
+    );
+    for (text, want) in [
+        ("true", UpdateCheck::Daily),
+        ("false", UpdateCheck::Off),
+        ("\"daily\"", UpdateCheck::Daily),
+        ("\"start\"", UpdateCheck::Start),
+        ("\"off\"", UpdateCheck::Off),
+    ] {
+        let (c, _) = parse_ok(&format!("[updates]\ncheck = {text}\n"));
+        assert_eq!(c.updates.check, want, "check = {text}");
+    }
+    let (c, _) = parse_ok("[updates]\nchannel = \"nightly\"\nskip = \"1.5.0\"\n");
+    assert_eq!((c.updates.channel, c.updates.skip.as_str()), (UpdateChannel::Nightly, "1.5.0"));
+    let error = Config::parse("[font]\nsize = 13\n[updates]\ncheck = \"hourly\"\n").unwrap_err();
+    assert_eq!(error.line, 4, "{error}");
+}

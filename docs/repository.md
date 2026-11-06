@@ -88,8 +88,15 @@ the CI run.
 `pwsh tools/release.ps1` makes a release from a clean checkout: it runs the tests, bumps the version in
 `Cargo.toml`, builds, makes the Windows installer, installs it on the build machine and checks the installed version,
 builds the Linux AppImage and `.deb` in WSL and the macOS dmg, tags, pushes, publishes the GitHub release with every
-package attached, downloads each one back to compare its SHA256, and writes the winget manifest. `-Part minor` makes a
-minor release and `-WhatIf` prints the plan without changing anything.
+package attached, downloads each one back to compare its SHA256, writes the winget manifest, and publishes
+unluminous.com/termoil. `-Part minor` makes a minor release and `-WhatIf` prints the plan without changing anything.
+
+Every release is a **nightly**: a GitHub prerelease, listed in `unluminous.com/termoil/nightly.json`. The page and
+`stable.json` stay on the stable version. After a nightly has been used, `pwsh tools/promote.ps1 [-Version x.y.z]`
+makes it **stable**: it publishes the same files on the stable channel and marks the GitHub release as the latest full
+release. Nothing is built to promote. Termoil checks `updates.channel` (stable by default) once a day and offers a newer
+version with a notification; `install-update` downloads it, checks its size and SHA-256, and restarts into it with the
+same windows. `docs/decisions/updates.md` is the design.
 
 ## The design documents
 

@@ -456,11 +456,71 @@ pub struct Keybindings {
     pub linux: PlatformKeys,
 }
 
-/// `[updates]`: the update check.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
+/// `[updates]`: the update check (`docs/decisions/updates.md`).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Updates {
-    pub check: bool,
+    pub check: UpdateCheck,
+    pub channel: UpdateChannel,
+    /// The version the automatic check does not announce; empty for none.
+    pub skip: String,
+    /// How long one request to the release server may take.
+    pub timeout_seconds: u64,
+}
+
+impl Default for Updates {
+    /// A daily check of the stable channel with a 15 second limit per request.
+    fn default() -> Self {
+        Updates { check: UpdateCheck::Daily, channel: UpdateChannel::Stable, skip: String::new(), timeout_seconds: 15 }
+    }
+}
+
+/// When Termoil asks for a newer version.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum UpdateCheck {
+    /// At most once a day, counted across every Termoil process.
+    #[default]
+    Daily,
+    /// Every time the first window opens.
+    Start,
+    /// Never on its own.
+    Off,
+}
+
+impl<'de> Deserialize<'de> for UpdateCheck {
+    /// Reads `daily`, `start` or `off`, and the boolean the key used to be: true is daily, false is off.
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Raw {
+            Flag(bool),
+            Word(String),
+        }
+        match Raw::deserialize(d)? {
+            Raw::Flag(true) => Ok(UpdateCheck::Daily),
+            Raw::Flag(false) => Ok(UpdateCheck::Off),
+            Raw::Word(w) => match w.as_str() {
+                "daily" => Ok(UpdateCheck::Daily),
+                "start" => Ok(UpdateCheck::Start),
+                "off" => Ok(UpdateCheck::Off),
+                other => {
+                    Err(serde::de::Error::custom(format!("unknown variant `{other}`, expected daily, start or off")))
+                }
+            },
+        }
+    }
+}
+
+/// Which list of releases the update check asks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum UpdateChannel {
+    /// Versions promoted after they were used as a nightly.
+    #[default]
+    Stable,
+    /// Every release.
+    Nightly,
 }
 
 /// `[log]`: log verbosity.

@@ -109,6 +109,8 @@ pub enum UserEvent {
     QuickTerminal,
     /// A screen reader asked for the accessibility tree or for an action on a node.
     Access(accesskit_winit::Event),
+    /// An update job wants a notification shown, or a checked update installed.
+    Update(crate::update::actions::Event),
 }
 
 impl From<accesskit_winit::Event> for UserEvent {
@@ -203,8 +205,12 @@ impl Gui {
         {
             eprintln!("termoil: no quick terminal hotkey: {e}");
         }
-        let app =
+        let mut app =
             App::new(config, config_path, Box::new(crate::platform::SystemClipboard), proxy_wakers(proxy.clone()));
+        let update_proxy = proxy.clone();
+        app.updates.sink = Some(Arc::new(move |ev| {
+            let _ = update_proxy.send_event(UserEvent::Update(ev));
+        }));
         Ok(Some(Gui {
             app,
             windows: HashMap::new(),
@@ -231,6 +237,30 @@ impl Gui {
     /// Applies queued effects; the E6 harness calls it after acting on the app directly.
     pub fn flush(&mut self, el: &ActiveEventLoop) {
         self.apply_effects(el);
+    }
+}
+
+/// Reopens the session the update helper named, once, and deletes its file. Answers whether it opened
+/// any window.
+fn restore_after_update(app: &mut App) -> bool {
+    let Some(path) = crate::update::apply::pending_restore() else { return false };
+    let opened = crate::restore::restore_from(app, &path);
+    let _ = std::fs::remove_file(&path);
+    opened
+}
+
+impl Gui {
+    /// Carries out what an update job asked: a notification, or saving the session, starting the helper
+    /// and quitting.
+    fn update_event(&mut self, ev: crate::update::actions::Event) {
+        use crate::update::actions::Event;
+        match ev {
+            Event::Notify { title, body } => crate::platform::notify(&title, &body),
+            Event::Restart(prepared, target) => match crate::update::actions::restart(&self.app, &prepared, &target) {
+                Ok(()) => self.app.effects.push(Effect::Quit),
+                Err(e) => crate::platform::notify("Termoil could not install the update", &e),
+            },
+        }
     }
 }
 
@@ -756,7 +786,10 @@ impl ApplicationHandler<UserEvent> for Gui {
         if let Some((cwd, command)) = self.initial.take() {
             phase("resumed");
             let plain_start = cwd.is_none() && command.is_none() && !crate::app::instance_mode().separate;
-            if plain_start && crate::restore::restore_on_start(&mut self.app) {
+            if plain_start && self.bench.is_none() {
+                crate::update::actions::start_automatic(&self.app);
+            }
+            if plain_start && (restore_after_update(&mut self.app) || crate::restore::restore_on_start(&mut self.app)) {
                 self.apply_effects(el);
                 return;
             }
@@ -787,6 +820,7 @@ impl ApplicationHandler<UserEvent> for Gui {
             UserEvent::Config(r) => self.config_loaded(*r),
             UserEvent::QuickTerminal => self.toggle_quick(el),
             UserEvent::Access(ev) => self.access_event(ev),
+            UserEvent::Update(ev) => self.update_event(ev),
         }
         self.apply_effects(el);
     }

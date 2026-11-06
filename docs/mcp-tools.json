@@ -450,6 +450,82 @@
       "name": "termoil_version"
     },
     {
+      "description": "Asks the release channel for the newest version and says whether it is newer than this one.",
+      "inputSchema": {
+        "properties": {
+          "channel": {
+            "description": "The release channel, stable or nightly; updates.channel when omitted.",
+            "enum": [
+              "stable",
+              "nightly"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "termoil_check_for_updates"
+    },
+    {
+      "description": "Lists the newest five versions on the stable and nightly channels, marking the one running.",
+      "inputSchema": {
+        "properties": {
+          "channel": {
+            "description": "List only this channel; both when omitted.",
+            "enum": [
+              "stable",
+              "nightly"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "termoil_list_updates"
+    },
+    {
+      "description": "Downloads a version, checks its size and SHA-256, then quits, installs it and reopens the same windows.",
+      "inputSchema": {
+        "properties": {
+          "channel": {
+            "description": "The release channel, stable or nightly; updates.channel when omitted.",
+            "enum": [
+              "stable",
+              "nightly"
+            ],
+            "type": "string"
+          },
+          "restart": {
+            "description": "Quit, install and start the new version; true when omitted. false only downloads and checks the file.",
+            "type": "boolean"
+          },
+          "version": {
+            "description": "The version to install, newer or older; the newest on the channel when omitted.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "termoil_install_update"
+    },
+    {
+      "description": "Stops the automatic check announcing a version, by writing it to updates.skip.",
+      "inputSchema": {
+        "properties": {
+          "version": {
+            "description": "The version to skip; the one the last check found when omitted.",
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "termoil_skip_update"
+    },
+    {
       "description": "Erases the scrollback of the pane, keeping the screen.",
       "inputSchema": {
         "properties": {

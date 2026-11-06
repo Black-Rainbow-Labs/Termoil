@@ -23,14 +23,23 @@
        compares its SHA256 with the local file.
    11. Writes the winget manifest for the release into installer/winget/manifests. It is not committed or
        submitted; installer/winget/README.md says how a person publishes it.
+   12. Publishes unluminous.com/termoil with scripts/termoil/publish-termoil.ps1 in the
+       black-rainbow-labs-sites checkout (TERMOIL_SITE, or C:/jason/dev/black-rainbow-labs-sites/sites/unluminous):
+       the version goes on the nightly channel, /termoil/nightly.json, and the page names it beside the
+       stable downloads. A failure here exits 1 with the command to run again; the GitHub release stays.
 
-  Every release is a prerelease until promoted. -Stable makes a full release.
+  Every release is a nightly: a GitHub prerelease on the nightly channel (docs/decisions/updates.md).
+  tools/promote.ps1 makes a nightly stable after it has been used. -Stable releases and promotes at once.
 
 .PARAMETER Part
   Which part of the version goes up: patch (the default), minor or major.
 
 .PARAMETER Stable
-  Create the GitHub release as a full release. Without it the release is a prerelease.
+  Create the GitHub release as a full release and publish it on the stable channel of unluminous.com.
+  Without it the release is a prerelease on the nightly channel.
+
+.PARAMETER SkipSite
+  Leave unluminous.com alone.
 
 .PARAMETER Prerelease
   Create the GitHub release as a prerelease. This is the default; the switch exists so a command line
@@ -65,6 +74,7 @@ param(
     [switch] $SkipTests,
     [switch] $SkipInstall,
     [switch] $SkipPublish,
+    [switch] $SkipSite,
     [switch] $WhatIf
 )
 
@@ -194,40 +204,31 @@ function Get-InnoCompiler {
     throw 'Inno Setup was installed but ISCC.exe could not be found afterwards.'
 }
 
-<#
-.SYNOPSIS
-  Returns the GitHub token: GH_TOKEN or GITHUB_TOKEN when set, otherwise the github.com credential
-  git already uses to push (the credential manager), so gh needs no separate login.
-#>
-function Get-GitHubToken {
-    if ($env:GH_TOKEN) { return $env:GH_TOKEN }
-    if ($env:GITHUB_TOKEN) { return $env:GITHUB_TOKEN }
-    # The request goes in through a file: a piped string does not reach git credential in a form it
-    # accepts from every PowerShell. The file holds the protocol and host only; the answer, which holds
-    # the secret, is only ever in memory.
-    $ask = Join-Path ([System.IO.Path]::GetTempPath()) ('termoil-credential-' + [guid]::NewGuid().ToString('N') + '.txt')
-    try {
-        Set-Content -Path $ask -Value "protocol=https`nhost=github.com`n" -NoNewline -Encoding ascii
-        $answer = & cmd /c "git credential fill < `"$ask`"" 2>$null
-    } finally {
-        Remove-Item -LiteralPath $ask -Force -ErrorAction SilentlyContinue
-    }
-    $line = $answer | Where-Object { $_ -like 'password=*' } | Select-Object -First 1
-    if (-not $line) { throw 'No GitHub credential is stored for github.com. Run `gh auth login` (or set GH_TOKEN) and run this again.' }
-    return $line.Substring('password='.Length)
-}
+# Get-GitHubToken, Get-GitHubCli and Get-TermoilSite, shared with tools/promote.ps1.
+. (Join-Path $Here 'github.ps1')
 
 <#
 .SYNOPSIS
-  Returns the GitHub CLI, authenticated with the token from Get-GitHubToken, failing early when it is
-  missing or the token is refused.
+  Publishes the release on unluminous.com/termoil with the site's scripts/termoil/publish-termoil.ps1,
+  and answers whether it worked. The GitHub release already exists when this runs, so a failure is
+  reported with the command to run again rather than thrown.
+.PARAMETER Version
+  The released version.
+.PARAMETER Channel
+  nightly, or stable for a release made with -Stable.
 #>
-function Get-GitHubCli {
-    $gh = Get-Command 'gh' -ErrorAction SilentlyContinue
-    if (-not $gh) { throw 'The GitHub CLI (gh) is not installed. Install it from https://cli.github.com and run this again.' }
-    $env:GH_TOKEN = Get-GitHubToken
-    Invoke-Checked 'gh auth status' { & $gh.Source auth status 2>&1 | Out-Null }
-    return $gh.Source
+function Publish-Site([string] $Version, [string] $Channel) {
+    $site = Get-TermoilSite
+    if (-not $site) {
+        Write-Host 'unluminous.com: the black-rainbow-labs-sites checkout was not found (set TERMOIL_SITE), skipping.' -ForegroundColor Yellow
+        return $false
+    }
+    $script = Join-Path $site 'scripts/termoil/publish-termoil.ps1'
+    Write-Step "Publishing Termoil $Version on the $Channel channel of unluminous.com"
+    & pwsh -NoProfile -File $script -Channel $Channel -Version $Version | Out-Host
+    if ($LASTEXITCODE -eq 0) { return $true }
+    Write-Host "unluminous.com was not updated. Run this again: pwsh $script -Channel $Channel -Version $Version" -ForegroundColor Red
+    return $false
 }
 
 <#
@@ -568,6 +569,10 @@ if ($WhatIf) {
     Write-Host "    9. gh release create v$next with $(Join-Path $DistDir "TermoilSetup-$next-x64.exe") ($kind)"
     Write-Host '   10. download each asset back and compare SHA256 with the local file'
     Write-Host '   11. write the winget manifest into installer/winget/manifests'
+    $site = Get-TermoilSite
+    $channel = if ($Stable) { 'stable' } else { 'nightly' }
+    $siteStep = if ($SkipSite -or $SkipPublish) { 'skip unluminous.com' } elseif ($site) { "publish unluminous.com/termoil on the $channel channel with $site/scripts/termoil/publish-termoil.ps1" } else { 'unluminous.com: the sites checkout was not found, a real run skips it' }
+    Write-Host "   12. $siteStep"
     exit 0
 }
 
@@ -609,5 +614,8 @@ Publish-GitHubRelease $gh $next $assets
 Write-Step 'Writing the winget manifest'
 $installerUrl = "https://github.com/Black-Rainbow-Labs/Termoil/releases/download/v$next/$(Split-Path -Leaf $installer)"
 Write-WingetManifest $next $installerUrl (Get-FileHash -Algorithm SHA256 -LiteralPath $installer).Hash | Out-Null
+$siteOk = $true
+if (-not $SkipSite) { $siteOk = Publish-Site $next $(if ($Stable) { 'stable' } else { 'nightly' }) }
 Write-Host ''
 Write-Host "Released Termoil v$next ($kind)." -ForegroundColor Green
+if (-not $siteOk) { exit 1 }

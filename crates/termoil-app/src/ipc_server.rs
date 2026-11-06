@@ -73,6 +73,7 @@ pub fn bridge(
                     }
                 })
             }
+            Ok(crate::app::Outcome::Later(job)) => job(false),
             Err(_) => Err(termoil_protocol::ActionError::Failed("Termoil is shutting down".into())),
         };
         Response::from_result(req.id, result)

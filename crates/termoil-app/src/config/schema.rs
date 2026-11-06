@@ -236,7 +236,22 @@ pub static SECTIONS: &[Section] = &[
         doc: "Bindings that apply only on Linux, after the common ones.",
         keys: &[e("bindings", "Linux only bindings.")],
     },
-    Section { path: "updates", doc: "Update check.", keys: &[e("check", "Check for a newer release at startup.")] },
+    Section {
+        path: "updates",
+        doc: "Update check.",
+        keys: &[
+            e(
+                "check",
+                "daily, start or off. daily asks for a newer release at most once a day, start every time the first window opens, off never.",
+            ),
+            e(
+                "channel",
+                "stable or nightly. stable offers only versions promoted after use; nightly offers every release.",
+            ),
+            e("skip", "A version the automatic check does not announce; empty for none."),
+            e("timeout_seconds", "How long one request to the release server may take, in seconds."),
+        ],
+    },
     Section { path: "log", doc: "Logging.", keys: &[e("level", "error, warn, info, debug or trace.")] },
 ];
 

@@ -67,6 +67,7 @@ fn bench_setup(args: &mut Args) -> Option<LatencyBench> {
 /// Entry point.
 fn main() -> ExitCode {
     termoil_app::gui::mark_start();
+    termoil_app::update::apply::take_restore_from_env();
     termoil_app::platform::set_app_id();
     termoil_app::crash::install();
     let mut args = match parse_args() {

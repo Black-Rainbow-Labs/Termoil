@@ -75,6 +75,8 @@ fn kind_of(path: &str) -> Kind {
     const EDGES: &[&str] = &["top", "bottom", "left", "right"];
     const BELLS: &[&str] = &["visual", "audible", "none"];
     const LEVELS: &[&str] = &["error", "warn", "info", "debug", "trace"];
+    const CHECKS: &[&str] = &["daily", "start", "off"];
+    const CHANNELS: &[&str] = &["stable", "nightly"];
     match path {
         "font.family" | "font.ligatures_off" | "font.fallback" | "colors.palette" | "shell.args" => Kind::TextList,
         "font.size"
@@ -87,13 +89,16 @@ fn kind_of(path: &str) -> Kind {
         | "cursor.blink_interval_ms"
         | "window.columns"
         | "window.rows"
-        | "notify.after_seconds" => numeric_kind(path),
+        | "notify.after_seconds"
+        | "updates.timeout_seconds" => numeric_kind(path),
         "theme.name" | "theme.dark" | "theme.light" => Kind::Theme,
         "cursor.style" => Kind::Enum(STYLES),
         "window.renderer" => Kind::Enum(RENDERERS),
         "window.quick_terminal_edge" => Kind::Enum(EDGES),
         "notify.on_bell" => Kind::Enum(BELLS),
         "log.level" => Kind::Enum(LEVELS),
+        "updates.check" => Kind::Enum(CHECKS),
+        "updates.channel" => Kind::Enum(CHANNELS),
         "window.padding" => Kind::UintPair,
         "shell.env" => Kind::NotEditable("a table; edit it in the file"),
         p if p.starts_with("keybindings") => Kind::NotEditable("a list of tables; edit it in the file"),
@@ -128,7 +133,6 @@ fn is_bool_key(path: &str) -> bool {
         "notify.command_finished",
         "mouse.focus_follows_mouse",
         "mouse.hide_while_typing",
-        "updates.check",
     ];
     BOOLS.contains(&path)
 }

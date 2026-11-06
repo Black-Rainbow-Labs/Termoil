@@ -25,6 +25,7 @@ pub mod settings;
 pub mod shell_integration;
 pub mod terminfo;
 pub mod themes;
+pub mod update;
 pub mod view;
 
 pub use app::{App, Effect, Outcome};

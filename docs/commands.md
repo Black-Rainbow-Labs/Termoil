@@ -45,6 +45,10 @@ or the IPC socket asked for it.
 | [`deactivate-all-key-tables`](#deactivate-all-key-tables) | yes | no | nothing | Deactivates every active key table. |
 | [`install-shell-integration`](#install-shell-integration) | yes | yes | nothing | Installs the shell integration scripts and hooks them into the named shells' startup files. |
 | [`version`](#version) | yes | yes | nothing | Prints the version and build date. |
+| [`check-for-updates`](#check-for-updates) | yes | yes | nothing | Asks the release channel for the newest version and says whether it is newer than this one. |
+| [`list-updates`](#list-updates) | yes | no | nothing | Lists the newest five versions on the stable and nightly channels, marking the one running. |
+| [`install-update`](#install-update) | yes | yes | nothing | Downloads a version, checks its size and SHA-256, then quits, installs it and reopens the same windows. |
+| [`skip-update`](#skip-update) | yes | yes | nothing | Stops the automatic check announcing a version, by writing it to updates.skip. |
 | [`copy`](#copy) | no | yes | a pane | Copies the selection to the clipboard. |
 | [`paste`](#paste) | no | yes | a pane | Pastes the clipboard into the pane, bracketed when the program asked for it. |
 | [`select-all`](#select-all) | no | yes | a pane | Selects the whole screen and scrollback. |
@@ -523,6 +527,64 @@ termoil +version
 Over IPC: `{"id":1,"action":"version","args":{...}}`. MCP tool: `termoil_version`.
 
 No parameters.
+
+## check-for-updates
+
+Asks the release channel for the newest version and says whether it is newer than this one.
+
+```
+termoil +check-for-updates [--channel <stable|nightly>]
+```
+
+Over IPC: `{"id":1,"action":"check-for-updates","args":{...}}`. MCP tool: `termoil_check_for_updates`.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `channel` | stable|nightly | no | The release channel, stable or nightly; updates.channel when omitted. |
+
+## list-updates
+
+Lists the newest five versions on the stable and nightly channels, marking the one running.
+
+```
+termoil +list-updates [--channel <stable|nightly>]
+```
+
+Over IPC: `{"id":1,"action":"list-updates","args":{...}}`. MCP tool: `termoil_list_updates`.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `channel` | stable|nightly | no | List only this channel; both when omitted. |
+
+## install-update
+
+Downloads a version, checks its size and SHA-256, then quits, installs it and reopens the same windows.
+
+```
+termoil +install-update [--version <text>] [--channel <stable|nightly>] [--restart <true|false>]
+```
+
+Over IPC: `{"id":1,"action":"install-update","args":{...}}`. MCP tool: `termoil_install_update`.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `version` | text | no | The version to install, newer or older; the newest on the channel when omitted. |
+| `channel` | stable|nightly | no | The release channel, stable or nightly; updates.channel when omitted. |
+| `restart` | true|false | no | Quit, install and start the new version; true when omitted. false only downloads and checks the file. |
+
+## skip-update
+
+Stops the automatic check announcing a version, by writing it to updates.skip.
+
+```
+termoil +skip-update [--version <text>]
+```
+
+Over IPC: `{"id":1,"action":"skip-update","args":{...}}`. MCP tool: `termoil_skip_update`.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `version` | text | no | The version to skip; the one the last check found when omitted. |
 
 ## copy
 

@@ -33,7 +33,7 @@ fn act(app: &mut App, name: &str, args: Value) -> Value {
     let args: Map<String, Value> = args.as_object().cloned().unwrap_or_default();
     match app.run_action(&ActionCall { action: name.into(), args }) {
         termoil_app::Outcome::Done(r) => r.unwrap_or_else(|e| panic!("{name} failed: {e}")),
-        termoil_app::Outcome::Wait(..) => Value::Null,
+        termoil_app::Outcome::Wait(..) | termoil_app::Outcome::Later(_) => Value::Null,
     }
 }
 

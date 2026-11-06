@@ -166,6 +166,19 @@ pub enum Outcome {
     Done(Result<Value, ActionError>),
     /// Wait on another thread for the shell to settle, then answer with the exit code.
     Wait(PromptWaiter, Duration),
+    /// Work that waits on the network, run off the app's thread. The flag says a person asked from the
+    /// window (the palette or a keybinding), so the job tells them the answer itself.
+    Later(Job),
+}
+
+/// The work of an [`Outcome::Later`].
+pub type Job = Box<dyn FnOnce(bool) -> Result<Value, ActionError> + Send>;
+
+/// Runs a job on a thread of its own, for an action started from the window, whose answer nobody reads.
+pub fn spawn_job(job: Job) {
+    let _ = std::thread::Builder::new().name("termoil action".into()).spawn(move || {
+        let _ = job(true);
+    });
 }
 
 impl Outcome {
@@ -207,6 +220,8 @@ pub struct App {
     pub key_tables: Vec<crate::keymap::ActiveTable>,
     /// Where each window is on screen, kept current by the window layer and read by session restore.
     pub geometry: HashMap<WinId, crate::restore::WindowGeometry>,
+    /// The update check's sink and what it last found (`update::actions`).
+    pub updates: crate::update::actions::Updates,
     wakers: WakerFactory,
 }
 
@@ -225,6 +240,7 @@ impl App {
             record_input: false,
             key_tables: Vec::new(),
             geometry: HashMap::new(),
+            updates: Default::default(),
             wakers,
         }
     }
@@ -399,6 +415,10 @@ impl App {
         match self.run_action(&ActionCall { action: name.into(), args: Map::new() }) {
             Outcome::Done(r) => r,
             Outcome::Wait(..) => Ok(Value::Null),
+            Outcome::Later(job) => {
+                spawn_job(job);
+                Ok(Value::Null)
+            }
         }
     }
 }

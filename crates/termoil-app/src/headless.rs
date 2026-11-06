@@ -20,6 +20,8 @@ enum Msg {
     Wake(PaneId, Arc<AtomicBool>),
     /// An IPC request and where to send its outcome.
     Ipc(ActionCall, Sender<Outcome>),
+    /// An update job's event: a notification, printed here, or a checked update to install.
+    Update(crate::update::actions::Event),
 }
 
 /// Makes wakers that send one `Wake` per burst of output: the flag stays set until the app thread
@@ -45,6 +47,10 @@ pub fn run(
     let (tx, rx) = unbounded::<Msg>();
     let wakers = coalescing_wakers(tx.clone(), Msg::Wake);
     let mut app = App::new(config, config_path, Box::new(MemoryClipboard::default()), wakers);
+    let update_tx = tx.clone();
+    app.updates.sink = Some(Arc::new(move |ev| {
+        let _ = update_tx.send(Msg::Update(ev));
+    }));
     let ipc_tx = tx.clone();
     let handler = bridge(move |call, reply| ipc_tx.send(Msg::Ipc(call, reply)).is_ok());
     match start(socket, handler) {
@@ -78,6 +84,13 @@ fn serve(app: &mut App, rx: &Receiver<Msg>) {
             }
             Msg::Ipc(call, reply) => {
                 let _ = reply.send(app.run_action(&call));
+            }
+            Msg::Update(crate::update::actions::Event::Notify { title, body }) => eprintln!("termoil: {title}: {body}"),
+            Msg::Update(crate::update::actions::Event::Restart(prepared, target)) => {
+                match crate::update::actions::restart(app, &prepared, &target) {
+                    Ok(()) => return,
+                    Err(e) => eprintln!("termoil: could not install the update: {e}"),
+                }
             }
         }
         if apply_effects(app) {

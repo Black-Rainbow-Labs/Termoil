@@ -28,7 +28,7 @@ The suite is specified in `docs/TEST-SUITE.md`. Expected outputs change only wit
 
 Functional verification runs here: the end to end suite spawns the real shell on this machine. Visual judgment of the window is done by looking at a release build installed on this machine, not at screenshots of a dev build.
 
-Each milestone ends with `pwsh tools/release.ps1`, which bumps, builds, installs here, tags, pushes and publishes the GitHub release.
+Each milestone ends with `pwsh tools/release.ps1`, which bumps, builds, installs here, tags, pushes, publishes the GitHub release and publishes unluminous.com/termoil. Every release is a nightly. `pwsh tools/promote.ps1` makes a nightly stable; an agent does not promote unless Jason asks (`docs/decisions/updates.md`).
 
 ## Design questions
 

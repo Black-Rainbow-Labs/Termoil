@@ -70,11 +70,14 @@ impl Instance {
                 .to_string_lossy()
                 .into_owned()
         };
+        let releases = release_server();
         let child = Command::new(gui_exe())
             .arg("--headless")
             .env("TERMOIL_SOCKET", &socket)
             .env("TERMOIL_CONFIG", &config)
             .env("TERMOIL_DATA_DIR", dir.join("data"))
+            .env("TERMOIL_RELEASES_STABLE", format!("{releases}/stable.json"))
+            .env("TERMOIL_RELEASES_NIGHTLY", format!("{releases}/nightly.json"))
             .spawn()
             .expect("start termoil-gui");
         let inst = Instance { child, socket, config, dir };
@@ -180,6 +183,9 @@ fn run_action_args(name: &str, pane: u64) -> Value {
         "wait-prompt" => json!({ "pane": pane, "timeout": 20 }),
         "search" => json!({ "pane": pane, "pattern": "E5" }),
         "install-shell-integration" => json!({ "shells": "bash", "dry-run": true }),
+        "install-update" => json!({ "restart": false }),
+        "skip-update" => json!({ "version": "98.0.0" }),
+        "check-for-updates" | "list-updates" => json!({}),
         "save-session" => json!({}),
         "new-window"
         | "new-tab"
@@ -311,6 +317,124 @@ fn more_commands(inst: &Instance, p2: &str, covered: &mut BTreeSet<String>) {
     seen("deactivate-all-key-tables");
 }
 
+/// The stable channel the release server offers: one version older than any build under test.
+const STABLE_VERSION: &str = "1.0.0";
+/// The nightly channel: a newer version with a good package and an older one whose SHA-256 is wrong.
+const NIGHTLY_GOOD: &str = "99.1.0";
+const NIGHTLY_BAD: &str = "99.0.0";
+/// The package every release on the server points at.
+const PACKAGE: &[u8] = b"not really an installer, but the bytes the manifest promises";
+
+/// One version in the site's manifest shape, every kind pointing at the same package.
+fn manifest_entry(base: &str, version: &str, sha256: &str) -> Value {
+    let file = json!({ "file": format!("pkg-{version}.bin"), "url": format!("{base}/pkg.bin"), "bytes": PACKAGE.len(), "sha256": sha256 });
+    let files = json!({ "windows": file, "macos": file, "deb": file, "appimage": file });
+    json!({ "version": version, "date": "2026-11-06", "notes": format!("{base}/notes/{version}"), "files": files })
+}
+
+/// A channel manifest: the newest entry at the top level and every entry in `versions`.
+fn manifest(channel: &str, entries: Vec<Value>) -> String {
+    let mut top = entries[0].clone();
+    top["product"] = json!("Termoil");
+    top["channel"] = json!(channel);
+    top["versions"] = json!(entries);
+    top.to_string()
+}
+
+/// Starts, once per test process, a local HTTP server with `stable.json`, `nightly.json` and the package,
+/// and answers its base URL. The instances under test are pointed at it, so no test reaches the network.
+fn release_server() -> String {
+    static BASE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    BASE.get_or_init(|| {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind the release server");
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let dir = std::env::temp_dir().join(format!("termoil-e5-pkg-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("pkg.bin"), PACKAGE).unwrap();
+        let sha = termoil_app::update::install::sha256_file(&dir.join("pkg.bin")).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        let stable = manifest("stable", vec![manifest_entry(&base, STABLE_VERSION, &sha)]);
+        let wrong = "0".repeat(64);
+        let nightly = manifest(
+            "nightly",
+            vec![manifest_entry(&base, NIGHTLY_GOOD, &sha), manifest_entry(&base, NIGHTLY_BAD, &wrong)],
+        );
+        std::thread::spawn(move || {
+            for stream in listener.incoming().flatten() {
+                serve_one(stream, &stable, &nightly);
+            }
+        });
+        base
+    })
+    .clone()
+}
+
+/// Answers one HTTP request from the release server's three files, or 404.
+fn serve_one(mut stream: std::net::TcpStream, stable: &str, nightly: &str) {
+    use std::io::{BufRead, BufReader, Write};
+    let mut line = String::new();
+    let mut reader = BufReader::new(stream.try_clone().unwrap());
+    if reader.read_line(&mut line).is_err() {
+        return;
+    }
+    loop {
+        let mut header = String::new();
+        if reader.read_line(&mut header).map_or(true, |n| n == 0) || header.trim().is_empty() {
+            break;
+        }
+    }
+    let path = line.split_whitespace().nth(1).unwrap_or("/");
+    let (status, body): (&str, &[u8]) = match path {
+        "/stable.json" => ("200 OK", stable.as_bytes()),
+        "/nightly.json" => ("200 OK", nightly.as_bytes()),
+        "/pkg.bin" => ("200 OK", PACKAGE),
+        _ => ("404 Not Found", b"not here"),
+    };
+    let head = format!("HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+    let _ = stream.write_all(head.as_bytes()).and_then(|_| stream.write_all(body));
+}
+
+/// The update actions against the release server: both channels checked and listed, a package downloaded
+/// and checked, a package with the wrong SHA-256 refused and deleted, an unknown version refused, and a
+/// skipped version written to the configuration.
+fn update_commands(inst: &Instance, covered: &mut BTreeSet<String>) {
+    let stable = inst.json(&["+check-for-updates"]);
+    assert_eq!(
+        (stable["channel"].as_str(), stable["latest"].as_str(), stable["newer"].as_bool()),
+        (Some("stable"), Some(STABLE_VERSION), Some(false))
+    );
+    let nightly = inst.json(&["+check-for-updates", "--channel", "nightly"]);
+    assert_eq!((nightly["latest"].as_str(), nightly["newer"].as_bool()), (Some(NIGHTLY_GOOD), Some(true)));
+    assert_eq!(nightly["bytes"].as_u64(), Some(PACKAGE.len() as u64));
+    covered.insert("check-for-updates".into());
+    let listed = inst.json(&["+list-updates"]);
+    let names = |ch: &str| {
+        listed[ch].as_array().unwrap().iter().map(|v| v["version"].as_str().unwrap().to_string()).collect::<Vec<_>>()
+    };
+    assert_eq!(
+        (names("stable"), names("nightly")),
+        (vec![STABLE_VERSION.to_string()], vec![NIGHTLY_GOOD.to_string(), NIGHTLY_BAD.to_string()])
+    );
+    covered.insert("list-updates".into());
+    let got = inst.json(&["+install-update", "--channel", "nightly", "--restart", "false"]);
+    let file = PathBuf::from(got["file"].as_str().unwrap());
+    assert_eq!(std::fs::read(&file).unwrap(), PACKAGE, "the downloaded package differs");
+    let bad = inst.cli(&["+install-update", "--version", NIGHTLY_BAD, "--restart", "false"]);
+    let err = String::from_utf8_lossy(&bad.stderr);
+    assert!(!bad.status.success() && err.contains("SHA-256"), "a wrong SHA-256 was not refused: {err}");
+    let bad_folder = file.parent().unwrap().with_file_name(format!("termoil-update-{NIGHTLY_BAD}"));
+    assert!(!bad_folder.join(format!("pkg-{NIGHTLY_BAD}.bin")).exists(), "the refused package was kept");
+    let missing = inst.cli(&["+install-update", "--version", "42.0.0", "--restart", "false"]);
+    assert!(String::from_utf8_lossy(&missing.stderr).contains("not on the"), "an unknown version was not refused");
+    covered.insert("install-update".into());
+    assert_eq!(inst.json(&["+skip-update", "--version", NIGHTLY_GOOD])["skip"].as_str(), Some(NIGHTLY_GOOD));
+    let text = std::fs::read_to_string(&inst.config).unwrap();
+    assert!(text.contains(&format!("skip = \"{NIGHTLY_GOOD}\"")), "updates.skip was not written:\n{text}");
+    covered.insert("skip-update".into());
+    let _ = std::fs::remove_dir_all(file.parent().unwrap());
+    let _ = std::fs::remove_dir_all(bad_folder);
+}
+
 /// Every catalogue action through `run-action`: none may be unknown to `run_action`.
 fn every_action(inst: &Instance, covered: &mut BTreeSet<String>) {
     for a in CATALOGUE.iter().filter(|a| a.name != "quit" && a.name != "close") {
@@ -369,6 +493,7 @@ fn e5_every_command_through_the_cli() {
     owner_only(&inst);
     let (_p1, p2) = direct_commands(&inst, &mut covered);
     more_commands(&inst, &p2, &mut covered);
+    update_commands(&inst, &mut covered);
     every_action(&inst, &mut covered);
     let out = inst.cli(&["+run-action", "--name", "quit"]);
     assert!(out.status.success());
