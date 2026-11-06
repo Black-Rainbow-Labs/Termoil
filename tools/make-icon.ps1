@@ -32,17 +32,22 @@ function New-IconPng([int] $Size) {
     $path.AddArc($r - $d, $r - $d, $d, $d, 0, 90)
     $path.AddArc(0, $r - $d, $d, $d, 90, 90)
     $path.CloseFigure()
-    $g.FillPath((New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255, 24, 26, 33))), $path)
-    $pen = New-Object System.Drawing.Pen ([System.Drawing.Color]::FromArgb(255, 230, 233, 240)), ([float]($Size * 0.075))
-    $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
-    $pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
-    $pen.LineJoin = [System.Drawing.Drawing2D.LineJoin]::Round
+    # task-2524: drawn to read as the two characters ">_" a terminal prints: thick strokes with square
+    # ends, a ">" as tall as a capital letter, and an underscore on the same baseline, near white on near black.
+    $g.FillPath((New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255, 14, 15, 19))), $path)
+    $light = [System.Drawing.Color]::FromArgb(255, 242, 244, 248)
+    $stroke = [float]([Math]::Max(1.6, $Size * 0.105))
+    $pen = New-Object System.Drawing.Pen $light, $stroke
+    $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Square
+    $pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Square
+    $pen.LineJoin = [System.Drawing.Drawing2D.LineJoin]::Miter
     $chevron = [System.Drawing.PointF[]]@(
-        (New-Object System.Drawing.PointF ($Size * 0.24), ($Size * 0.32)),
-        (New-Object System.Drawing.PointF ($Size * 0.44), ($Size * 0.50)),
-        (New-Object System.Drawing.PointF ($Size * 0.24), ($Size * 0.68)))
+        (New-Object System.Drawing.PointF ($Size * 0.22), ($Size * 0.27)),
+        (New-Object System.Drawing.PointF ($Size * 0.46), ($Size * 0.48)),
+        (New-Object System.Drawing.PointF ($Size * 0.22), ($Size * 0.69)))
     $g.DrawLines($pen, $chevron)
-    $g.DrawLine($pen, [float]($Size * 0.52), [float]($Size * 0.70), [float]($Size * 0.76), [float]($Size * 0.70))
+    $bar = $Size * 0.69 - $stroke / 2
+    $g.FillRectangle((New-Object System.Drawing.SolidBrush $light), [float]($Size * 0.53), [float]$bar, [float]($Size * 0.27), [float]$stroke)
     $g.Dispose()
     $stream = New-Object System.IO.MemoryStream
     $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
