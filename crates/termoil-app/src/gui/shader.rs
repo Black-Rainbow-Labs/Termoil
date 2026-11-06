@@ -56,8 +56,12 @@ impl ShaderState {
     pub fn configure(&mut self, config: &Config, config_path: &Path) {
         let path = resolve_path(config, config_path);
         if path != self.path {
+            // Clearing the setting keeps the old source, so `apply` knows the painter still has a
+            // shader to drop. A new path forgets it, so the new file is compiled.
+            if path.is_some() {
+                self.source = None;
+            }
             self.path = path;
-            self.source = None;
             self.modified = None;
         }
         self.poll = Duration::from_millis(config.window.shader_poll_ms.max(50));
@@ -69,7 +73,7 @@ impl ShaderState {
     pub fn apply(&mut self, painter: &mut Painter, force: bool) -> bool {
         let before = self.error.clone();
         let Some(path) = self.path.clone() else {
-            if self.source.take().is_some() || force {
+            if self.must_drop(force) {
                 let _ = painter.set_shader(None);
             }
             self.error = None;
@@ -88,6 +92,12 @@ impl ShaderState {
             Ok(_) => {}
         }
         before != self.error
+    }
+
+    /// With no shader set, whether the painter still has one to drop: once after the setting was
+    /// cleared, and always for a new renderer (`force`). Forgets the old source.
+    fn must_drop(&mut self, force: bool) -> bool {
+        self.source.take().is_some() || force
     }
 
     /// Records a read failure: the painter drops its shader and the error is shown and printed.
@@ -152,5 +162,18 @@ mod tests {
         assert!(s.source.is_some(), "the same path keeps the source");
         s.configure(&config_with("b.wgsl"), Path::new("/c/config.toml"));
         assert!(s.source.is_none());
+    }
+
+    #[test]
+    fn clearing_the_setting_drops_the_running_shader_once() {
+        // task-2528: setting window.shader to "" left the CRT shader running, because the path
+        // change forgot the source and `apply` then thought nothing was running.
+        let mut s = ShaderState::new(&config_with("crt.wgsl"), Path::new("/c/config.toml"));
+        s.source = Some("fn termoil_shade() {}".into());
+        s.configure(&config_with(""), Path::new("/c/config.toml"));
+        assert_eq!(s.path, None);
+        assert!(s.must_drop(false), "the painter's shader is dropped after the setting is cleared");
+        assert!(!s.must_drop(false), "and only once");
+        assert!(s.must_drop(true), "a new renderer is always told");
     }
 }
