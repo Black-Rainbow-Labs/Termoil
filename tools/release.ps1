@@ -215,7 +215,7 @@ function Get-InnoCompiler {
 .PARAMETER Version
   The released version.
 .PARAMETER Channel
-  nightly, or stable for a release made with -Stable.
+  nightly, or stable for a release made with -Stable, which publishes nightly first and then stable.
 #>
 function Publish-Site([string] $Version, [string] $Channel) {
     $site = Get-TermoilSite
@@ -615,7 +615,12 @@ Write-Step 'Writing the winget manifest'
 $installerUrl = "https://github.com/Black-Rainbow-Labs/Termoil/releases/download/v$next/$(Split-Path -Leaf $installer)"
 Write-WingetManifest $next $installerUrl (Get-FileHash -Algorithm SHA256 -LiteralPath $installer).Hash | Out-Null
 $siteOk = $true
-if (-not $SkipSite) { $siteOk = Publish-Site $next $(if ($Stable) { 'stable' } else { 'nightly' }) }
+# The site promotes to stable only a version already on the nightly channel, so -Stable publishes
+# the nightly first and then promotes it, the same two steps tools/promote.ps1 relies on.
+if (-not $SkipSite) {
+    $siteOk = Publish-Site $next 'nightly'
+    if ($siteOk -and $Stable) { $siteOk = Publish-Site $next 'stable' }
+}
 Write-Host ''
 Write-Host "Released Termoil v$next ($kind)." -ForegroundColor Green
 if (-not $siteOk) { exit 1 }
