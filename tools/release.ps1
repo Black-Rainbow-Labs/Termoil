@@ -422,7 +422,7 @@ function Publish-GitHubRelease([string] $Gh, [string] $Version, [string[]] $Asse
     # @() around the if: an if expression unrolls a one item array to a string, and splatting a
     # string passes it one character at a time.
     $releaseFlags = @(if (-not $Stable) { '--prerelease' })
-    Invoke-Checked 'gh release create' { & $Gh release create "v$Version" @Assets --title "Termoil $Version" --notes $releaseNotes @releaseFlags }
+    Invoke-Checked 'gh release create' { & $Gh release create "v$Version" @Assets -R $TermoilRepository --title "Termoil $Version" --notes $releaseNotes @releaseFlags }
     Test-DownloadedAssets $Gh $Version $Assets
 }
 
@@ -442,7 +442,7 @@ function Test-DownloadedAssets([string] $Gh, [string] $Version, [string[]] $Asse
     New-Item -ItemType Directory -Force -Path $folder | Out-Null
     foreach ($asset in $Assets) {
         $name = Split-Path -Leaf $asset
-        Invoke-Checked "gh release download $name" { & $Gh release download "v$Version" --pattern $name --dir $folder --clobber }
+        Invoke-Checked "gh release download $name" { & $Gh release download "v$Version" -R $TermoilRepository --pattern $name --dir $folder --clobber }
         $local = (Get-FileHash -Algorithm SHA256 -LiteralPath $asset).Hash
         $remote = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $folder $name)).Hash
         if ($local -ne $remote) { throw "$name downloaded from GitHub has SHA256 $remote but the local file has $local." }
