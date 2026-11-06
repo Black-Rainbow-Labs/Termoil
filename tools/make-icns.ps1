@@ -50,8 +50,11 @@ function New-IcnsChunk([string] $Type, [byte[]] $Png) {
     return [byte[]] ([System.Text.Encoding]::ASCII.GetBytes($Type) + $length + $Png)
 }
 
-# Chunk types for PNG images: icp4 16, icp5 32, icp6 64, ic07 128, ic08 256 pixels.
-$chunkTypes = @(@(16, 'icp4'), @(32, 'icp5'), @(64, 'icp6'), @(128, 'ic07'), @(256, 'ic08'))
+# Chunk types for PNG images. icp4 (16) and icp5 (32) are left out on purpose: Finder decodes PNG
+# data in those chunks as garbage and shows a multi-colored smear at list and sidebar sizes. The
+# Retina chunks carry the same pixels and macOS scales them down for the 16 and 32 point slots:
+# ic11 16@2x (32 px), ic12 32@2x (64 px), ic07 128, ic13 128@2x (256 px), ic08 256.
+$chunkTypes = @(@(32, 'ic11'), @(64, 'ic12'), @(128, 'ic07'), @(256, 'ic13'), @(256, 'ic08'))
 $images = Read-IcoImages $Source
 $body = [byte[]] @()
 foreach ($pair in $chunkTypes) {
