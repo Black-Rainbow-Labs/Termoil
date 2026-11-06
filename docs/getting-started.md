@@ -157,4 +157,6 @@ the settings people change most.
   with the line and the problem.
 - `termoil +version` prints the version and build date of the running Termoil.
 - A crash writes a report into `%LOCALAPPDATA%\termoil` on Windows, `~/Library/Application Support/termoil` on
-  macOS, or `~/.local/share/termoil` on Linux. Nothing is sent anywhere.
+  macOS, or `~/.local/share/termoil` on Linux. The report itself is never sent; the usage statistics count only that a crash happened.
+- Anonymous usage statistics: which actions you use and how long Termoil is open, never a path, a command, a
+  title or anything you type. Turn them off with `enabled = false` under `[telemetry]`, or in the settings view.

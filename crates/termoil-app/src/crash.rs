@@ -1,6 +1,6 @@
 //! Crash reports (`docs/TDD.md` section 4.8): a panic writes a report with the message, the place,
-//! the thread, the version and a backtrace to a file under the data folder. Nothing is ever sent
-//! anywhere.
+//! the thread, the version and a backtrace to a file under the data folder. The report is never sent;
+//! telemetry counts only that a new one appeared (`telemetry::crashed_since_last_start`).
 
 use std::io::Write;
 

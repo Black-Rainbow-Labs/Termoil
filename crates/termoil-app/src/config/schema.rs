@@ -252,6 +252,14 @@ pub static SECTIONS: &[Section] = &[
             e("timeout_seconds", "How long one request to the release server may take, in seconds."),
         ],
     },
+    Section {
+        path: "telemetry",
+        doc: "Anonymous usage statistics: which actions are used and how long Termoil is open. Never a path, a command, a title or anything typed.",
+        keys: &[
+            e("enabled", "Send anonymous usage statistics. false sends nothing and counts nothing."),
+            e("interval_minutes", "How often a Termoil in use sends what it counted, in minutes."),
+        ],
+    },
     Section { path: "log", doc: "Logging.", keys: &[e("level", "error, warn, info, debug or trace.")] },
 ];
 

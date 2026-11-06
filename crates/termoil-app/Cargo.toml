@@ -32,6 +32,8 @@ softbuffer = "0.4"
 wgpu = "30"
 # The SHA-256 of a downloaded update, checked against the release manifest before it runs.
 sha2 = "0.10"
+# The telemetry client id: 16 bytes from the operating system's random source.
+getrandom = "0.3"
 
 [lints]
 workspace = true

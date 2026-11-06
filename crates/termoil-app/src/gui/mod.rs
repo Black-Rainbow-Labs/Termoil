@@ -170,8 +170,13 @@ pub fn run(
     let event_loop = EventLoop::<UserEvent>::with_user_event().build().map_err(|e| format!("no event loop: {e}"))?;
     phase("event_loop");
     warm::start(&config);
+    let (cwd_given, command_given) = (cwd.is_some(), command.is_some());
     match Gui::new(&event_loop, config, config_path, socket, cwd, command)? {
         Some(mut gui) => {
+            let env = crate::telemetry::environment();
+            let permission = crate::telemetry::Permission::for_the_binary(false, bench.is_some(), env.as_deref());
+            let launch = crate::telemetry::launch_kind(cwd_given, command_given);
+            crate::telemetry::start(&gui.app.config, permission, launch);
             gui.bench = bench;
             event_loop.run_app(&mut gui).map_err(|e| format!("event loop: {e}"))
         }
@@ -320,7 +325,10 @@ impl Gui {
                 let _ = ws.window.request_inner_size(winit::dpi::PhysicalSize::new(w, h));
             }),
             Effect::OpenPath(p) => crate::platform::open(&p.to_string_lossy()),
-            Effect::ConfigChanged => self.config_changed(),
+            Effect::ConfigChanged => {
+                crate::telemetry::configure(&self.app.config);
+                self.config_changed()
+            }
             Effect::LastWindowClosed | Effect::Quit => {
                 crate::restore::save_on_quit(&self.app, self.quick);
                 for id in self.app.panes.keys().copied().collect::<Vec<_>>() {
@@ -815,6 +823,7 @@ impl ApplicationHandler<UserEvent> for Gui {
                 self.pump_pane(pane);
             }
             UserEvent::Ipc(call, reply) => {
+                crate::telemetry::note_action(crate::telemetry::Category::Ipc, &call.action);
                 let _ = reply.send(self.app.run_action(&call));
             }
             UserEvent::Config(r) => self.config_loaded(*r),
@@ -844,6 +853,7 @@ impl ApplicationHandler<UserEvent> for Gui {
                 | WindowEvent::MouseWheel { .. }
         ) {
             ws.last_input = Some(Instant::now());
+            crate::telemetry::input();
         }
         match ev {
             WindowEvent::CloseRequested => {
@@ -903,6 +913,7 @@ impl ApplicationHandler<UserEvent> for Gui {
             }
             WindowEvent::Ime(ime) => handle::ime(ws, app, ime),
             WindowEvent::Focused(f) => {
+                crate::telemetry::focus(f);
                 if f {
                     app.model.focused = Some(id);
                 }

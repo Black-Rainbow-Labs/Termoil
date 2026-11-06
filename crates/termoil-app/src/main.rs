@@ -97,6 +97,8 @@ fn main() -> ExitCode {
     } else {
         termoil_app::gui::run(config, path, &socket, args.cwd, args.command, bench)
     };
+    // The closing telemetry request, which waits at most 600 ms and only when telemetry is on.
+    termoil_app::telemetry::close(std::time::Duration::from_millis(600));
     // Replies to the request that ended the instance (quit) are written by the IPC threads; give
     // them a moment to reach their clients before the process ends.
     std::thread::sleep(std::time::Duration::from_millis(150));

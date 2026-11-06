@@ -29,7 +29,8 @@ Every action it has can also be run from the command line or by an AI agent.
   the last command, and see a failed command's exit code in its tab.
 - Custom shaders written in WGSL, for effects such as a CRT screen or a cursor glow.
 - A command line and an MCP server that reach the same 65 actions as the keyboard and the mouse.
-- No telemetry and no network connections.
+- Anonymous usage statistics (which actions are used, how long Termoil is open), on by default and turned off
+  with `[telemetry] enabled = false`. No other network connections except the update check.
 
 ## Documentation
 

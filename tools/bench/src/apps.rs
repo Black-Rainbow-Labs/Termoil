@@ -170,6 +170,8 @@ impl Running {
         } else {
             cmd.args([subject.command_flag.as_str(), shell_command]);
         }
+        // A measured Termoil sends no usage statistics; other terminals ignore the variable.
+        cmd.env("TERMOIL_TELEMETRY", "off");
         for (k, v) in &subject.env {
             cmd.env(k, v);
         }

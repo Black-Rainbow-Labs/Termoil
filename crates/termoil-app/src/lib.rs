@@ -23,6 +23,7 @@ pub mod restore;
 pub mod session;
 pub mod settings;
 pub mod shell_integration;
+pub mod telemetry;
 pub mod terminfo;
 pub mod themes;
 pub mod update;

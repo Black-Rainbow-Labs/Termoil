@@ -138,7 +138,7 @@ Each row is marked must (in 1.0), should (planned, may slip to 1.1) or later (no
 
 - Not a tmux replacement in 1.0. Splits and tabs are in; a session that outlives its window, or moves to another process, is not (docs/decisions/detach.md).
 - Not a Lua or scripting runtime inside the process. Scripting is the CLI and IPC.
-- No telemetry, no network access of any kind except SSH the user starts and the update check. The update check asks unluminous.com for a static release list once a day by default (task-2524 asked for an automatic check), says nothing about the person, and `updates.check = "off"` turns it off (docs/decisions/updates.md).
+- No network access of any kind except SSH the user starts, the update check, and anonymous usage statistics. Usage statistics (task-2530) are on by default and send only which actions are used and how long Termoil is open, never a path, a command, a title or anything typed; `[telemetry] enabled = false` turns them off (docs/decisions/telemetry.md). The update check asks unluminous.com for a static release list once a day by default (task-2524 asked for an automatic check), says nothing about the person, and `updates.check = "off"` turns it off (docs/decisions/updates.md).
 - No DRCS soft fonts, no VT52 mode, no ReGIS, no Tektronix. DECRQM answers 0 (unsupported) for each.
 - No native toolkit widgets (GTK, WinUI, AppKit windows for tabs). The whole window is painted by vello so it looks and behaves the same everywhere. Native menus and the macOS menu bar are used.
 

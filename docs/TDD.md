@@ -23,7 +23,7 @@ Goals, each with the test that proves it (test ids are from `docs/TEST-SUITE.md`
 | Every action reachable by a person and by an agent through the same code | A1 catalogue completeness tests |
 | Installers for three platforms from one release command | R1 release script dry run and the installed version check |
 
-Non goals for 1.0: a multiplexer server, a scripting runtime, bidi reordering, DRCS, VT52, ReGIS, Tektronix, telemetry, native toolkit widgets. Each is listed with its reason in the PRD sections 5.5 and 5.6, and section 4 below says where the design leaves room for the first three.
+Non goals for 1.0: a multiplexer server, a scripting runtime, bidi reordering, DRCS, VT52, ReGIS, Tektronix, native toolkit widgets. Anonymous usage statistics were added later on request (task-2530, section 4.12). Each is listed with its reason in the PRD sections 5.5 and 5.6, and section 4 below says where the design leaves room for the first three.
 
 ## 3. Problem statement
 
@@ -194,11 +194,15 @@ Every action is a row in the catalogue (name, parameters, description, which con
 - The IPC socket is created with owner only permissions (a DACL on Windows, mode 0600 on Unix). No network listener.
 - Shell integration scripts are installed by explicit command only.
 - Image payloads are decoded with `image` in a thread with a size cap; a malformed PNG is dropped and counted.
-- No telemetry. The update check fetches one static file, `unluminous.com/termoil/stable.json` or `nightly.json`, once a day by default; `updates.check = "off"` sends nothing. A downloaded update runs only after its size and SHA-256 match the manifest (docs/decisions/updates.md).
+- Anonymous usage statistics (section 4.12) send only catalogue action names, shell kinds, counts and durations, never a path, a command, a title or anything typed; `telemetry.enabled = false` sends nothing. The update check fetches one static file, `unluminous.com/termoil/stable.json` or `nightly.json`, once a day by default; `updates.check = "off"` sends nothing. A downloaded update runs only after its size and SHA-256 match the manifest (docs/decisions/updates.md).
 
 ### 4.11 Embedding in Unluminous and the Tasks board
 
 `termoil-vt` plus `termoil-input` plus `termoil-pty` replace `alacritty_terminal` in `crates/unluminous-terminal`: `Session` wraps a `termoil-pty` spawn and a `Terminal`, `Screen` is built from a `RenderState` snapshot, `keys::encode` delegates to `termoil-input`. The proof of concept (milestone M4, test B2) is a branch in Unluminous that compiles and passes that crate's headless tests. Nothing in Unluminous changes in this ticket. The Tasks board can later open a Termoil window per agent terminal through `termoil +new-tab --cwd ... --name task-N` and read the screen through `+screen`; the ConPTY daemon keeps owning the session until that is designed.
+
+### 4.12 Usage statistics
+
+task-2530 asked for anonymous usage statistics, on by default with a way to turn them off. They go to the GA4 property `Termoil App` (`G-NDVVCGE4FD`) through the Measurement Protocol, posted with the system's curl like the update check. `App::run_action` counts every action by its catalogue name, the IPC handler counts the subset that came over the socket, and the session spawn counts the shell kind. The clocks are driven by input and focus events, because the event loop has no frame to count time on. A thread of its own decides when to send: 10 seconds after start, every `telemetry.interval_minutes` (20) while Termoil is used, never while idle, and once on close with a 600 ms bound. A `--headless` instance, a benchmark run and the E5 tests send nothing unless `TERMOIL_TELEMETRY=on`. `termoil +telemetry-status [--flush true]` reports what was sent. The design, the event list and the limits are in docs/decisions/telemetry.md.
 
 ## 5. Alternatives considered
 

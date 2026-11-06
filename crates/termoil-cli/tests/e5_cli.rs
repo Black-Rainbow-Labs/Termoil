@@ -60,6 +60,11 @@ impl Instance {
     /// Starts an instance in `dir` (kept if it exists, so a second instance can reuse the data folder)
     /// with the given configuration text.
     fn start_in(dir: PathBuf, tag: &str, config_file: String) -> Instance {
+        Instance::start_with(dir, tag, config_file, &[])
+    }
+
+    /// Starts an instance in `dir` with the given configuration text and extra environment variables.
+    fn start_with(dir: PathBuf, tag: &str, config_file: String, env: &[(&str, &str)]) -> Instance {
         std::fs::create_dir_all(&dir).unwrap();
         let config = dir.join("config.toml");
         std::fs::write(&config, config_file).unwrap();
@@ -71,7 +76,13 @@ impl Instance {
                 .into_owned()
         };
         let releases = release_server();
-        let child = Command::new(gui_exe())
+        let mut command = Command::new(gui_exe());
+        // The E5 instances never send usage statistics unless a test says so (`TERMOIL_TELEMETRY`).
+        command.env("TERMOIL_TELEMETRY", "off");
+        for (key, value) in env {
+            command.env(key, value);
+        }
+        let child = command
             .arg("--headless")
             .env("TERMOIL_SOCKET", &socket)
             .env("TERMOIL_CONFIG", &config)
@@ -185,7 +196,7 @@ fn run_action_args(name: &str, pane: u64) -> Value {
         "install-shell-integration" => json!({ "shells": "bash", "dry-run": true }),
         "install-update" => json!({ "restart": false }),
         "skip-update" => json!({ "version": "98.0.0" }),
-        "check-for-updates" | "list-updates" => json!({}),
+        "check-for-updates" | "list-updates" | "telemetry-status" => json!({}),
         "save-session" => json!({}),
         "new-window"
         | "new-tab"
@@ -494,6 +505,9 @@ fn e5_every_command_through_the_cli() {
     let (_p1, p2) = direct_commands(&inst, &mut covered);
     more_commands(&inst, &p2, &mut covered);
     update_commands(&inst, &mut covered);
+    let status = inst.json(&["+telemetry-status"]);
+    assert_eq!((status["enabled"].as_bool(), status["offBecause"].as_str()), (Some(false), Some("environment")));
+    covered.insert("telemetry-status".into());
     every_action(&inst, &mut covered);
     let out = inst.cli(&["+run-action", "--name", "quit"]);
     assert!(out.status.success());
@@ -625,4 +639,113 @@ fn e5_separate_instance() {
     assert!(cli_at(&socket, &["+send-text", "--pane", &pane.to_string(), "echo SEP_ALIVE\n"]).status.success());
     poll_at(&socket, &["+screen", "--pane", &pane.to_string()], |t| t.lines().any(|l| l.trim() == "SEP_ALIVE"));
     let _ = cli_at(&socket, &["+run-action", "--name", "quit"]);
+}
+
+/// A scripted Measurement Protocol server: answers 204 to every POST and keeps each body it was sent.
+fn collector() -> (String, std::sync::Arc<std::sync::Mutex<Vec<Value>>>) {
+    use std::io::{BufRead, BufReader, Read, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind the collector");
+    let base = format!("http://{}/mp/collect", listener.local_addr().unwrap());
+    let bodies = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let kept = bodies.clone();
+    std::thread::spawn(move || {
+        for mut stream in listener.incoming().flatten() {
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut length = 0usize;
+            loop {
+                let mut header = String::new();
+                if reader.read_line(&mut header).map_or(true, |n| n == 0) || header.trim().is_empty() {
+                    break;
+                }
+                if let Some(v) = header.to_ascii_lowercase().strip_prefix("content-length:") {
+                    length = v.trim().parse().unwrap_or(0);
+                }
+            }
+            let mut body = vec![0u8; length];
+            if reader.read_exact(&mut body).is_ok()
+                && let Ok(v) = serde_json::from_slice::<Value>(&body)
+            {
+                kept.lock().unwrap().push(v);
+            }
+            let _ = stream.write_all(
+                b"HTTP/1.1 204 No Content
+Connection: close
+
+",
+            );
+        }
+    });
+    (base, bodies)
+}
+
+/// Every `(event name, feature)` pair the collector received, `feature` empty for other events.
+fn received(bodies: &std::sync::Mutex<Vec<Value>>) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for body in bodies.lock().unwrap().iter() {
+        for e in body["events"].as_array().into_iter().flatten() {
+            let feature = format!(
+                "{}:{}",
+                e["params"]["category"].as_str().unwrap_or(""),
+                e["params"]["feature"].as_str().unwrap_or("")
+            );
+            out.push((e["name"].as_str().unwrap_or("").to_string(), feature));
+        }
+    }
+    out
+}
+
+/// Waits for the instance to exit after `quit`, so its closing request has been made.
+fn quit_and_wait(mut inst: Instance) {
+    let _ = inst.cli(&["+run-action", "--name", "quit"]);
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while inst.child.try_wait().ok().flatten().is_none() {
+        assert!(Instant::now() < deadline, "the instance did not quit");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+#[test]
+fn e5_telemetry_sends_counts_to_the_collector_and_nothing_when_off() {
+    let (url, bodies) = collector();
+    let env = [("TERMOIL_TELEMETRY", "on"), ("TERMOIL_TELEMETRY_URL", url.as_str())];
+    let dir = std::env::temp_dir().join(format!("termoil-e5-telemetry-{}", std::process::id()));
+    let inst = Instance::start_with(dir.clone(), "telemetry", config_text(1_000_000), &env);
+    let pane = inst.json(&["+new-tab"])["pane"].as_u64().unwrap().to_string();
+    inst.ok(&["+wait-prompt", "--pane", &pane, "--timeout", "30"]);
+    inst.ok(&["+version"]);
+    let status = inst.json(&["+telemetry-status", "--flush", "true"]);
+    assert_eq!(status["enabled"].as_bool(), Some(true), "{status}");
+    assert!(status["posted"].as_u64() >= Some(1) && status["failed"].as_u64() == Some(0), "{status}");
+    quit_and_wait(inst);
+    let got = received(&bodies);
+    for want in [
+        ("app_open", ":"),
+        ("app_heartbeat", ":"),
+        ("feature", "action:new-tab"),
+        ("feature", "ipc:version"),
+        ("app_close", ":"),
+    ] {
+        assert!(got.iter().any(|(e, f)| e == want.0 && f == want.1), "{want:?} was not sent: {got:?}");
+    }
+    let id = std::fs::read_to_string(dir.join("data/telemetry/id.txt")).unwrap();
+    assert!(id.len() == 32 && id.chars().all(|c| c.is_ascii_hexdigit()), "client id {id:?}");
+    for body in bodies.lock().unwrap().iter() {
+        assert_eq!(body["client_id"].as_str(), Some(id.trim()));
+        assert!(!body.to_string().contains(dir.to_string_lossy().as_ref()), "a path was sent: {body}");
+    }
+    bodies.lock().unwrap().clear();
+    let off = format!(
+        "{}
+[telemetry]
+enabled = false
+",
+        config_text(1_000_000)
+    );
+    let inst = Instance::start_with(dir.clone(), "telemetry-off", off, &env);
+    inst.ok(&["+new-tab"]);
+    let status = inst.json(&["+telemetry-status", "--flush", "true"]);
+    assert_eq!((status["enabled"].as_bool(), status["offBecause"].as_str()), (Some(false), Some("setting")));
+    quit_and_wait(inst);
+    assert!(bodies.lock().unwrap().is_empty(), "telemetry off still sent: {:?}", received(&bodies));
+    let _ = std::fs::remove_dir_all(&dir);
 }

@@ -526,6 +526,20 @@
       "name": "termoil_skip_update"
     },
     {
+      "description": "Says whether anonymous usage statistics are on, why not when they are off, and what has been sent.",
+      "inputSchema": {
+        "properties": {
+          "flush": {
+            "description": "Send what is waiting now instead of at the next interval.",
+            "type": "boolean"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "termoil_telemetry_status"
+    },
+    {
       "description": "Erases the scrollback of the pane, keeping the screen.",
       "inputSchema": {
         "properties": {

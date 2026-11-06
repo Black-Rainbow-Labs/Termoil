@@ -66,6 +66,28 @@ pub fn download(url: &str, to: &Path, timeout: Duration) -> Result<(), String> {
     run(cmd).map(|_| ())
 }
 
+/// Posts a JSON body to `url`, with `timeout` for the whole request. The body goes on curl's standard
+/// input, so it never appears on a command line. Used by the telemetry sender (`telemetry::sender`).
+pub fn post_json(url: &str, body: &str, timeout: Duration) -> Result<(), String> {
+    use std::io::Write;
+    let mut cmd = curl(timeout);
+    cmd.arg("--max-time").arg(timeout.as_secs().max(1).to_string()).arg("--max-redirs").arg("0");
+    cmd.args(["--header", "Content-Type: application/json", "--data-binary", "@-", "--output"]);
+    cmd.arg(if cfg!(windows) { "NUL" } else { "/dev/null" }).arg("--url").arg(url);
+    cmd.stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::piped());
+    let mut child = cmd.spawn().map_err(|e| format!("could not run curl: {e}"))?;
+    if let Some(mut input) = child.stdin.take() {
+        let _ = input.write_all(body.as_bytes());
+    }
+    let out = child.wait_with_output().map_err(|e| format!("curl did not finish: {e}"))?;
+    if out.status.success() {
+        return Ok(());
+    }
+    let message = String::from_utf8_lossy(&out.stderr).trim().to_string();
+    let code = out.status.code().map(|c| c.to_string()).unwrap_or_else(|| "a signal".into());
+    Err(if message.is_empty() { format!("curl failed with exit code {code}") } else { message })
+}
+
 /// Runs curl and answers its output, or its error message with the exit code.
 fn run(mut cmd: Command) -> Result<Vec<u8>, String> {
     let out = cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).output().map_err(|e| {

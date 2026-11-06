@@ -277,6 +277,7 @@ impl App {
         let mut opts = self.session_options(grid, cwd, command);
         opts.history = history;
         let title = crate::view::program_name(&opts.spawn.program);
+        crate::telemetry::note_shell(&opts.spawn.program);
         let waker = (self.wakers)(id);
         let session =
             Session::spawn(opts, waker).map_err(|e| ActionError::Failed(format!("could not start the shell: {e}")))?;
@@ -407,7 +408,16 @@ impl App {
         if termoil_protocol::action(&call.action).is_none() {
             return Outcome::err(ActionError::Unknown(call.action.clone()));
         }
-        crate::actions::dispatch(self, &call.action, &call.args)
+        crate::telemetry::note_action(crate::telemetry::Category::Action, &call.action);
+        let outcome = crate::actions::dispatch(self, &call.action, &call.args);
+        self.note_layout();
+        outcome
+    }
+
+    /// Tells telemetry how many windows, tabs and panes are open, so it keeps the largest.
+    fn note_layout(&self) {
+        let tabs = self.model.windows.iter().map(|w| w.tabs.len()).sum();
+        crate::telemetry::note_layout(self.model.windows.len(), tabs, self.panes.len());
     }
 
     /// Runs an action by name with no arguments and returns its result, for keybindings.

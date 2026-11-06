@@ -176,6 +176,7 @@ table takes every key the table does not bind.
 | `[mouse]` | `focus_follows_mouse`, `hide_while_typing`, `scroll_multiplier` |
 | `[openers]` | the commands run when you open a path or a URL; `{path}`, `{line}`, `{col}` and `{url}` are filled in |
 | `[accessibility]` | `enabled` exposes the screen to screen readers through UI Automation, NSAccessibility and AT-SPI |
+| `[telemetry]` | `enabled` sends anonymous usage statistics (on by default; never a path, a command or anything typed), `interval_minutes` |
 | `[log]` | `level` |
 
 `termoil +show-config --default true` lists every key in these sections with its default.

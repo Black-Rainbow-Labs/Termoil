@@ -59,6 +59,9 @@ pub fn run(
         Err(ServeError::Io(e)) => return Err(format!("could not serve {socket}: {e}")),
     }
     drop(tx);
+    let env = crate::telemetry::environment();
+    let permission = crate::telemetry::Permission::for_the_binary(true, false, env.as_deref());
+    crate::telemetry::start(&app.config, permission, "headless");
     if let Some((cwd, command)) = first_window {
         crate::actions::new_window(&mut app, cwd, command.as_deref()).map_err(|e| e.to_string())?;
         let _ = app.take_effects();
@@ -83,6 +86,7 @@ fn serve(app: &mut App, rx: &Receiver<Msg>) {
                 crate::events::pump(app, pane, true);
             }
             Msg::Ipc(call, reply) => {
+                crate::telemetry::note_action(crate::telemetry::Category::Ipc, &call.action);
                 let _ = reply.send(app.run_action(&call));
             }
             Msg::Update(crate::update::actions::Event::Notify { title, body }) => eprintln!("termoil: {title}: {body}"),
@@ -106,6 +110,7 @@ fn apply_effects(app: &mut App) -> bool {
         match e {
             Effect::SetClipboard(t) => app.clipboard.set(&t),
             Effect::Quit => quit = true,
+            Effect::ConfigChanged => crate::telemetry::configure(&app.config),
             _ => {}
         }
     }

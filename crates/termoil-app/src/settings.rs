@@ -90,7 +90,8 @@ fn kind_of(path: &str) -> Kind {
         | "window.columns"
         | "window.rows"
         | "notify.after_seconds"
-        | "updates.timeout_seconds" => numeric_kind(path),
+        | "updates.timeout_seconds"
+        | "telemetry.interval_minutes" => numeric_kind(path),
         "theme.name" | "theme.dark" | "theme.light" => Kind::Theme,
         "cursor.style" => Kind::Enum(STYLES),
         "window.renderer" => Kind::Enum(RENDERERS),
@@ -133,6 +134,7 @@ fn is_bool_key(path: &str) -> bool {
         "notify.command_finished",
         "mouse.focus_follows_mouse",
         "mouse.hide_while_typing",
+        "telemetry.enabled",
     ];
     BOOLS.contains(&path)
 }

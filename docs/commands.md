@@ -49,6 +49,7 @@ or the IPC socket asked for it.
 | [`list-updates`](#list-updates) | yes | no | nothing | Lists the newest five versions on the stable and nightly channels, marking the one running. |
 | [`install-update`](#install-update) | yes | yes | nothing | Downloads a version, checks its size and SHA-256, then quits, installs it and reopens the same windows. |
 | [`skip-update`](#skip-update) | yes | yes | nothing | Stops the automatic check announcing a version, by writing it to updates.skip. |
+| [`telemetry-status`](#telemetry-status) | yes | yes | nothing | Says whether anonymous usage statistics are on, why not when they are off, and what has been sent. |
 | [`copy`](#copy) | no | yes | a pane | Copies the selection to the clipboard. |
 | [`paste`](#paste) | no | yes | a pane | Pastes the clipboard into the pane, bracketed when the program asked for it. |
 | [`select-all`](#select-all) | no | yes | a pane | Selects the whole screen and scrollback. |
@@ -585,6 +586,20 @@ Over IPC: `{"id":1,"action":"skip-update","args":{...}}`. MCP tool: `termoil_ski
 | Parameter | Type | Required | Meaning |
 |---|---|---|---|
 | `version` | text | no | The version to skip; the one the last check found when omitted. |
+
+## telemetry-status
+
+Says whether anonymous usage statistics are on, why not when they are off, and what has been sent.
+
+```
+termoil +telemetry-status [--flush <true|false>]
+```
+
+Over IPC: `{"id":1,"action":"telemetry-status","args":{...}}`. MCP tool: `termoil_telemetry_status`.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `flush` | true|false | no | Send what is waiting now instead of at the next interval. |
 
 ## copy
 

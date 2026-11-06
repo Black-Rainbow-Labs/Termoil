@@ -63,6 +63,7 @@ pub struct Config {
     pub openers: Openers,
     pub keybindings: Keybindings,
     pub updates: Updates,
+    pub telemetry: Telemetry,
     pub log: Log,
 }
 
@@ -521,6 +522,31 @@ pub enum UpdateChannel {
     Stable,
     /// Every release.
     Nightly,
+}
+
+/// `[telemetry]`: anonymous usage statistics (`docs/decisions/telemetry.md`).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Telemetry {
+    /// Send anonymous usage statistics. Off, nothing is counted and nothing is sent.
+    pub enabled: bool,
+    /// How often a Termoil that is being used sends what it counted, in minutes.
+    pub interval_minutes: u64,
+}
+
+impl Default for Telemetry {
+    /// On, sending every 20 minutes while Termoil is used: under GA4's 30 minute session timeout, so a
+    /// session that is being used stays one session.
+    fn default() -> Self {
+        Telemetry { enabled: true, interval_minutes: 20 }
+    }
+}
+
+impl Telemetry {
+    /// The interval as a duration, at least one minute.
+    pub fn interval(&self) -> std::time::Duration {
+        std::time::Duration::from_secs(self.interval_minutes.max(1) * 60)
+    }
 }
 
 /// `[log]`: log verbosity.

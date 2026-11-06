@@ -201,7 +201,7 @@ fn wait_for_exit(pid: u32, limit: Duration) -> bool {
 
 /// Whether a process is still running.
 #[cfg(windows)]
-fn is_running(pid: u32) -> bool {
+pub(crate) fn is_running(pid: u32) -> bool {
     use windows::Win32::Foundation::{CloseHandle, WAIT_TIMEOUT};
     use windows::Win32::System::Threading::{OpenProcess, PROCESS_SYNCHRONIZE, WaitForSingleObject};
     // SAFETY: the handle is checked and closed here; a zero wait only reads the process's state.
@@ -215,7 +215,7 @@ fn is_running(pid: u32) -> bool {
 
 /// Whether a process is still running, from `kill -0`.
 #[cfg(not(windows))]
-fn is_running(pid: u32) -> bool {
+pub(crate) fn is_running(pid: u32) -> bool {
     Command::new("kill").arg("-0").arg(pid.to_string()).status().is_ok_and(|s| s.success())
 }
 
