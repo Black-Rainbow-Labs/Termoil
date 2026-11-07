@@ -244,8 +244,9 @@ Where counting happens, and what differs from the sketch above:
   registered as `RpcRecorder::Tap{"name"} | handler`, so that one function is the funnel for all of
   them, and the name counted is the registered name. `isQuietRpc` skips `testHarness/*`, every name
   starting with `get`, `eqzGetDynamicMeters`, the list and waveform reads, `graphSetViewport`,
-  `graphSetWindowSize`, `graphSetNodeSize` and the three telemetry RPCs. A skipped RPC neither counts
-  nor marks the interface as in use. Calls to one RPC less than 0.3 seconds apart are one gesture, so a
+  `graphSetWindowSize`, `graphSetNodeSize`, the three telemetry RPCs, and the three RPCs the interface
+  sends by itself when it loads (`setKeyboardNotesEnabled`, `setSuppressedMidiNotes`,
+  `midiLearnRegisterSelect`). A skipped RPC neither counts nor marks the interface as in use. Calls to one RPC less than 0.3 seconds apart are one gesture, so a
   knob drag counts once and not hundreds of times (`gestureGapSeconds`).
 - **Preset loads** are counted in `handlePresetLoad` as `preset` / `factory` or `user`. A preset is
   `factory` when it is in bank 1 or its author is `Factory`.
