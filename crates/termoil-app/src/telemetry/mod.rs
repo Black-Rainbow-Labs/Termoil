@@ -354,12 +354,15 @@ pub fn launch_kind(cwd: bool, command: bool) -> &'static str {
     }
 }
 
-/// The theme name to send: the configured name when it is a bundled theme, `other` otherwise.
+/// The theme name to send: a bundled theme's name in lower case with spaces as hyphens (`unluminous-dark`),
+/// and `other` for any theme Termoil does not bundle. Bundled names have spaces, which [`clean_name`] would
+/// otherwise drop.
 ///
 /// @param name - `theme.name` from the configuration
 pub fn theme_name(name: &str) -> String {
     let bundled = crate::config::themes().iter().any(|t| t.name == name);
-    if bundled { clean_name(name) } else { "other".into() }
+    let slug = clean_name(&name.to_ascii_lowercase().replace(' ', "-"));
+    if bundled && !slug.is_empty() { slug } else { "other".into() }
 }
 
 /// Starts telemetry for this process: the clock, the switch and the sender thread. Does nothing when

@@ -59,6 +59,17 @@ fn the_environment_and_the_mode_decide_whether_a_process_may_send() {
 }
 
 #[test]
+fn a_bundled_theme_is_sent_by_its_name_and_any_other_as_other() {
+    assert_eq!(
+        theme_name(crate::config::DEFAULT_THEME),
+        crate::config::DEFAULT_THEME.to_ascii_lowercase().replace(' ', "-")
+    );
+    assert!(!theme_name(crate::config::DEFAULT_THEME).is_empty());
+    assert_eq!(theme_name("My Secret Theme"), "other");
+    assert_eq!(theme_name(""), "other");
+}
+
+#[test]
 fn launch_kinds() {
     assert_eq!(launch_kind(false, false), "plain");
     assert_eq!(launch_kind(true, false), "folder");
