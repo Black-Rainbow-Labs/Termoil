@@ -159,6 +159,13 @@ impl FontGrid {
         self.shaper.shape(f, text, ligatures, self.config.size_px)
     }
 
+    /// Shapes `text` with face `face` with ligatures off, for a run whose ligatures do not fill the cells they
+    /// cover (task-2584).
+    pub fn shape_without_ligatures(&mut self, face: FaceId, text: &str) -> Arc<ShapedRun> {
+        let f = self.faces.face(face);
+        self.shaper.shape(f, text, false, self.config.size_px)
+    }
+
     /// The glyph id for `c` in `face`, without shaping (for single characters that need none).
     pub fn glyph(&self, face: FaceId, c: char) -> Option<u32> {
         self.faces.face(face).glyph(c)

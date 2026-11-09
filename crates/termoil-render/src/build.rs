@@ -4,7 +4,7 @@
 //! run (through the font grid's run cache) and places every glyph at its cell's position so text
 //! stays on the grid, and collects decorations, sprite characters and the cursor.
 
-use termoil_font::{FaceId, FontGrid, FontStyle, Presentation, sprite};
+use termoil_font::{FaceId, FontGrid, FontStyle, Presentation, ShapedRun, sprite};
 use termoil_vt::style::{Rgb, Underline, attr};
 use termoil_vt::terminal::CursorShape;
 
@@ -376,7 +376,10 @@ fn text_runs(
 fn flush(row: &mut RowFrame, pending: &mut Option<Pending>, y: f32, grid: &mut FontGrid, opts: &BuildOptions) {
     let Some(p) = pending.take() else { return };
     let m = *grid.metrics();
-    let shaped = grid.shape(p.face, &p.text);
+    let mut shaped = grid.shape(p.face, &p.text);
+    if has_narrow_ligature(&shaped, &p, m.width as f32) {
+        shaped = grid.shape_without_ligatures(p.face, &p.text);
+    }
     let face = grid.face(p.face);
     let wants_bold = matches!(p.style, FontStyle::Bold | FontStyle::BoldItalic);
     let wants_italic = matches!(p.style, FontStyle::Italic | FontStyle::BoldItalic);
@@ -406,6 +409,25 @@ fn flush(row: &mut RowFrame, pending: &mut Option<Pending>, y: f32, grid: &mut F
         skew: wants_italic && face.synthetic_italic,
         glyphs,
     });
+}
+
+/// Whether a shaped run has a cluster that covers more cells than its glyphs fill. Menlo joins f and i into
+/// one glyph one cell wide, which drawn at the f cell leaves the i cell empty (task-2584); programming
+/// ligatures are as wide as the cells they join, so they are kept.
+fn has_narrow_ligature(shaped: &ShapedRun, p: &Pending, cell_width: f32) -> bool {
+    let mut clusters: Vec<(u32, f32)> = Vec::new();
+    for g in &shaped.glyphs {
+        match clusters.iter_mut().find(|(c, _)| *c == g.cluster) {
+            Some((_, advance)) => *advance += g.advance,
+            None => clusters.push((g.cluster, g.advance)),
+        }
+    }
+    clusters.sort_by_key(|&(c, _)| c);
+    let ends = clusters.iter().skip(1).map(|&(c, _)| c).chain(std::iter::once(p.text.len() as u32));
+    clusters.iter().zip(ends).any(|(&(start, advance), end)| {
+        let cells = p.starts.iter().filter(|&&(off, _)| off >= start && off < end).count();
+        cells > 1 && ((advance / cell_width).round() as usize) < cells
+    })
 }
 
 /// The cursor rectangle, and for a block cursor the glyph under it in the cursor's text colour.
