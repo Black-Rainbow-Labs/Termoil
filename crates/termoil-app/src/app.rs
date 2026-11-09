@@ -76,6 +76,8 @@ pub enum Effect {
     LastWindowClosed,
     /// Exit the process.
     Quit,
+    /// Show a person what an action they ran from the window answered (`crate::answer`).
+    ShowAnswer(crate::answer::Answer),
 }
 
 /// Reads and writes the system clipboard.
@@ -174,11 +176,23 @@ pub enum Outcome {
 /// The work of an [`Outcome::Later`].
 pub type Job = Box<dyn FnOnce(bool) -> Result<Value, ActionError> + Send>;
 
-/// Runs a job on a thread of its own, for an action started from the window, whose answer nobody reads.
-pub fn spawn_job(job: Job) {
-    let _ = std::thread::Builder::new().name("termoil action".into()).spawn(move || {
-        let _ = job(true);
-    });
+/// Runs a job on a thread of its own, for an action started from the window, and gives its result to
+/// `done`, which sends it to the window as an answer.
+pub fn spawn_job(job: Job, done: impl FnOnce(Result<Value, ActionError>) + Send + 'static) {
+    let _ = std::thread::Builder::new().name("termoil action".into()).spawn(move || done(job(true)));
+}
+
+/// Waits on a thread of its own for the shell in a pane to settle, and gives the exit code to `done`.
+fn spawn_wait(waiter: PromptWaiter, timeout: Duration, done: impl FnOnce(Result<Value, ActionError>) + Send + 'static) {
+    let _ = std::thread::Builder::new().name("termoil wait".into()).spawn(move || done(wait_result(&waiter, timeout)));
+}
+
+/// Waits for a pane's shell to settle and answers its exit code, the way `wait-prompt` answers over IPC.
+pub fn wait_result(waiter: &PromptWaiter, timeout: Duration) -> Result<Value, ActionError> {
+    waiter
+        .wait(timeout)
+        .map(|code| serde_json::json!({ "exit_code": code }))
+        .map_err(|e| if e == "timed out" { ActionError::Timeout } else { ActionError::Failed(e) })
 }
 
 impl Outcome {
@@ -222,6 +236,8 @@ pub struct App {
     pub geometry: HashMap<WinId, crate::restore::WindowGeometry>,
     /// The update check's sink and what it last found (`update::actions`).
     pub updates: crate::update::actions::Updates,
+    /// Where the answer of a job started from the window goes; set by the window runtime.
+    pub answers: Option<crate::answer::Sink>,
     wakers: WakerFactory,
 }
 
@@ -241,6 +257,7 @@ impl App {
             key_tables: Vec::new(),
             geometry: HashMap::new(),
             updates: Default::default(),
+            answers: None,
             wakers,
         }
     }
@@ -420,14 +437,61 @@ impl App {
         crate::telemetry::note_layout(self.model.windows.len(), tabs, self.panes.len());
     }
 
-    /// Runs an action by name with no arguments and returns its result, for keybindings.
+    /// Runs an action by name with no arguments for a person, the way a keybinding does, and returns its
+    /// result; Null when the result comes later from a job.
     pub fn run_named(&mut self, name: &str) -> Result<Value, ActionError> {
-        match self.run_action(&ActionCall { action: name.into(), args: Map::new() }) {
-            Outcome::Done(r) => r,
-            Outcome::Wait(..) => Ok(Value::Null),
-            Outcome::Later(job) => {
-                spawn_job(job);
+        self.run_for_person(&ActionCall { action: name.into(), args: Map::new() }, crate::answer::Asked::Binding)
+    }
+
+    /// Runs an action a person started from the window (the palette, a key, a click) and makes sure they
+    /// are told what it answered: a result that is information or a failure is queued as
+    /// `Effect::ShowAnswer`, and a job that waits on the network or the shell runs on a thread and sends
+    /// its answer through `answers` (`docs/decisions/window-actions.md`). Returns the result when there is
+    /// one now, Null while a job runs.
+    /// @param call - the action and its arguments
+    /// @param asked - where the person ran it from, which decides whether a quiet failure is shown
+    pub fn run_for_person(&mut self, call: &ActionCall, asked: crate::answer::Asked) -> Result<Value, ActionError> {
+        let window = self.model.focused_index().map(|wi| self.model.windows[wi].id);
+        match self.run_action(call) {
+            Outcome::Done(result) => {
+                self.answer_now(window, &call.action, &result, asked);
+                result
+            }
+            Outcome::Wait(waiter, timeout) => {
+                let done = self.answer_later(window, &call.action);
+                spawn_wait(waiter, timeout, done);
                 Ok(Value::Null)
+            }
+            Outcome::Later(job) => {
+                let done = self.answer_later(window, &call.action);
+                spawn_job(job, done);
+                Ok(Value::Null)
+            }
+        }
+    }
+
+    /// Queues the answer to a finished action when the person should see it: always for an action whose
+    /// result is information, and for a failure from the palette.
+    fn answer_now(
+        &mut self, window: Option<WinId>, action: &str, result: &Result<Value, ActionError>,
+        asked: crate::answer::Asked,
+    ) {
+        let show = crate::answer::shows_result(action) || (result.is_err() && asked == crate::answer::Asked::Palette);
+        if show {
+            self.effects.push(Effect::ShowAnswer(crate::answer::describe(window, action, result)));
+        }
+    }
+
+    /// Queues the waiting answer for a job and returns what the job calls with its result: it describes
+    /// the result and sends it through `answers`.
+    fn answer_later(
+        &mut self, window: Option<WinId>, action: &str,
+    ) -> impl FnOnce(Result<Value, ActionError>) + Send + 'static {
+        self.effects.push(Effect::ShowAnswer(crate::answer::waiting(window, action)));
+        let (sink, action) = (self.answers.clone(), action.to_string());
+        move |result| {
+            if let Some(sink) = sink {
+                sink(crate::answer::describe(window, &action, &result));
             }
         }
     }

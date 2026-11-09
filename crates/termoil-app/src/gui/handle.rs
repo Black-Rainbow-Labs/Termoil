@@ -1,5 +1,5 @@
 //! Keyboard, IME and mouse input for a window. Keys are checked against the bindings first (an
-//! action runs through `App::run_action`), then encoded for the focused pane's keyboard mode.
+//! action runs through `App::run_for_person` and so `App::run_action`), then encoded for the focused pane's keyboard mode.
 //! Mouse buttons report to the program when it asked for mouse tracking (shift overrides), and
 //! select text otherwise.
 
@@ -14,6 +14,7 @@ use termoil_vt::modes::Mode;
 use termoil_vt::selection::{Selection, SelectionMode};
 use winit::event::{ElementState, Ime, MouseScrollDelta};
 
+use crate::answer::Asked;
 use crate::app::App;
 use crate::gui::tab_bar::TabHit;
 use crate::gui::window::WinState;
@@ -60,6 +61,10 @@ fn overlay_key(ws: &mut WinState, app: &mut App, ev: &KeyEvent) {
         {
             p.search = None;
         }
+        ws.overlay = ws
+            .answer_waiting
+            .take()
+            .map(|a| crate::gui::overlay::Overlay::Answer(crate::gui::overlay::AnswerUi::new(a)));
     }
     ws.window.request_redraw();
 }
@@ -80,7 +85,7 @@ fn binding(ws: &mut WinState, app: &mut App, bound: &[Bound], ev: &KeyEvent) -> 
     match result {
         Lookup::Action(name, args) => {
             ws.chords.clear();
-            let _ = app.run_action(&termoil_protocol::ActionCall { action: name, args });
+            let _ = app.run_for_person(&termoil_protocol::ActionCall { action: name, args }, Asked::Binding);
             true
         }
         Lookup::Pending => true,
@@ -421,7 +426,10 @@ fn middle_click_paste(app: &mut App, pane: PaneId) {
             let _ = view::paste_text(app, pane, &text);
         }
         None => {
-            let _ = app.run_action(&termoil_protocol::ActionCall { action: "paste".into(), args: Map::new() });
+            let _ = app.run_for_person(
+                &termoil_protocol::ActionCall { action: "paste".into(), args: Map::new() },
+                Asked::Binding,
+            );
         }
     }
 }
@@ -431,9 +439,11 @@ fn right_click(app: &mut App, pane: PaneId) {
     let name = if view::selected_text(app, pane).is_some() { "copy" } else { "paste" };
     let mut args = Map::new();
     args.insert("pane".into(), pane.into());
-    let _ = app.run_action(&termoil_protocol::ActionCall { action: name.into(), args: args.clone() });
+    let _ =
+        app.run_for_person(&termoil_protocol::ActionCall { action: name.into(), args: args.clone() }, Asked::Binding);
     if name == "copy" {
-        let _ = app.run_action(&termoil_protocol::ActionCall { action: "clear-selection".into(), args });
+        let _ = app
+            .run_for_person(&termoil_protocol::ActionCall { action: "clear-selection".into(), args }, Asked::Binding);
     }
 }
 
@@ -458,11 +468,15 @@ fn press_tab_bar(ws: &mut WinState, app: &mut App, x: f64, b: winit::event::Mous
         (B::Left, Some(TabHit::Close(i))) | (B::Middle, Some(TabHit::Tab(i) | TabHit::Close(i))) => {
             if let Some(pane) = tab_pane(app, i) {
                 let args = Map::from_iter([("pane".to_string(), serde_json::json!(pane))]);
-                let _ = app.run_action(&termoil_protocol::ActionCall { action: "close-tab".into(), args });
+                let _ = app
+                    .run_for_person(&termoil_protocol::ActionCall { action: "close-tab".into(), args }, Asked::Binding);
             }
         }
         (B::Left, Some(TabHit::NewTab)) => {
-            let _ = app.run_action(&termoil_protocol::ActionCall { action: "new-tab".into(), args: Map::new() });
+            let _ = app.run_for_person(
+                &termoil_protocol::ActionCall { action: "new-tab".into(), args: Map::new() },
+                Asked::Binding,
+            );
         }
         _ => {}
     }

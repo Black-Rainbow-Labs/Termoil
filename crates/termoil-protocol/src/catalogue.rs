@@ -318,7 +318,7 @@ pub const CATALOGUE: &[ActionDef] = &[
         &[p("channel", Choice(CHANNELS), false, "List only this channel; both when omitted.")],
         G,
         true,
-        false,
+        true,
     ),
     a(
         "install-update",

@@ -64,15 +64,7 @@ pub fn bridge(
         }
         let result = match rx.recv() {
             Ok(crate::app::Outcome::Done(r)) => r,
-            Ok(crate::app::Outcome::Wait(waiter, timeout)) => {
-                waiter.wait(timeout).map(|code| serde_json::json!({ "exit_code": code })).map_err(|e| {
-                    if e == "timed out" {
-                        termoil_protocol::ActionError::Timeout
-                    } else {
-                        termoil_protocol::ActionError::Failed(e)
-                    }
-                })
-            }
+            Ok(crate::app::Outcome::Wait(waiter, timeout)) => crate::app::wait_result(&waiter, timeout),
             Ok(crate::app::Outcome::Later(job)) => job(false),
             Err(_) => Err(termoil_protocol::ActionError::Failed("Termoil is shutting down".into())),
         };

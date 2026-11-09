@@ -111,6 +111,8 @@ pub enum UserEvent {
     Access(accesskit_winit::Event),
     /// An update job wants a notification shown, or a checked update installed.
     Update(crate::update::actions::Event),
+    /// A job a person started from the window finished; its answer is shown (`crate::answer`).
+    Answer(crate::answer::Answer),
 }
 
 impl From<accesskit_winit::Event> for UserEvent {
@@ -215,6 +217,10 @@ impl Gui {
         let update_proxy = proxy.clone();
         app.updates.sink = Some(Arc::new(move |ev| {
             let _ = update_proxy.send_event(UserEvent::Update(ev));
+        }));
+        let answer_proxy = proxy.clone();
+        app.answers = Some(Arc::new(move |answer| {
+            let _ = answer_proxy.send_event(UserEvent::Answer(answer));
         }));
         Ok(Some(Gui {
             app,
@@ -391,7 +397,35 @@ impl Gui {
                 ws.overlay = Some(overlay::Overlay::Hints(overlay::HintsUi { pane, items, typed: String::new() }));
                 ws.window.request_redraw();
             }),
+            Effect::ShowAnswer(answer) => self.show_answer(answer),
         }
+    }
+
+    /// Shows an answer in the window the action was run in, or the focused window when that one has
+    /// closed: at once when no other overlay is open, otherwise when that overlay closes. With no window
+    /// open it becomes a desktop notification.
+    fn show_answer(&mut self, answer: crate::answer::Answer) {
+        let target = answer
+            .window
+            .filter(|w| self.windows.contains_key(w))
+            .or_else(|| self.windows.iter().find(|(_, ws)| ws.focused).map(|(id, _)| *id))
+            .or_else(|| self.windows.keys().next().copied());
+        let Some(ws) = target.and_then(|id| self.windows.get_mut(&id)) else {
+            return crate::platform::notify(
+                &answer.title,
+                &answer.lines.join(
+                    "
+",
+                ),
+            );
+        };
+        match ws.overlay {
+            None | Some(overlay::Overlay::Answer(_)) => {
+                ws.overlay = Some(overlay::Overlay::Answer(overlay::AnswerUi::new(answer)))
+            }
+            Some(_) => ws.answer_waiting = Some(answer),
+        }
+        ws.window.request_redraw();
     }
 
     /// Runs `f` on a window when it exists.
@@ -830,6 +864,7 @@ impl ApplicationHandler<UserEvent> for Gui {
             UserEvent::QuickTerminal => self.toggle_quick(el),
             UserEvent::Access(ev) => self.access_event(ev),
             UserEvent::Update(ev) => self.update_event(ev),
+            UserEvent::Answer(answer) => self.app.effects.push(Effect::ShowAnswer(answer)),
         }
         self.apply_effects(el);
     }

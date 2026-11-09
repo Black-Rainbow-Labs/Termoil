@@ -5,6 +5,7 @@
 //! action becomes a change. The winit front end lives in [`gui`].
 
 pub mod actions;
+pub mod answer;
 pub mod app;
 pub mod config;
 pub mod crash;

@@ -154,6 +154,8 @@ pub struct WinState {
     pub overlay: Option<crate::gui::overlay::Overlay>,
     /// The overlay's strip.
     pub overlay_strip: Strip,
+    /// An answer that arrived while another overlay was open, shown when that overlay closes.
+    pub answer_waiting: Option<crate::answer::Answer>,
     /// One small strip per hint label.
     pub hint_strips: Vec<Strip>,
     /// The GPU renderer being built, until the window switches to it.
@@ -281,6 +283,7 @@ impl WinState {
             access,
             shader,
             overlay: None,
+            answer_waiting: None,
             hint_strips: Vec::new(),
             bell_until: None,
             hover: None,
@@ -789,6 +792,13 @@ impl WinState {
                 let room = (size.height as f32 - self.tab_bar_h) / ch as f32;
                 let max_rows = (room as u16).saturating_sub(2).max(8);
                 let (bytes, rows) = crate::gui::settings_view::settings_content(s, width, max_rows, &self.colors);
+                self.overlay_strip.frame(width, rows, &bytes, &self.colors, &mut self.grid, &opts);
+                let x = (size.width as f32 - (width as u32 * cw + 2 * opts.padding.0) as f32) / 2.0;
+                Some((x.max(0.0), self.tab_bar_h + ch as f32 / 2.0))
+            }
+            Overlay::Answer(a) => {
+                let width = cols.saturating_sub(4).clamp(10, PALETTE_COLS);
+                let (bytes, rows) = crate::gui::overlay::answer_content(a, width, &self.colors);
                 self.overlay_strip.frame(width, rows, &bytes, &self.colors, &mut self.grid, &opts);
                 let x = (size.width as f32 - (width as u32 * cw + 2 * opts.padding.0) as f32) / 2.0;
                 Some((x.max(0.0), self.tab_bar_h + ch as f32 / 2.0))

@@ -115,12 +115,12 @@ Every part is a catalogue row, so the palette, a keybinding, `termoil +<name>` a
 
 | Action | Parameters | What it does |
 |---|---|---|
-| `check-for-updates` | `channel` | Asks the channel and answers `{ current, channel, latest, newer, notes, file, bytes }`. Run from the palette, it shows a notification with the answer either way. |
+| `check-for-updates` | `channel` | Asks the channel and answers `{ current, channel, latest, newer, notes, file, bytes }`. Run from the palette or a key, the window shows the answer either way in its answer overlay (task-2586; `window-actions.md`). |
 | `list-updates` | `channel` | The newest five versions on each channel (or the one named), newest first, the running one marked. |
 | `install-update` | `version`, `channel`, `restart` | Downloads the version (the newest on the channel when none is named), checks its size and SHA-256, and with `restart` (the default) saves the session, closes Termoil, installs, and starts the new version with the same windows. With `restart` false it answers the path of the checked file and does nothing else. |
 | `skip-update` | `version` | Writes `updates.skip`, the version the last check found when none is named. |
 
-The work that waits on the network runs on a thread. A new `Outcome::Later` carries it: the IPC server runs it on the connection's thread, as it already does for `wait-prompt`, and the palette and keybindings run it on a thread of its own. The window's thread never waits on the network.
+The work that waits on the network runs on a thread. A new `Outcome::Later` carries it: the IPC server runs it on the connection's thread, as it already does for `wait-prompt`, and the palette and keybindings run it on a thread of its own through `App::run_for_person`, which shows its answer in the window when it arrives. The window's thread never waits on the network. Before task-2586 the window dropped the job without running it, so these actions did nothing from the palette.
 
 `check-for-updates`, `list-updates` and `install-update` with `restart` false also answer from `termoil +<name>` when no Termoil is running, like `version` does.
 

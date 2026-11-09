@@ -114,7 +114,7 @@ Spawn the real shell through `termoil-pty` on each platform, send bytes through 
 - **E3 shell integration**: for PowerShell, pwsh, bash, zsh, fish and nushell, the installed script emits OSC 133 A, B, C and D with the exit code, OSC 7 after `cd`, and `wait-prompt` returns the exit code of a command that failed.
 - **E4 programs**: vim opens and quits, `less` pages and quits, a program that sends DA1 and DSR gets the answers, a program that reads the kitty keyboard flags sees them, `kitten icat` style output places an image (Unix), tmux passthrough reaches the terminal.
 - **E5 IPC and CLI**: every catalogue command through `termoil-cli` against a running instance started for the test: `new-tab` with a cwd, `send-text`, `send-key`, `screen` text and JSON, `scrollback`, `wait-prompt`, `list`, `close`, `run-action` for every action, `show-config`, `reload-config` after writing a changed file, `version`. Permission on the socket is owner only.
-- **E6 window**: through winit with a fake key and IME source: typing reaches the PTY, IME preedit is drawn at the cursor and never written to the PTY until commit, cancel writes nothing, focus loss during composition commits or cancels per platform convention, paste is bracketed when the mode is on, a tab opens and closes, a split is created and focus moves, the quick terminal toggles, the command palette runs an action. Skipped and printed where no display is available.
+- **E6 window**: through winit with a fake key and IME source: typing reaches the PTY, IME preedit is drawn at the cursor and never written to the PTY until commit, cancel writes nothing, focus loss during composition commits or cancels per platform convention, paste is bracketed when the mode is on, a tab opens and closes, a split is created and focus moves, the quick terminal toggles, the command palette runs an action, the palette shows the answers of `check-for-updates` and `list-updates` from a release server in the test process and the error of a failed action, Escape closes an answer and the next key reaches the shell, and every palette entry runs from the palette in turn with none failing apart from the ones the step names (task-2586). Skipped and printed where no display is available.
 
 ## 12. Fuzzing (F1 to F14, `cargo fuzz`)
 
@@ -137,6 +137,7 @@ Each benchmark prints the machine, build flags, commit, sample count, median and
 - **A2**: the MCP tool list is generated from the catalogue and matches the checked in `docs/mcp-tools.json`.
 - **A3**: every keybinding in the default config names a catalogue action.
 - **A4**: the command palette lists every action.
+- **A5** (task-2586, `crates/termoil-app/tests/a5_window_actions.rs`): every action a person runs from the window is run and they are told what it answered. Every catalogue row is in exactly one of `answer::ANSWERS` and `answer::ACTS`; every action runs through `App::run_for_person` in a headless app with a real shell, and an action whose result is information shows it while a failure from the palette is shown with its reason; `check-for-updates`, `list-updates`, `install-update` and `skip-update` answer from a release server in the test process, through the palette keys and directly; an unreachable channel, a wrong SHA-256 and a skip before any check are shown as failures; the palette asks for every required parameter; the answer overlay scrolls and closes on any key. `docs/decisions/window-actions.md` has the design.
 - **B1**: `cargo build -p termoil-vt -p termoil-input -p termoil-protocol --target wasm32-unknown-unknown` passes.
 - **B2**: the Unluminous proof of concept branch compiles and `cargo test -p unluminous-terminal` passes there (milestone M4).
 - **W1**: ConPTY reflow: ten recorded sessions resized through ConPTY on this machine; Termoil's grid after host side reflow equals what ConPTY reports.
@@ -163,7 +164,7 @@ Each benchmark prints the machine, build flags, commit, sample count, median and
 | DCS passthrough | U1 DCS, E4 tmux |
 | Rendering, fonts, cursor, pacing | R1 to R4, P2 |
 | Platforms and windowing | E6, R3 adapters, CI matrix |
-| Tabs, splits, quick terminal, palette | E5, E6, A4 |
+| Tabs, splits, quick terminal, palette | E5, E6, A4, A5 |
 | Selection, search, hints, hyperlinks | U4, U2 hyperlinks, E5 screen |
 | Shell integration, prompts, notifications | E3, U2 OSC 133 and 9 and 99 |
 | Config, themes, keybindings | E5 config, A3, F12 |

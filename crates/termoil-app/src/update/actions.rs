@@ -64,7 +64,7 @@ pub fn dispatch(app: &mut App, name: &str, args: &Map<String, Value>) -> Outcome
     let timeout = Duration::from_secs(app.config.updates.timeout_seconds.max(1));
     let updates = app.updates.clone();
     match name {
-        "check-for-updates" => Outcome::Later(Box::new(move |announce| check(&updates, channel, timeout, announce))),
+        "check-for-updates" => Outcome::Later(Box::new(move |_| check(&updates, channel, timeout))),
         "list-updates" => {
             let named = arg_str(args, "channel").is_some();
             Outcome::Later(Box::new(move |_| Ok(list(channel, named, timeout))))
@@ -76,7 +76,7 @@ pub fn dispatch(app: &mut App, name: &str, args: &Map<String, Value>) -> Outcome
                 restart: args.get("restart").is_none_or(|_| crate::actions::arg_bool(args, "restart")),
                 timeout,
             };
-            Outcome::Later(Box::new(move |announce| install_job(&updates, &request, announce)))
+            Outcome::Later(Box::new(move |announce| install_steps(&updates, &request, announce)))
         }
         _ => Outcome::Done(skip(app, args)),
     }
@@ -92,24 +92,12 @@ fn channel_arg(app: &App, args: &Map<String, Value>) -> Result<UpdateChannel, Ac
 }
 
 /// check-for-updates: asks the channel and answers what it found. A person who asked from the window is
-/// told the answer either way.
-fn check(updates: &Updates, channel: UpdateChannel, timeout: Duration, announce: bool) -> Result<Value, ActionError> {
-    let list = match fetch_channel(channel, timeout) {
-        Ok(l) => l,
-        Err(e) => {
-            if announce {
-                updates.notify("Could not check for updates", &e);
-            }
-            return Err(ActionError::Failed(e));
-        }
-    };
+/// shown the answer by `App::run_for_person`, so the job itself only fetches and compares.
+fn check(updates: &Updates, channel: UpdateChannel, timeout: Duration) -> Result<Value, ActionError> {
+    let list = fetch_channel(channel, timeout).map_err(ActionError::Failed)?;
     let newest = &list[0];
     updates.remember(&newest.version);
     let newer = is_newer(current_version(), &newest.version);
-    if announce {
-        let (title, body) = sentence(channel, newest, newer);
-        updates.notify(&title, &body);
-    }
     let mut answer = newest.to_json();
     if let Value::Object(m) = &mut answer {
         m.insert("current".into(), json!(current_version()));
@@ -120,21 +108,20 @@ fn check(updates: &Updates, channel: UpdateChannel, timeout: Duration, announce:
     Ok(answer)
 }
 
-/// The notification for a check's answer.
-fn sentence(channel: UpdateChannel, newest: &Release, newer: bool) -> (String, String) {
+/// The sentences for a check's answer, shared by the automatic check's notification and the answer the
+/// window shows (`crate::answer`).
+/// @param current - the running version
+/// @param latest - the newest version on the channel
+/// @param channel - the channel's name
+/// @param newer - the newest version is newer than the running one
+pub fn sentence(current: &str, latest: &str, channel: &str, newer: bool) -> (String, String) {
     if newer {
         (
-            format!("Termoil {} is available", newest.version),
-            format!(
-                "You have {}. Run Install Update from the command palette, or termoil +install-update.",
-                current_version()
-            ),
+            format!("Termoil {latest} is available"),
+            format!("You have {current}. Run Install Update from the command palette, or termoil +install-update."),
         )
     } else {
-        (
-            "Termoil is up to date".into(),
-            format!("{} is the newest version on the {} channel.", current_version(), channel_name(channel)),
-        )
+        ("Termoil is up to date".into(), format!("{current} is the newest version on the {channel} channel."))
     }
 }
 
@@ -164,17 +151,8 @@ struct InstallRequest {
 }
 
 /// install-update: finds the version, downloads and checks it, and then either answers the file or hands
-/// over to the helper. Failures are told to a person who asked from the window.
-fn install_job(updates: &Updates, req: &InstallRequest, announce: bool) -> Result<Value, ActionError> {
-    let result = install_steps(updates, req, announce);
-    if announce && let Err(e) = &result {
-        updates.notify("Termoil could not install the update", &e.to_string());
-    }
-    result
-}
-
-/// The steps of install-update, without the notification. `announce` also opens the download page when
-/// this Termoil cannot be replaced in place.
+/// over to the helper. `announce` (a person asked from the window) also opens the download page when this
+/// Termoil cannot be replaced in place; the window shows the failure itself.
 fn install_steps(updates: &Updates, req: &InstallRequest, announce: bool) -> Result<Value, ActionError> {
     let release = find_release(req)?;
     let target = match req.restart.then(install::target) {
@@ -288,7 +266,7 @@ pub fn start_automatic(app: &App) {
         let newest = &list[0];
         updates.remember(&newest.version);
         if is_newer(current_version(), &newest.version) && newest.version != skip {
-            let (title, body) = sentence(channel, newest, true);
+            let (title, body) = sentence(current_version(), &newest.version, channel_name(channel), true);
             updates.notify(&title, &body);
         }
     });

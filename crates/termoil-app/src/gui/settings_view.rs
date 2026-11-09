@@ -126,7 +126,10 @@ fn browse_key(s: &mut SettingsUi, app: &mut App, ev: &KeyEvent) -> After {
 fn activate(s: &mut SettingsUi, app: &mut App) -> After {
     let Some(row) = s.matches().get(s.selected).cloned() else { return After::Open };
     let Row::Setting(i) = row else {
-        let _ = app.run_action(&ActionCall { action: "open-config".into(), args: Map::new() });
+        let _ = app.run_for_person(
+            &ActionCall { action: "open-config".into(), args: Map::new() },
+            crate::answer::Asked::Palette,
+        );
         return After::Close;
     };
     let setting = s.settings[i].clone();

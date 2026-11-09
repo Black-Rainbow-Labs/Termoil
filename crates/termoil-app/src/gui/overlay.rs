@@ -4,9 +4,10 @@
 
 use serde_json::{Map, Value};
 use termoil_input::{Key, KeyEvent, Modifiers, NamedKey};
-use termoil_protocol::{ActionCall, ParamKind};
+use termoil_protocol::{ActionCall, ParamDef, ParamKind};
 use termoil_render::Colors;
 
+use crate::answer::{Answer, Asked};
 use crate::app::App;
 use crate::gui::chrome::sgr_colors;
 use crate::gui::look::mix;
@@ -17,6 +18,8 @@ use crate::palette::{Entry, filter};
 pub const PALETTE_ROWS: usize = 12;
 /// The palette's width in columns, at most.
 pub const PALETTE_COLS: u16 = 96;
+/// Rows of an answer the overlay shows at once, below its title.
+pub const ANSWER_ROWS: usize = 20;
 
 /// An open overlay.
 pub enum Overlay {
@@ -30,6 +33,28 @@ pub enum Overlay {
     Themes(ThemesUi),
     /// The settings view.
     Settings(crate::gui::settings_view::SettingsUi),
+    /// What an action run from the window answered.
+    Answer(AnswerUi),
+}
+
+/// The answer overlay's state.
+pub struct AnswerUi {
+    /// The answer shown.
+    pub answer: Answer,
+    /// The first line shown, for an answer longer than [`ANSWER_ROWS`].
+    pub top: usize,
+}
+
+impl AnswerUi {
+    /// An overlay showing `answer` from its first line.
+    pub fn new(answer: Answer) -> AnswerUi {
+        AnswerUi { answer, top: 0 }
+    }
+
+    /// The largest first line: the one that shows the last line at the bottom.
+    fn last_top(&self) -> usize {
+        self.answer.lines.len().saturating_sub(ANSWER_ROWS)
+    }
 }
 
 /// The theme switcher's state.
@@ -78,8 +103,18 @@ pub struct PaletteUi {
     /// The highlighted match.
     pub selected: usize,
     entries: Vec<Entry>,
-    /// The action and parameter an argument is being typed for.
-    asking: Option<(&'static str, &'static str, ParamKind)>,
+    /// The action whose required arguments are being typed.
+    asking: Option<Asking>,
+}
+
+/// The palette asking for an action's required arguments, one after another.
+struct Asking {
+    /// The action.
+    action: &'static str,
+    /// The required parameters not yet typed; the first is the one being asked for.
+    left: Vec<ParamDef>,
+    /// The arguments typed so far.
+    args: Map<String, Value>,
 }
 
 /// The search bar's state.
@@ -115,6 +150,11 @@ impl PaletteUi {
     fn matches(&self) -> Vec<&Entry> {
         filter(&self.entries, &self.query)
     }
+
+    /// The entries matching the query, best first, as the palette lists them; `selected` indexes it.
+    pub fn visible(&self) -> Vec<&Entry> {
+        self.matches()
+    }
 }
 
 /// The text a key types, when it types any and no control or alt is held.
@@ -133,7 +173,20 @@ pub fn key(ov: &mut Overlay, app: &mut App, ev: &KeyEvent) -> After {
         Overlay::Hints(h) => hints_key(h, app, ev),
         Overlay::Themes(t) => themes_key(t, app, ev),
         Overlay::Settings(s) => crate::gui::settings_view::key(s, app, ev),
+        Overlay::Answer(a) => answer_key(a, ev),
     }
+}
+
+/// Answer keys: Up and Down scroll an answer longer than the overlay; any other key closes it.
+fn answer_key(a: &mut AnswerUi, ev: &KeyEvent) -> After {
+    match ev.key {
+        Key::Named(NamedKey::Up) => a.top = a.top.saturating_sub(1),
+        Key::Named(NamedKey::Down) => a.top = (a.top + 1).min(a.last_top()),
+        Key::Named(NamedKey::PageUp) => a.top = a.top.saturating_sub(ANSWER_ROWS),
+        Key::Named(NamedKey::PageDown) => a.top = (a.top + ANSWER_ROWS).min(a.last_top()),
+        _ => return After::Close,
+    }
+    After::Open
 }
 
 /// Theme keys: type to filter, arrows move and preview, Enter keeps and saves, Escape restores.
@@ -251,32 +304,41 @@ fn palette_key(p: &mut PaletteUi, app: &mut App, ev: &KeyEvent) -> After {
     After::Open
 }
 
-/// Enter in the palette: run the highlighted action, ask for its required argument, or run the
-/// action with the argument just typed.
+/// Enter in the palette: run the highlighted action, ask for its required arguments one after another,
+/// or store the argument just typed and ask for the next one or run the action.
 fn palette_enter(p: &mut PaletteUi, app: &mut App) -> After {
-    if let Some((action, param, kind)) = p.asking {
-        let mut args = Map::new();
-        let value = match kind {
-            ParamKind::Int | ParamKind::Pane => p.query.trim().parse::<i64>().map(Value::from).unwrap_or(Value::Null),
-            ParamKind::Bool => Value::Bool(matches!(p.query.trim(), "true" | "yes" | "1")),
-            _ => Value::String(p.query.clone()),
-        };
-        args.insert(param.to_string(), value);
-        let _ = app.run_action(&ActionCall { action: action.to_string(), args });
-        return After::Close;
+    if let Some(mut asking) = p.asking.take() {
+        let param = asking.left.remove(0);
+        asking.args.insert(param.name.to_string(), typed_value(param.kind, &p.query));
+        p.query.clear();
+        if asking.left.is_empty() {
+            let call = ActionCall { action: asking.action.to_string(), args: asking.args };
+            let _ = app.run_for_person(&call, Asked::Palette);
+            return After::Close;
+        }
+        p.asking = Some(asking);
+        return After::Open;
     }
     let Some(e) = p.matches().get(p.selected).map(|e| (*e).clone()) else { return After::Open };
-    if e.needs_args {
-        let def = termoil_protocol::action(e.action).expect("palette entries come from the catalogue");
-        if let Some(param) = def.params.iter().find(|x| x.required) {
-            p.asking = Some((e.action, param.name, param.kind));
-            p.query.clear();
-            return After::Open;
-        }
+    let args: Map<String, Value> = e.preset.and_then(|p| serde_json::from_str(p).ok()).unwrap_or_default();
+    let def = termoil_protocol::action(e.action).expect("palette entries come from the catalogue");
+    let left: Vec<ParamDef> = def.params.iter().filter(|x| x.required).copied().collect();
+    if !left.is_empty() {
+        p.asking = Some(Asking { action: e.action, left, args });
+        p.query.clear();
+        return After::Open;
     }
-    let args = e.preset.and_then(|p| serde_json::from_str(p).ok()).unwrap_or_default();
-    let _ = app.run_action(&ActionCall { action: e.action.to_string(), args });
+    let _ = app.run_for_person(&ActionCall { action: e.action.to_string(), args }, Asked::Palette);
     After::Close
+}
+
+/// The JSON value of an argument typed into the palette: a number, a boolean or the text.
+fn typed_value(kind: ParamKind, text: &str) -> Value {
+    match kind {
+        ParamKind::Int | ParamKind::Pane => text.trim().parse::<i64>().map(Value::from).unwrap_or(Value::Null),
+        ParamKind::Bool => Value::Bool(matches!(text.trim(), "true" | "yes" | "1")),
+        _ => Value::String(text.to_string()),
+    }
 }
 
 /// Search keys: type to search as you go, Enter for the next older match, Shift+Enter for the next
@@ -330,8 +392,8 @@ pub fn palette_content(p: &PaletteUi, cols: u16, colors: &Colors) -> (Vec<u8>, u
     let panel = mix(colors.background, colors.foreground, 0.08);
     let dim = mix(colors.foreground, colors.background, 0.4);
     let mut out = String::new();
-    let prompt = match p.asking {
-        Some((action, param, _)) => format!(" {action} --{param}: {}\u{2588}", p.query),
+    let prompt = match &p.asking {
+        Some(a) => format!(" {} --{}: {}\u{2588}", a.action, a.left[0].name, p.query),
         None => format!(" > {}\u{2588}", p.query),
     };
     out.push_str(&format!("{}\x1b[1m{}\x1b[22m\x1b[K", sgr_colors(colors.foreground, panel), clip(&prompt, cols)));
@@ -355,6 +417,36 @@ pub fn palette_content(p: &PaletteUi, cols: u16, colors: &Colors) -> (Vec<u8>, u
         }
     }
     (out.into_bytes(), rows)
+}
+
+/// The answer overlay's content and its number of rows: the title in bold, red for a failure, then the
+/// lines that fit, then a dim line saying how to scroll or close.
+pub fn answer_content(a: &AnswerUi, cols: u16, colors: &Colors) -> (Vec<u8>, u16) {
+    let panel = mix(colors.background, colors.foreground, 0.08);
+    let dim = mix(colors.foreground, panel, 0.4);
+    let title_fg = if a.answer.failed { colors.palette[1] } else { colors.foreground };
+    let ellipsis = if a.answer.pending { "\u{2026}" } else { "" };
+    let title = clip(&format!(" {}{ellipsis}", a.answer.title), cols);
+    let mut out = format!("{}\x1b[1m{title}\x1b[22m\x1b[K", sgr_colors(title_fg, panel));
+    let mut rows = 1u16;
+    for line in a.answer.lines.iter().skip(a.top).take(ANSWER_ROWS) {
+        let text = clip(&format!(" {line}"), cols);
+        out.push_str(&format!("\r\n{}{text}\x1b[K", sgr_colors(colors.foreground, panel)));
+        rows += 1;
+    }
+    out.push_str(&format!("\r\n{}{}\x1b[K", sgr_colors(dim, panel), clip(&answer_hint(a), cols)));
+    (out.into_bytes(), rows + 1)
+}
+
+/// The answer overlay's last line: which lines are shown when they do not all fit, and how to close it.
+fn answer_hint(a: &AnswerUi) -> String {
+    let total = a.answer.lines.len();
+    if total > ANSWER_ROWS {
+        let last = (a.top + ANSWER_ROWS).min(total);
+        format!(" lines {} to {last} of {total}; Up and Down scroll, any other key closes", a.top + 1)
+    } else {
+        " any key closes".to_string()
+    }
 }
 
 /// The search bar's content.

@@ -4,11 +4,13 @@
 //! the winit conversion, and go through the bindings and the encoder exactly as typed keys do. IME
 //! and focus events go through `ApplicationHandler::window_event` as winit delivers them. Sessions
 //! record what is written to the shell, so the test can check that a preedit is never sent and a
-//! paste is bracketed. The quick terminal and command palette parts of E6 belong to M4. Skipped,
-//! with a message, when no window can be created.
+//! paste is bracketed. The update actions ask a release server in this process (task-2586), so the
+//! palette's answers can be checked without the network. Skipped, with a message, when no window can be
+//! created.
 
 use std::time::{Duration, Instant};
 
+use termoil_app::answer::Answer;
 use termoil_app::app::MemoryClipboard;
 use termoil_app::config::Config;
 use termoil_app::gui::{Gui, UserEvent, handle};
@@ -304,9 +306,26 @@ fn steps() -> Vec<(&'static str, Step)> {
         ("the theme switcher previews and keeps a theme", Box::new(theme_step)),
         ("the settings view edits font.size and saves it", Box::new(settings_step)),
         ("the command palette runs an action", Box::new(palette_step)),
+        (
+            "the palette checks for updates and shows the answer",
+            answer_step("check-for-updates", &[], |a| {
+                a.title == "Termoil 99.0.0 is available" && a.lines[0].starts_with("You have ")
+            }),
+        ),
+        (
+            "the palette lists updates",
+            answer_step("list-updates", &[], |a| {
+                a.lines.iter().any(|l| l == "stable:") && a.lines.iter().any(|l| l.trim_start().starts_with("99.0.0"))
+            }),
+        ),
+        (
+            "the palette shows a failed action's error",
+            answer_step("set-theme", &["No Such Theme E6"], |a| a.failed && a.title == "set-theme failed"),
+        ),
         ("the search bar finds text as it is typed", Box::new(search_step)),
         ("the quick terminal opens", Box::new(quick_open_step)),
         ("the quick terminal is shown and then hidden", Box::new(quick_toggle_step)),
+        ("every palette action runs from the palette", every_action_step()),
         (
             "quit",
             Box::new(|g: &mut Gui, _: &ActiveEventLoop| {
@@ -330,8 +349,17 @@ fn e6_window_input_ime_paste_tabs_splits() {
     let shell = if cfg!(windows) { "cmd.exe" } else { "bash" };
     // `renderer = "gpu"`: the window starts on the CPU renderer and switches to the GPU, the path a
     // step below checks. The default (`auto`) never starts a GPU device (task-2481).
-    let body =
-        format!("[shell]\nprogram = \"{shell}\"\n\n[window]\nrenderer = \"gpu\"\n\n[updates]\ncheck = \"off\"\n");
+    let body = format!(
+        "[shell]\nprogram = \"{shell}\"\n\n[window]\nrenderer = \"gpu\"\n\n[updates]\ncheck = \"off\"\nchannel = \"nightly\"\n"
+    );
+    let releases = release_server();
+    // SAFETY: set before the event loop and the front end start any thread that reads the environment.
+    unsafe {
+        std::env::set_var("TERMOIL_RELEASES_STABLE", format!("{releases}/stable.json"));
+        std::env::set_var("TERMOIL_RELEASES_NIGHTLY", format!("{releases}/nightly.json"));
+        std::env::set_var("TERMOIL_DATA_DIR", dir.join("data"));
+        std::env::set_var("TERMOIL_TELEMETRY", "off");
+    }
     std::fs::write(&config_path, body).unwrap();
     let (config, _) = Config::load(&config_path).unwrap();
     let mut builder = EventLoop::<UserEvent>::with_user_event();
@@ -618,4 +646,230 @@ fn settings_step(g: &mut Gui, el: &ActiveEventLoop) -> Result<bool, String> {
         return Err("Escape did not close the settings view".into());
     }
     Ok(true)
+}
+
+/// A release server in this process for the update actions: stable offers the running version,
+/// nightly offers 99.0.0. Answers its base URL.
+fn release_server() -> String {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind the release server");
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    let entry = |version: &str| {
+        let file =
+            serde_json::json!({ "file": "pkg.bin", "url": format!("{base}/pkg.bin"), "bytes": 1, "sha256": "00" });
+        serde_json::json!({ "version": version, "date": "2026-11-09", "notes": "", "files": { "windows": file, "macos": file, "deb": file, "appimage": file } })
+    };
+    let manifest = |channel: &str, e: serde_json::Value| {
+        let mut top = e.clone();
+        top["product"] = serde_json::json!("Termoil");
+        top["channel"] = serde_json::json!(channel);
+        top["versions"] = serde_json::json!([e]);
+        top.to_string()
+    };
+    let stable = manifest("stable", entry(termoil_protocol::VERSION));
+    let nightly = manifest("nightly", entry("99.0.0"));
+    std::thread::spawn(move || {
+        use std::io::{BufRead, BufReader, Write};
+        for mut stream in listener.incoming().flatten() {
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut line = String::new();
+            let _ = reader.read_line(&mut line);
+            while reader.read_line(&mut String::new()).is_ok_and(|n| n > 2) {}
+            let body = match line.split_whitespace().nth(1) {
+                Some("/stable.json") => stable.as_str(),
+                Some("/nightly.json") => nightly.as_str(),
+                _ => "",
+            };
+            let status = if body.is_empty() { "404 Not Found" } else { "200 OK" };
+            let head = format!("HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len());
+            let _ = stream.write_all(head.as_bytes()).and_then(|_| stream.write_all(body.as_bytes()));
+        }
+    });
+    base
+}
+
+/// The answer overlay of a window, when one is open.
+fn answer_of(g: &Gui, win: u64) -> Option<&Answer> {
+    match g.windows.get(&win)?.overlay.as_ref()? {
+        termoil_app::gui::overlay::Overlay::Answer(a) => Some(&a.answer),
+        _ => None,
+    }
+}
+
+/// Opens the palette in the first window from its key, types `action`, selects its entry, presses
+/// Enter, and types each of `args` with Enter when the palette asks for a required parameter.
+fn run_from_palette(g: &mut Gui, el: &ActiveEventLoop, action: &str, args: &[&str]) -> Result<(), String> {
+    press_binding(g, "command-palette")?;
+    g.flush(el);
+    let (win, _) = focus(g).ok_or("window")?;
+    type_text(g, action);
+    match g.windows.get_mut(&win).and_then(|ws| ws.overlay.as_mut()) {
+        Some(termoil_app::gui::overlay::Overlay::Palette(p)) => {
+            let at = p.visible().iter().position(|e| e.action == action && e.preset.is_none());
+            p.selected = at.ok_or(format!("the palette does not list {action}"))?;
+        }
+        _ => return Err("the palette did not open".into()),
+    }
+    press(g, RawKey::new(Key::Named(NamedKey::Enter), Modifiers::NONE));
+    for arg in args {
+        type_text(g, arg);
+        press(g, RawKey::new(Key::Named(NamedKey::Enter), Modifiers::NONE));
+    }
+    g.flush(el);
+    Ok(())
+}
+
+/// A step that runs an action from the palette, waits for its answer in the window, checks it with
+/// `ok`, closes it with Escape, and checks the next key reaches the shell again.
+fn answer_step(action: &'static str, args: &'static [&'static str], ok: fn(&Answer) -> bool) -> Step {
+    let mut started = false;
+    Box::new(move |g: &mut Gui, el: &ActiveEventLoop| {
+        let (win, _) = focus(g).ok_or("window")?;
+        if !started {
+            run_from_palette(g, el, action, args)?;
+            started = true;
+            if answer_of(g, win).is_none() {
+                return Err(format!("{action} from the palette opened no answer"));
+            }
+        }
+        let Some(answer) = answer_of(g, win).cloned() else { return Err(format!("the answer to {action} closed")) };
+        if answer.pending {
+            return Ok(false);
+        }
+        if !ok(&answer) {
+            return Err(format!("{action} answered {answer:?}"));
+        }
+        let Gui { app, windows, .. } = g;
+        windows.get_mut(&win).ok_or("window")?.draw(app)?;
+        press(g, RawKey::new(Key::Named(NamedKey::Escape), Modifiers::NONE));
+        if answer_of(g, win).is_some() {
+            return Err("Escape did not close the answer".into());
+        }
+        let before = sent(g).len();
+        type_text(g, "x");
+        if sent(g).len() == before {
+            return Err("the key after the answer did not reach the shell".into());
+        }
+        press(g, RawKey::new(Key::Named(NamedKey::Backspace), Modifiers::NONE));
+        Ok(true)
+    })
+}
+
+/// The palette entries the every action step leaves to A5, which runs them with arguments that keep
+/// them inside the test folder, and why.
+const LEFT_TO_A5: &[(&str, &str)] = &[
+    ("quit", "ends the test; the last step runs it"),
+    ("close", "would close the window the remaining steps use"),
+    ("close-tab", "would close the window the remaining steps use"),
+    ("move-tab-to-window", "would move the window's only tab away"),
+    ("install-shell-integration", "would change this machine's shell startup files"),
+    ("install-update", "would download and install over the build under test"),
+    ("open-config", "would open an editor"),
+    ("wait-prompt", "waits 600 seconds without a timeout argument"),
+];
+
+/// Actions that may fail in this window, and why; a failure must still be shown with its reason.
+const MAY_FAIL: &[(&str, &str)] = &[
+    ("copy", "the selection the search step made may be gone"),
+    ("previous-prompt", "cmd sends no OSC 133 prompt marks"),
+    ("next-prompt", "cmd sends no OSC 133 prompt marks"),
+    ("select-last-output", "cmd sends no OSC 133 prompt marks"),
+    ("search-next", "the search bar was closed, which ends the search"),
+    ("search-previous", "the search bar was closed, which ends the search"),
+];
+
+/// What the palette types for an action's required parameters in the every action step.
+fn palette_args(action: &str) -> &'static [&'static str] {
+    match action {
+        "resize-split" => &["right"],
+        "send-text" => &["echo e6palette"],
+        "send-key" => &["escape"],
+        "resize" => &["90", "26"],
+        "set-title" => &["e6 title"],
+        "run-action" => &["version"],
+        "set-theme" => &["Termoil Light"],
+        "activate-key-table" => &["e6"],
+        _ => &[],
+    }
+}
+
+/// Every palette entry, run from the palette in the first window one after another: each one must
+/// reach `run_action`, an action whose result is information must show it, and none may fail apart
+/// from the ones in `MAY_FAIL`. Overlays an action opens are closed before the next one.
+fn every_action_step() -> Step {
+    let mut queue: Vec<&'static str> = Vec::new();
+    let mut waiting: Option<&'static str> = None;
+    let mut problems: Vec<String> = Vec::new();
+    let mut loaded = false;
+    let mut ran = 0usize;
+    Box::new(move |g: &mut Gui, el: &ActiveEventLoop| {
+        if !loaded {
+            let entries = termoil_app::palette::entries(
+                &g.app.config.resolved_keybindings(termoil_app::config::Platform::current()),
+            );
+            queue = entries.iter().filter(|e| e.preset.is_none()).map(|e| e.action).collect();
+            queue.retain(|a| !LEFT_TO_A5.iter().any(|(n, _)| n == a));
+            queue.reverse();
+            loaded = true;
+        }
+        let (win, first) = focus(g).ok_or("window")?;
+        if let Some(action) = waiting {
+            let Some(answer) = answer_of(g, win).cloned() else { return Err(format!("the answer to {action} closed")) };
+            if answer.pending {
+                return Ok(false);
+            }
+            judge(action, Some(&answer), &mut problems);
+            waiting = None;
+        }
+        let Some(action) = queue.pop() else {
+            reset_window(g, el, win, first)?;
+            println!("E6: {ran} palette actions run from the palette");
+            return if problems.is_empty() { Ok(true) } else { Err(problems.join("\n")) };
+        };
+        reset_window(g, el, win, first)?;
+        run_from_palette(g, el, action, palette_args(action))?;
+        ran += 1;
+        let answer = answer_of(g, win).cloned();
+        if answer.as_ref().is_some_and(|a| a.pending) {
+            waiting = Some(action);
+            return Ok(false);
+        }
+        judge(action, answer.as_ref(), &mut problems);
+        Ok(false)
+    })
+}
+
+/// Records what is wrong with the answer an action from the palette showed, if anything.
+fn judge(action: &str, answer: Option<&Answer>, problems: &mut Vec<String>) {
+    let informs = termoil_app::answer::shows_result(action);
+    match answer {
+        None if informs => problems.push(format!("{action}: answers information but showed nothing")),
+        None => {}
+        Some(a) if a.lines.iter().chain([&a.title]).any(|l| l.contains("unknown action")) => {
+            problems.push(format!("{action}: did not reach run_action"))
+        }
+        Some(a) if a.failed && a.lines.is_empty() => problems.push(format!("{action}: failed with no reason")),
+        Some(a) if a.failed && !MAY_FAIL.iter().any(|(n, _)| *n == action) => {
+            problems.push(format!("{action}: failed: {}", a.lines.join(" ")))
+        }
+        Some(a) if !a.failed && !informs => problems.push(format!("{action}: acts, but showed {a:?}")),
+        Some(_) => {}
+    }
+}
+
+/// Puts the first window back for the next action: no overlay in any window, no full screen, the
+/// first window's first pane focused, and the font at its configured size.
+fn reset_window(g: &mut Gui, el: &ActiveEventLoop, win: u64, first: u64) -> Result<(), String> {
+    for ws in g.windows.values_mut() {
+        ws.overlay = None;
+        ws.answer_waiting = None;
+        if ws.window.fullscreen().is_some() {
+            ws.window.set_fullscreen(None);
+        }
+    }
+    g.app.key_tables.clear();
+    if g.app.model.window_index(win).is_some() {
+        let _ = termoil_app::actions::focus_pane(&mut g.app, first);
+    }
+    g.flush(el);
+    Ok(())
 }

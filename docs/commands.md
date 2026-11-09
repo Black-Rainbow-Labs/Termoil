@@ -46,7 +46,7 @@ or the IPC socket asked for it.
 | [`install-shell-integration`](#install-shell-integration) | yes | yes | nothing | Installs the shell integration scripts and hooks them into the named shells' startup files. |
 | [`version`](#version) | yes | yes | nothing | Prints the version and build date. |
 | [`check-for-updates`](#check-for-updates) | yes | yes | nothing | Asks the release channel for the newest version and says whether it is newer than this one. |
-| [`list-updates`](#list-updates) | yes | no | nothing | Lists the newest five versions on the stable and nightly channels, marking the one running. |
+| [`list-updates`](#list-updates) | yes | yes | nothing | Lists the newest five versions on the stable and nightly channels, marking the one running. |
 | [`install-update`](#install-update) | yes | yes | nothing | Downloads a version, checks its size and SHA-256, then quits, installs it and reopens the same windows. |
 | [`skip-update`](#skip-update) | yes | yes | nothing | Stops the automatic check announcing a version, by writing it to updates.skip. |
 | [`telemetry-status`](#telemetry-status) | yes | yes | nothing | Says whether anonymous usage statistics are on, why not when they are off, and what has been sent. |
