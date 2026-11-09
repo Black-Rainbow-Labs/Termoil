@@ -101,6 +101,29 @@ pub fn event_to_chord(ev: &KeyEvent) -> Option<KeyChord> {
     })
 }
 
+/// The chords a key event can match, most exact first: the key with every modifier held, then,
+/// when Shift is held and the layout types a different character for the key with Shift (not
+/// just its capital), that character without Shift. On a US layout Ctrl, Shift and `=` gives
+/// `ctrl+shift+=` and then `ctrl+plus`, so a binding written either way matches (task-2589).
+pub fn event_chords(ev: &KeyEvent) -> Vec<KeyChord> {
+    let Some(exact) = event_to_chord(ev) else { return Vec::new() };
+    let mut out = vec![exact];
+    if let Some(shifted) = shifted_chord(ev) {
+        out.push(shifted);
+    }
+    out
+}
+
+/// The chord of the character the key types with Shift, with Shift taken off, when there is one.
+fn shifted_chord(ev: &KeyEvent) -> Option<KeyChord> {
+    let (Key::Char(c), Some(s)) = (ev.key, ev.shifted_key) else { return None };
+    if !ev.mods.contains(Modifiers::SHIFT) || s.to_lowercase().eq(c.to_lowercase()) {
+        return None;
+    }
+    let as_typed = KeyEvent::press(Key::Char(s), ev.mods.without(Modifiers::SHIFT));
+    event_to_chord(&as_typed)
+}
+
 /// The binding table name of a named key.
 fn named_key_name(n: NamedKey) -> Option<String> {
     Some(match n {
@@ -237,6 +260,36 @@ mod tests {
         assert_eq!(lookup(&bound, std::slice::from_ref(&a)), Lookup::Pending);
         assert!(matches!(lookup(&bound, &[a, c]), Lookup::Action(ref n, _) if n == "new-tab"));
         assert_eq!(lookup(&bound, &[parse_chord("x").unwrap()]), Lookup::None);
+    }
+
+    /// A press of `key` with `mods` and the layout's shifted character, as the normalizer makes it
+    /// for a command key (no text).
+    fn shifted_press(key: char, mods: Modifiers, shifted: Option<char>) -> KeyEvent {
+        KeyEvent::press(Key::Char(key), mods).with_alternates(shifted, None)
+    }
+
+    #[test]
+    fn event_chords_try_the_key_then_the_character_shift_types() {
+        let text = |ev: &KeyEvent| event_chords(ev).iter().map(KeyChord::to_string).collect::<Vec<_>>();
+        let cs = Modifiers::CTRL | Modifiers::SHIFT;
+        assert_eq!(text(&shifted_press('=', cs, Some('+'))), ["ctrl+shift+=", "ctrl+plus"]);
+        let cmd_shift = Modifiers::SUPER | Modifiers::SHIFT;
+        assert_eq!(text(&shifted_press('=', cmd_shift, Some('+'))), ["shift+super+=", "super+plus"]);
+        assert_eq!(text(&shifted_press('.', cs, Some('>'))), ["ctrl+shift+.", "ctrl+greater"]);
+        assert_eq!(text(&shifted_press('=', Modifiers::SUPER, None)), ["super+="], "no shift, one chord");
+        assert_eq!(text(&shifted_press('t', cs, Some('T'))), ["ctrl+shift+t"], "a capital is not another key");
+    }
+
+    #[test]
+    fn a_binding_for_the_exact_chord_beats_the_shifted_character() {
+        let bound =
+            resolve(&[Binding::new("ctrl+plus", "increase-font-size"), Binding::new("ctrl+shift+=", "new-tab")]);
+        let ev = shifted_press('=', Modifiers::CTRL | Modifiers::SHIFT, Some('+'));
+        let found = event_chords(&ev).into_iter().map(|c| lookup(&bound, &[c])).find(|l| *l != Lookup::None);
+        assert!(matches!(found, Some(Lookup::Action(ref n, _)) if n == "new-tab"), "{found:?}");
+        let only_plus = resolve(&[Binding::new("ctrl+plus", "increase-font-size")]);
+        let found = event_chords(&ev).into_iter().map(|c| lookup(&only_plus, &[c])).find(|l| *l != Lookup::None);
+        assert!(matches!(found, Some(Lookup::Action(ref n, _)) if n == "increase-font-size"), "{found:?}");
     }
 
     /// A binding in `table`.

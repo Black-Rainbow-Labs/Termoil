@@ -22,6 +22,10 @@ pub struct RawKey {
     pub numlock: bool,
     /// The text the OS produced for the press.
     pub text: Option<String>,
+    /// The character the layout types for this key with Shift held, when Shift is held. The OS
+    /// reports it even when Ctrl or Cmd make the text empty, so a binding written as `ctrl+plus`
+    /// can match Ctrl, Shift and the `=` key.
+    pub shifted: Option<char>,
     pub kind: KeyEventKind,
 }
 
@@ -36,6 +40,7 @@ impl RawKey {
             dead: None,
             numlock: false,
             text: None,
+            shifted: None,
             kind: KeyEventKind::Press,
         }
     }
@@ -67,6 +72,12 @@ impl RawKey {
     /// Returns the raw key with its physical (base layout) key set.
     pub fn with_physical(mut self, physical: char) -> RawKey {
         self.physical = Some(physical);
+        self
+    }
+
+    /// Returns the raw key with the character the layout types for it with Shift held.
+    pub fn with_shifted(mut self, shifted: char) -> RawKey {
+        self.shifted = Some(shifted);
         self
     }
 
@@ -248,7 +259,7 @@ fn to_event(raw: &RawKey, mods: Modifiers, text: Option<String>) -> KeyEvent {
     }
     let command = mods.intersects(Modifiers::CTRL | Modifiers::ALT | Modifiers::SUPER);
     let text = text.filter(|t| !t.is_empty() && !has_control(t) && !command);
-    let shifted_key = shifted_from_text(key, mods, &text);
+    let shifted_key = shifted_from_text(key, mods, &text).or_else(|| shifted_from_layout(raw, key, mods));
     let base_layout_key = match key {
         Key::Char(c) => raw.physical.filter(|p| *p != c),
         Key::Named(_) => None,
@@ -267,6 +278,13 @@ fn shifted_from_text(key: Key, mods: Modifiers, text: &Option<String>) -> Option
         (Some(s), None) if s != c => Some(s),
         _ => None,
     }
+}
+
+/// Returns the shifted character the OS reported for a character key when Shift is held and the
+/// character differs from the key.
+fn shifted_from_layout(raw: &RawKey, key: Key, mods: Modifiers) -> Option<char> {
+    let Key::Char(c) = key else { return None };
+    raw.shifted.filter(|s| mods.contains(Modifiers::SHIFT) && *s != c)
 }
 
 /// Returns the accent group of a dead key character: 0 grave, 1 acute, 2 circumflex, 3 tilde, 4 diaeresis, 5 cedilla, 6 ring.

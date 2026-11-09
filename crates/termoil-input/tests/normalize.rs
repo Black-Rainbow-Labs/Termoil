@@ -114,6 +114,25 @@ fn alternate_keys_come_from_physical_key_and_text() {
     }
 }
 
+/// With Ctrl or Cmd held the text is dropped, so the shifted key comes from the character the
+/// layout reports for Shift (winit's `logical_key`). The text still wins when there is one, and the
+/// layout's character is ignored without Shift (task-2589).
+#[test]
+fn shifted_key_comes_from_the_layout_when_a_command_key_drops_the_text() {
+    let mut normalizer = KeyNormalizer::new();
+    let rows: Vec<(&str, RawKey, Option<char>)> = vec![
+        ("ctrl+shift+= on a US layout", RawKey::new(c('='), C | S).with_shifted('+'), Some('+')),
+        ("cmd+shift+= on a US layout", RawKey::new(c('='), SU | S).with_shifted('+'), Some('+')),
+        ("shift+= typing text", raw_text('=', S, "+").with_shifted('*'), Some('+')),
+        ("ctrl+= without shift", RawKey::new(c('='), C).with_shifted('+'), None),
+        ("shift+a reports itself", RawKey::new(c('a'), C | S).with_shifted('a'), None),
+    ];
+    for (label, raw, want) in rows {
+        count_row();
+        assert_eq!(normalizer.feed(&raw)[0].shifted_key, want, "{label}");
+    }
+}
+
 /// Dead key then a letter it composes with: one row per accent and letter.
 #[test]
 fn dead_key_followed_by_a_composing_letter() {
@@ -470,7 +489,10 @@ fn normalised_events_encode_correctly() {
             b"\x1b[101;;233u",
         ),
         ("dead grave x", vec![dead('x', '`'), raw_text('x', N, "x")], &legacy, b"`x"),
-        ("win+e", vec![raw_text('e', SU, "e")], &legacy, b"\x1b[101;9u"),
+        // A legacy program cannot read Super, so an unbound Win or Cmd key sends nothing (task-2589).
+        ("win+e", vec![raw_text('e', SU, "e")], &legacy, b""),
+        ("win+e under flag 1", vec![raw_text('e', SU, "e")], &kitty_disambiguate, b"\x1b[101;9u"),
+        ("cmd+= as a US keyboard sends it", vec![raw_text('=', SU, "=")], &legacy, b""),
         ("numpad 5 with numlock", vec![RawKey::new(digit5, N).with_numlock(true)], &legacy, b"5"),
         ("numpad 5 without numlock", vec![RawKey::new(digit5, N)], &legacy, b"\x1b[E"),
         ("numpad 8 without numlock", vec![RawKey::new(digit8, N)], &legacy, b"\x1b[A"),

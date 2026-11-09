@@ -190,7 +190,8 @@ pub fn normalize_keys(text: &str) -> Result<String, String> {
     Ok(chords.iter().map(KeyChord::to_string).collect::<Vec<_>>().join(">"))
 }
 
-/// The default bindings for Windows and Linux, exactly as the PRD lists them.
+/// The default bindings for Windows and Linux, exactly as the PRD lists them, plus `ctrl+=`: the key
+/// people press for Ctrl and plus on a US layout, where the plus sign needs Shift (task-2589).
 pub fn default_keybindings() -> Vec<Binding> {
     let table = [
         ("ctrl+shift+t", "new-tab"),
@@ -215,6 +216,7 @@ pub fn default_keybindings() -> Vec<Binding> {
         ("ctrl+shift+home", "scroll-to-top"),
         ("ctrl+shift+end", "scroll-to-bottom"),
         ("ctrl+plus", "increase-font-size"),
+        ("ctrl+=", "increase-font-size"),
         ("ctrl+minus", "decrease-font-size"),
         ("ctrl+0", "reset-font-size"),
         ("f11", "toggle-fullscreen"),
@@ -266,6 +268,7 @@ pub fn default_keybindings_macos() -> Vec<Binding> {
         ("cmd+home", "scroll-to-top"),
         ("cmd+end", "scroll-to-bottom"),
         ("cmd+plus", "increase-font-size"),
+        ("cmd+=", "increase-font-size"),
         ("cmd+minus", "decrease-font-size"),
         ("cmd+0", "reset-font-size"),
         ("ctrl+cmd+f", "toggle-fullscreen"),

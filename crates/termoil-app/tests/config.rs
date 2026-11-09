@@ -279,6 +279,7 @@ fn default_keybindings_are_the_prd_list() {
         ("ctrl+shift+home", "scroll-to-top"),
         ("ctrl+shift+end", "scroll-to-bottom"),
         ("ctrl+plus", "increase-font-size"),
+        ("ctrl+=", "increase-font-size"),
         ("ctrl+minus", "decrease-font-size"),
         ("ctrl+0", "reset-font-size"),
         ("f11", "toggle-fullscreen"),

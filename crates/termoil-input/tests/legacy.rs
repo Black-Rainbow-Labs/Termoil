@@ -205,21 +205,49 @@ fn alt_without_escape_sets_the_eighth_bit() {
     }
 }
 
-/// Super, hyper and meta have no legacy byte and use the CSI u form.
+/// Super, hyper and meta have no legacy byte. With modifyOtherKeys off a character key or a C0 key
+/// with one of them sends nothing, because the CSI u form is text to a program that did not ask for
+/// it (task-2589: Cmd and `=` typed `1;9u` into zsh). Cursor, editing and function keys keep the
+/// xterm modifier parameter, which programs parse or ignore.
 #[test]
-fn extended_modifiers_use_csi_u() {
-    let rows: &[(Key, Modifiers, &[u8])] = &[
-        (c('a'), SU, b"\x1b[97;9u"),
-        (c('a'), Modifiers::HYPER, b"\x1b[97;17u"),
-        (c('a'), Modifiers::META, b"\x1b[97;33u"),
-        (c('a'), SU | C, b"\x1b[97;13u"),
-        (n(NamedKey::Enter), SU, b"\x1b[13;9u"),
-        (n(NamedKey::Escape), SU, b"\x1b[27;9u"),
-        (n(NamedKey::Up), SU, b"\x1b[1;9A"),
-        (n(NamedKey::F(5)), SU, b"\x1b[15;9~"),
+fn extended_modifiers_send_nothing_unless_asked_for() {
+    let rows: &[(Key, Modifiers, Option<&[u8]>)] = &[
+        (c('a'), SU, None),
+        (c('='), SU, None),
+        (c('='), SU | S, None),
+        (c('j'), SU, None),
+        (c('a'), Modifiers::HYPER, None),
+        (c('a'), Modifiers::META, None),
+        (c('a'), SU | C, None),
+        (n(NamedKey::Enter), SU, None),
+        (n(NamedKey::Escape), SU, None),
+        (n(NamedKey::Tab), SU, None),
+        (n(NamedKey::Backspace), SU, None),
+        (n(NamedKey::Up), SU, Some(b"[1;9A")),
+        (n(NamedKey::F(5)), SU, Some(b"[15;9~")),
+        (n(NamedKey::Delete), SU, Some(b"[3;9~")),
     ];
     for &(key, mods, expected) in rows {
-        check("extended modifiers", &ev(key, mods), &modes(), Some(expected));
+        check("extended modifiers", &ev(key, mods), &modes(), expected);
+    }
+}
+
+/// With modifyOtherKeys on, the program reads the extended modifiers, so they are sent: the CSI 27
+/// form for character keys and the CSI u form for the C0 keys.
+#[test]
+fn extended_modifiers_are_sent_with_modify_other_keys() {
+    for level in [1, 2] {
+        let mok = KeyboardModes { modify_other_keys: level, ..modes() };
+        let rows: &[(Key, Modifiers, &[u8])] = &[
+            (c('a'), SU, b"[27;9;97~"),
+            (c('a'), Modifiers::HYPER, b"[27;17;97~"),
+            (c('='), SU, b"[27;9;61~"),
+            (n(NamedKey::Enter), SU, b"[13;9u"),
+            (n(NamedKey::Escape), SU, b"[27;9u"),
+        ];
+        for &(key, mods, expected) in rows {
+            check(&format!("modifyOtherKeys {level}"), &ev(key, mods), &mok, Some(expected));
+        }
     }
 }
 

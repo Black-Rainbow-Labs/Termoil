@@ -40,7 +40,21 @@ pub fn raw_key(ev: &KeyEvent, mods: ModifiersState) -> Option<RawKey> {
         && mods.alt_key()
         && matches!(ev.text.as_deref(), Some(t) if !t.is_empty() && !t.chars().any(char::is_control));
     raw.text = ev.text_with_all_modifiers().map(str::to_string).filter(|t| !t.is_empty());
+    raw.shifted = shifted_char(ev, mods);
     Some(raw)
+}
+
+/// The character the layout types for this key with Shift held, when Shift is held. winit's
+/// `logical_key` applies Shift and leaves out Ctrl and Cmd, so Ctrl, Shift and `=` reports `+` on a
+/// US layout even though the text is empty; bindings written as `ctrl+plus` match through it.
+fn shifted_char(ev: &KeyEvent, mods: ModifiersState) -> Option<char> {
+    if !mods.shift_key() {
+        return None;
+    }
+    match &ev.logical_key {
+        WKey::Character(s) => s.chars().next(),
+        _ => None,
+    }
 }
 
 /// The logical key, the dead key accent, and whether num lock is on (for keypad keys).

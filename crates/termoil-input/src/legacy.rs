@@ -47,6 +47,13 @@ fn push_with_alt(out: &mut Vec<u8>, bytes: &[u8], alt: bool, modes: &KeyboardMod
     }
 }
 
+/// True when Super, Hyper or Meta is held and the program has not turned on modifyOtherKeys. Such
+/// a key has no legacy byte, and its CSI u form is text to a program that never asked for it: zsh
+/// rings the bell on it and types the rest (`1;9u` for Cmd and `=`, task-2589). It sends nothing.
+fn unreadable_extended(mods: Modifiers, modes: &KeyboardModes) -> bool {
+    mods.intersects(Modifiers::EXTENDED) && modes.modify_other_keys == 0
+}
+
 /// Returns the code point of the key for the CSI u and modifyOtherKeys forms.
 fn key_code(c: char) -> u32 {
     unshifted(c) as u32
@@ -100,13 +107,15 @@ fn encode_char(event: &KeyEvent, c: char, mods: Modifiers, modes: &KeyboardModes
         push_other_keys(out, m, code);
         return true;
     }
+    if unreadable_extended(mods, modes) {
+        return false;
+    }
     let (shift, ctrl, alt) =
         (mods.contains(Modifiers::SHIFT), mods.contains(Modifiers::CTRL), mods.contains(Modifiers::ALT));
     // Ctrl+Shift+letter is Ctrl+letter, as in xterm: shift does not change a control byte. Other
     // keys with Ctrl and Shift have no control byte of their own and keep the CSI u form.
     let letter = c.is_ascii_alphabetic();
-    let needs_csi_u =
-        mods.intersects(Modifiers::EXTENDED) || (ctrl && shift && c != ' ' && !letter) || (ctrl && !c.is_ascii());
+    let needs_csi_u = (ctrl && shift && c != ' ' && !letter) || (ctrl && !c.is_ascii());
     if needs_csi_u {
         push_csi_u(out, key_code(c), mods.wire_value());
         return true;
@@ -223,6 +232,9 @@ fn encode_c0_key(key: NamedKey, mods: Modifiers, modes: &KeyboardModes, out: &mu
         NamedKey::Tab => 9,
         _ => 127,
     };
+    if unreadable_extended(mods, modes) {
+        return false;
+    }
     if mods.intersects(Modifiers::EXTENDED) {
         push_csi_u(out, code, mods.wire_value());
         return true;

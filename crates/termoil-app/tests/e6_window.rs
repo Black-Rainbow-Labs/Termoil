@@ -8,6 +8,9 @@
 //! palette's answers can be checked without the network. Skipped, with a message, when no window can be
 //! created.
 
+#[path = "common/keyboard.rs"]
+mod keyboard;
+
 use std::time::{Duration, Instant};
 
 use termoil_app::answer::Answer;
@@ -126,7 +129,7 @@ fn type_text(gui: &mut Gui, text: &str) {
     }
 }
 
-/// Presses the keys bound to an action in the default configuration.
+/// Presses and lets go of the keys bound to an action in the default configuration.
 fn press_binding(gui: &mut Gui, action: &str) -> Result<(), String> {
     let chords = gui
         .bound
@@ -134,9 +137,11 @@ fn press_binding(gui: &mut Gui, action: &str) -> Result<(), String> {
         .find(|b| b.action == action)
         .map(|b| b.chords.clone())
         .ok_or(format!("no binding for {action}"))?;
+    // Each chord is pressed the way a US keyboard sends it: `plus` is Shift and `=` (task-2589).
     for chord in chords {
-        let ev = termoil_app::keymap::chord_to_event(&chord).ok_or("chord")?;
-        press(gui, RawKey::new(ev.key, ev.mods));
+        let raw = keyboard::us_key(&chord, termoil_app::config::Platform::current()).ok_or("no US key")?;
+        press(gui, raw.clone());
+        press(gui, keyboard::release_of(&raw));
     }
     Ok(())
 }

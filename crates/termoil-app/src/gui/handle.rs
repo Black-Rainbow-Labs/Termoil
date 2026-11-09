@@ -16,10 +16,11 @@ use winit::event::{ElementState, Ime, MouseScrollDelta};
 
 use crate::answer::Asked;
 use crate::app::App;
+use crate::config::KeyChord;
 use crate::gui::tab_bar::TabHit;
 use crate::gui::window::WinState;
 use crate::inspect;
-use crate::keymap::{Bound, Lookup, event_to_chord, lookup_active};
+use crate::keymap::{ActiveTable, Bound, Lookup, event_chords, lookup_active};
 use crate::model::PaneId;
 use crate::view;
 
@@ -32,14 +33,20 @@ pub fn focus_of(ws: &WinState, app: &App) -> Option<PaneId> {
     Some(app.model.windows[wi].tab().focus)
 }
 
-/// Handles one raw key: bindings first, then the terminal.
+/// Handles one raw key: bindings first, then the terminal. The release of a key whose press ran a
+/// binding is dropped, so a program reporting key releases never sees half a key.
 pub fn raw_key(ws: &mut WinState, app: &mut App, bound: &[Bound], raw: &RawKey) {
     for ev in ws.normalizer.feed(raw) {
         if ws.overlay.is_some() {
             overlay_key(ws, app, &ev);
             continue;
         }
-        if ev.kind != termoil_input::KeyEventKind::Release && binding(ws, app, bound, &ev) {
+        let release = ev.kind == termoil_input::KeyEventKind::Release;
+        if release && ws.swallowed.remove(&ev.key) {
+            continue;
+        }
+        if !release && binding(ws, app, bound, &ev) {
+            ws.swallowed.insert(ev.key);
             continue;
         }
         if let Some(pane) = focus_of(ws, app) {
@@ -75,9 +82,10 @@ fn binding(ws: &mut WinState, app: &mut App, bound: &[Bound], ev: &KeyEvent) -> 
     if matches!(ev.key, Key::Named(n) if n.is_modifier_key()) {
         return false;
     }
-    let Some(chord) = event_to_chord(ev) else { return false };
-    ws.chords.push(chord);
-    let result = lookup_active(bound, &app.key_tables, &ws.chords);
+    let Some((result, pressed)) = first_match(bound, &app.key_tables, &ws.chords, event_chords(ev)) else {
+        return false;
+    };
+    ws.chords = pressed;
     // A table activated for one key ends once that key (or chained sequence) is decided.
     if result != Lookup::Pending && app.key_tables.last().is_some_and(|t| t.once) {
         app.key_tables.pop();
@@ -94,6 +102,25 @@ fn binding(ws: &mut WinState, app: &mut App, bound: &[Bound], ev: &KeyEvent) -> 
             false
         }
     }
+}
+
+/// Looks up the keys pressed so far followed by each chord the key can match, in order, and
+/// returns the first lookup that is not `Lookup::None` with the keys it matched (the last lookup
+/// when none matched). None when the key has no chord at all.
+fn first_match(
+    bound: &[Bound], tables: &[ActiveTable], pressed: &[KeyChord], candidates: Vec<KeyChord>,
+) -> Option<(Lookup, Vec<KeyChord>)> {
+    let mut last = None;
+    for chord in candidates {
+        let mut keys = pressed.to_vec();
+        keys.push(chord);
+        let result = lookup_active(bound, tables, &keys);
+        if result != Lookup::None {
+            return Some((result, keys));
+        }
+        last = Some((result, keys));
+    }
+    last
 }
 
 /// Encodes a key for the pane's keyboard mode and writes it, returning the view to the bottom.
@@ -141,6 +168,7 @@ pub fn focus(ws: &mut WinState, app: &mut App, focused: bool) {
         // own IME events); the preedit drawn here goes with it.
         ws.preedit = None;
         ws.chords.clear();
+        ws.swallowed.clear();
     }
     if let Some(pane) = focus_of(ws, app)
         && let Some(p) = app.panes.get(&pane)

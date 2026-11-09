@@ -159,6 +159,14 @@ bindings = [ { keys = "alt+left", action = "none" } ]
 `ctrl`, `shift`, `alt`, `cmd` (also `super`), then a letter, a digit, a named key such as `enter`, `tab`, `left` or
 `f11`, or a symbol such as `,` or `plus`. The command palette shows the binding of every action.
 
+A binding names the key, not the finger work. A symbol that needs Shift matches either way it is written:
+on a US keyboard the plus sign is Shift and `=`, so `ctrl+plus` and `ctrl+shift+=` are both Ctrl, Shift and `=`. When
+both are bound, the one written with `shift` wins. `ctrl+=` is Ctrl and `=` without Shift; the defaults bind it, and
+`cmd+=` on macOS, to make the font larger, because that is the key people press for "Ctrl +" and "Cmd +".
+
+A Cmd or Win key with no binding sends nothing to a program that has not turned on the kitty keyboard protocol or
+modifyOtherKeys, because such a program cannot read it.
+
 **Key tables** give a set of keys a meaning only while the table is active, the way a tmux prefix works. A binding with
 `table = "pane"` is only looked up while `activate-key-table` has made `pane` active, and `keys = "catch_all"` in a
 table takes every key the table does not bind.

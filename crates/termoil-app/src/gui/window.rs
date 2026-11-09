@@ -3,12 +3,12 @@
 //! Drawing holds each pane's terminal lock only to copy its render state (section 4.2); building
 //! frames and painting happen after the lock is released.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use termoil_font::FontGrid;
-use termoil_input::KeyNormalizer;
+use termoil_input::{Key, KeyNormalizer};
 use termoil_render::{BuildOptions, Colors, Frame, FrameBuilder, Layer, RenderState, Rgba};
 use termoil_vt::Terminal;
 use termoil_vt::terminal::CursorShape;
@@ -109,6 +109,9 @@ pub struct WinState {
     pub normalizer: KeyNormalizer,
     /// Keys pressed so far of a chained binding.
     pub chords: Vec<KeyChord>,
+    /// Keys whose press ran a binding (or started a chained one). Their releases are not given to
+    /// the program, which never saw the press.
+    pub swallowed: HashSet<Key>,
     /// IME composition text.
     pub preedit: Option<String>,
     /// Mouse state.
@@ -261,6 +264,7 @@ impl WinState {
             mods: ModifiersState::empty(),
             normalizer: KeyNormalizer::new(),
             chords: Vec::new(),
+            swallowed: HashSet::new(),
             preedit: None,
             mouse: Mouse::default(),
             focused: true,
