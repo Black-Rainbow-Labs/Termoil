@@ -385,6 +385,31 @@
       "name": "termoil_list_themes"
     },
     {
+      "description": "Turns on a built in shader (crt, retro, neon and the rest) over the window, or turns it off with none, and writes it to the configuration file. It combines with any theme.",
+      "inputSchema": {
+        "properties": {
+          "name": {
+            "description": "The shader's name, as `list-shaders` prints it, or none.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "name": "termoil_set_shader"
+    },
+    {
+      "description": "Prints every built in shader with what it looks like, and the shader in effect.",
+      "inputSchema": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "termoil_list_shaders"
+    },
+    {
       "description": "Makes a key table active: keys are looked up in its bindings first until it is deactivated.",
       "inputSchema": {
         "properties": {

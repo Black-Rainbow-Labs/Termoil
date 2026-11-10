@@ -83,6 +83,21 @@ pub fn sgr_colors(fg: Rgb, bg: Rgb) -> String {
     format!("\x1b[38;2;{};{};{};48;2;{};{};{}m", fg.r, fg.g, fg.b, bg.r, bg.g, bg.b)
 }
 
+/// The title strip's text: the window title centered in `cols` columns, on the tab bar's color in
+/// the tab bar's text color.
+pub fn title(text: &str, cols: u16, bar: [u8; 3], chrome: &crate::config::Chrome) -> Vec<u8> {
+    let text: String = text.chars().take(cols.saturating_sub(16) as usize).collect();
+    let left = (cols as usize).saturating_sub(text.chars().count()) / 2;
+    let fg = chrome.text;
+    format!(
+        "{}\x1b[K{}{}",
+        sgr_colors(Rgb::new(fg[0], fg[1], fg[2]), Rgb::new(bar[0], bar[1], bar[2])),
+        " ".repeat(left),
+        text
+    )
+    .into_bytes()
+}
+
 /// The banner shown while the configuration file has an error.
 pub fn banner(message: &str) -> Vec<u8> {
     let fg = Rgb::new(0xff, 0xff, 0xff);

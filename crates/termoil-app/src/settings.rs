@@ -91,7 +91,8 @@ fn kind_of(path: &str) -> Kind {
         | "window.rows"
         | "notify.after_seconds"
         | "updates.timeout_seconds"
-        | "telemetry.interval_minutes" => numeric_kind(path),
+        | "telemetry.interval_minutes"
+        | "window.macos_titlebar_height" => numeric_kind(path),
         "theme.name" | "theme.dark" | "theme.light" => Kind::Theme,
         "cursor.style" => Kind::Enum(STYLES),
         "window.renderer" => Kind::Enum(RENDERERS),

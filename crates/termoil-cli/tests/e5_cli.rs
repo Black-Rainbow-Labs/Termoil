@@ -188,6 +188,7 @@ fn run_action_args(name: &str, pane: u64) -> Value {
         "resize-split" => json!({ "pane": pane, "direction": "right" }),
         "move-tab-to-window" => json!({ "pane": pane }),
         "set-theme" => json!({ "name": "Termoil Light" }),
+        "set-shader" => json!({ "name": "none" }),
         "activate-key-table" => json!({ "name": "e5", "once": true }),
         "set-title" => json!({ "pane": pane, "title": "run-action" }),
         "run-action" => json!({ "name": "version" }),
@@ -206,6 +207,7 @@ fn run_action_args(name: &str, pane: u64) -> Value {
         | "version"
         | "list"
         | "list-themes"
+        | "list-shaders"
         | "quick-terminal"
         | "quit"
         | "deactivate-key-table"
@@ -302,6 +304,17 @@ fn more_commands(inst: &Instance, p2: &str, covered: &mut BTreeSet<String>) {
     assert!(std::fs::read_to_string(&inst.config).unwrap().contains("theme = \"Termoil Light\""));
     assert!(inst.ok(&["+show-config"]).contains("Termoil Light"));
     seen("set-theme");
+    // task-2590: the built in shaders, listed and set by name next to the theme, and cleared with none.
+    let shaders = inst.json(&["+list-shaders"]);
+    seen("list-shaders");
+    assert!(shaders["shaders"].as_array().is_some_and(|s| s.len() >= 20 && s.iter().any(|x| x["name"] == "crt")));
+    inst.ok(&["+set-shader", "neon"]);
+    let text = std::fs::read_to_string(&inst.config).unwrap();
+    assert!(text.contains("shader = \"neon\"") && text.contains("theme = \"Termoil Light\""), "{text}");
+    assert_eq!(inst.json(&["+list-shaders"])["current"], "neon");
+    inst.ok(&["+set-shader", "none"]);
+    assert!(std::fs::read_to_string(&inst.config).unwrap().contains("shader = \"\""));
+    seen("set-shader");
     let saved = inst.json(&["+save-session"]);
     seen("save-session");
     let session_file = inst.dir.join("data").join("session.json");

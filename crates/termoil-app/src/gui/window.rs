@@ -95,6 +95,14 @@ pub struct WinState {
     pub chrome: crate::config::Chrome,
     /// Height of the tab bar (0 when hidden).
     pub tab_bar_h: f32,
+    /// Height of the title strip Termoil draws itself on macOS when the window is translucent and
+    /// the system title bar is made transparent (`title_points` at this window's scale; 0 otherwise).
+    pub title_h: f32,
+    /// The title strip's height in points: `window.macos_titlebar_height`, or 0 when the system
+    /// draws the title bar.
+    pub title_points: f32,
+    /// The title strip.
+    pub title_strip: Strip,
     /// Frames in a row that did not reach the screen, for the repaint backoff.
     pub repaint_misses: u32,
     /// The tab bar.
@@ -198,6 +206,8 @@ impl WinState {
             .with_decorations(config.window.decorations)
             .with_theme(Some(window_theme(&look::colors(config, os_dark))));
         let attrs = with_app_icon(attrs);
+        let titled = draws_own_title_bar(config, translucent, quick.is_some());
+        let attrs = own_title_bar_attributes(attrs, titled);
         let attrs = if quick.is_some() { crate::gui::quick::attributes(attrs) } else { attrs };
         crate::gui::phase("window_attributes");
         let window = Arc::new(el.create_window(attrs).map_err(|e| format!("could not create a window: {e}"))?);
@@ -218,7 +228,9 @@ impl WinState {
         if translucent {
             opts.background_alpha = look::background_alpha(config);
         }
+        let title_points = if titled { config.window.macos_titlebar_height as f32 } else { 0.0 };
         let (w, h) = look::window_size(config, grid.metrics(), &opts, scale);
+        let h = h + (title_points as f64 * scale).round() as u32;
         match quick {
             Some(edge) => crate::gui::quick::place(&window, edge),
             None => match app.geometry.get(&id).filter(|g| on_a_monitor(el, g)) {
@@ -257,6 +269,9 @@ impl WinState {
             tab_hover: None,
             chrome: look::chrome(config, os_dark),
             tab_bar_h: 0.0,
+            title_h: 0.0,
+            title_points,
+            title_strip: Strip::new(1, colors.clone()),
             repaint_misses: 0,
             tab_strip: Strip::new(1, colors.clone()),
             banner_strip: Strip::new(1, colors.clone()),
@@ -329,8 +344,9 @@ impl WinState {
         let (cw, ch) = self.cell();
         let tabs = app.model.windows[wi].tabs.len();
         self.tab_bar_h = look::tab_bar_height(&app.config, ch, self.scale, tabs) as f32;
+        self.title_h = (self.title_points as f64 * self.scale).round() as f32;
         let banner_h = if self.banner_text(app).is_some() { ch as f32 + 4.0 } else { 0.0 };
-        let top = self.tab_bar_h + banner_h;
+        let top = self.title_h + self.tab_bar_h + banner_h;
         let area = Rect { x: 0.0, y: top, w: size.width as f32, h: (size.height as f32 - top).max(0.0) };
         let tab = app.model.windows[wi].tab();
         let mut layout = Vec::new();
@@ -444,6 +460,7 @@ impl WinState {
             }
         }
         let strips = [
+            (&self.title_strip, chrome.title),
             (&self.tab_strip, chrome.tab),
             (&self.banner_strip, chrome.banner),
             (&self.preedit_strip, chrome.preedit),
@@ -710,9 +727,13 @@ impl WinState {
         let (cw, _) = self.cell();
         let cols = (self.window.inner_size().width / cw.max(1)) as u16;
         let opts = BuildOptions { padding: (0, 3), all_rows: true, minimum_contrast: 1.0, ..self.opts.clone() };
+        if self.title_h > 0.0 {
+            self.build_title(app, cols, &opts);
+            at.title = Some((0.0, 0.0));
+        }
         if self.tab_bar_h > 0.0 {
             self.build_tab_bar(app, wi, cols, &opts);
-            at.tab = Some((0.0, 0.0));
+            at.tab = Some((0.0, self.title_h));
         }
         if let Some(text) = self.banner_text(app) {
             self.banner_strip.frame(
@@ -723,7 +744,7 @@ impl WinState {
                 &mut self.grid,
                 &BuildOptions { padding: (0, 2), ..opts.clone() },
             );
-            at.banner = Some((0.0, self.tab_bar_h));
+            at.banner = Some((0.0, self.title_h + self.tab_bar_h));
         }
         if let (Some(text), Some((x, y))) = (self.preedit.clone(), self.cursor_px(focus)) {
             let n = text.chars().count() as u16 * 2 + 1;
@@ -740,6 +761,20 @@ impl WinState {
         at.overlay = self.build_overlay(cols, &opts);
         at.hints = self.build_hints(&opts);
         at
+    }
+
+    /// Builds the title strip: the window's title centered on the tab bar's color, drawn where the
+    /// transparent system title bar is, so the macOS buttons sit on a solid bar (task-2590).
+    fn build_title(&mut self, app: &App, cols: u16, opts: &BuildOptions) {
+        let background = [self.colors.background.r, self.colors.background.g, self.colors.background.b];
+        let bar = tab_bar::bar_color(background, &app.config.tab_bar);
+        let bytes = chrome::title(&self.window.title(), cols, bar, &self.chrome);
+        let (_, ch) = self.cell();
+        let pad = ((self.title_h as u32).saturating_sub(ch) / 2, 0);
+        let opts = BuildOptions { padding: (0, pad.0), ..opts.clone() };
+        self.title_strip.frame(cols, 1, &bytes, &self.colors, &mut self.grid, &opts);
+        let width = self.window.inner_size().width;
+        self.title_strip.decorate(width, self.title_h as u32, Rgba::rgb(bar[0], bar[1], bar[2]), Vec::new());
     }
 
     /// Builds the tab bar: lays the tabs out, writes their titles into the strip, and puts the tabs,
@@ -781,31 +816,31 @@ impl WinState {
                 let (bytes, rows) = palette_content(p, width, &self.colors);
                 self.overlay_strip.frame(width, rows, &bytes, &self.colors, &mut self.grid, &opts);
                 let x = (size.width as f32 - (width as u32 * cw + 2 * opts.padding.0) as f32) / 2.0;
-                Some((x.max(0.0), self.tab_bar_h + ch as f32 / 2.0))
+                Some((x.max(0.0), self.title_h + self.tab_bar_h + ch as f32 / 2.0))
             }
             Overlay::Hints(_) => None,
             Overlay::Themes(t) => {
-                let width = cols.saturating_sub(4).clamp(10, 60);
+                let width = cols.saturating_sub(4).clamp(10, 92);
                 let (bytes, rows) = crate::gui::overlay::themes_content(t, width, &self.colors);
                 self.overlay_strip.frame(width, rows, &bytes, &self.colors, &mut self.grid, &opts);
                 let x = (size.width as f32 - (width as u32 * cw + 2 * opts.padding.0) as f32) / 2.0;
-                Some((x.max(0.0), self.tab_bar_h + ch as f32 / 2.0))
+                Some((x.max(0.0), self.title_h + self.tab_bar_h + ch as f32 / 2.0))
             }
             Overlay::Settings(s) => {
                 let width = cols.saturating_sub(4).clamp(10, crate::gui::settings_view::SETTINGS_COLS);
-                let room = (size.height as f32 - self.tab_bar_h) / ch as f32;
+                let room = (size.height as f32 - self.title_h - self.tab_bar_h) / ch as f32;
                 let max_rows = (room as u16).saturating_sub(2).max(8);
                 let (bytes, rows) = crate::gui::settings_view::settings_content(s, width, max_rows, &self.colors);
                 self.overlay_strip.frame(width, rows, &bytes, &self.colors, &mut self.grid, &opts);
                 let x = (size.width as f32 - (width as u32 * cw + 2 * opts.padding.0) as f32) / 2.0;
-                Some((x.max(0.0), self.tab_bar_h + ch as f32 / 2.0))
+                Some((x.max(0.0), self.title_h + self.tab_bar_h + ch as f32 / 2.0))
             }
             Overlay::Answer(a) => {
                 let width = cols.saturating_sub(4).clamp(10, PALETTE_COLS);
                 let (bytes, rows) = crate::gui::overlay::answer_content(a, width, &self.colors);
                 self.overlay_strip.frame(width, rows, &bytes, &self.colors, &mut self.grid, &opts);
                 let x = (size.width as f32 - (width as u32 * cw + 2 * opts.padding.0) as f32) / 2.0;
-                Some((x.max(0.0), self.tab_bar_h + ch as f32 / 2.0))
+                Some((x.max(0.0), self.title_h + self.tab_bar_h + ch as f32 / 2.0))
             }
             Overlay::Search(s) => {
                 let bytes = search_content(s, cols, &self.colors);
@@ -893,6 +928,7 @@ fn with_app_icon(attrs: winit::window::WindowAttributes) -> winit::window::Windo
 /// Where the chrome strips go this frame.
 #[derive(Default)]
 struct ChromeAt {
+    title: Option<(f32, f32)>,
     tab: Option<(f32, f32)>,
     banner: Option<(f32, f32)>,
     preedit: Option<(f32, f32)>,
@@ -905,6 +941,30 @@ impl Strip {
     pub fn last_frame(&self) -> Option<&Frame> {
         self.frame_ref()
     }
+}
+
+/// Whether Termoil draws the title bar itself: on macOS, for a translucent window with decorations
+/// that is not the quick terminal. A translucent NSWindow has a clear background, and the system
+/// title bar over it showed the desktop through it (task-2590).
+fn draws_own_title_bar(config: &crate::config::Config, translucent: bool, quick: bool) -> bool {
+    cfg!(target_os = "macos")
+        && translucent
+        && config.window.decorations
+        && !quick
+        && config.window.macos_titlebar_height > 0
+}
+
+/// Window attributes for a title bar Termoil draws: on macOS the system title bar becomes
+/// transparent with its title hidden, and the content runs under it, so the close, minimize and zoom
+/// buttons sit on Termoil's own strip. Elsewhere the attributes are unchanged.
+fn own_title_bar_attributes(attrs: winit::window::WindowAttributes, titled: bool) -> winit::window::WindowAttributes {
+    #[cfg(target_os = "macos")]
+    if titled {
+        use winit::platform::macos::WindowAttributesExtMacOS;
+        return attrs.with_titlebar_transparent(true).with_fullsize_content_view(true).with_title_hidden(true);
+    }
+    let _ = titled;
+    attrs
 }
 
 /// Window attributes for a translucent window: transparent, and on Windows without the GDI

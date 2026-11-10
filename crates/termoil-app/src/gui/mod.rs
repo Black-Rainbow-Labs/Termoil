@@ -327,7 +327,7 @@ impl Gui {
             Effect::ResizeWindow(id, _, cols, rows) => self.with_window(id, |ws, _| {
                 let (cw, ch) = ws.cell();
                 let w = cols as u32 * cw + 2 * ws.opts.padding.0;
-                let h = rows as u32 * ch + 2 * ws.opts.padding.1 + ws.tab_bar_h as u32;
+                let h = rows as u32 * ch + 2 * ws.opts.padding.1 + ws.tab_bar_h as u32 + ws.title_h as u32;
                 let _ = ws.window.request_inner_size(winit::dpi::PhysicalSize::new(w, h));
             }),
             Effect::OpenPath(p) => crate::platform::open(&p.to_string_lossy()),
@@ -370,8 +370,9 @@ impl Gui {
             Effect::ToggleQuickTerminal => self.toggle_quick(el),
             Effect::ShowThemes(id) => {
                 let original = self.app.config.theme.name.clone();
+                let shader = self.app.config.window.shader.clone();
                 self.with_window(id, |ws, _| {
-                    ws.overlay = Some(overlay::Overlay::Themes(overlay::ThemesUi::new(original)));
+                    ws.overlay = Some(overlay::Overlay::Themes(overlay::ThemesUi::new(original, shader)));
                     ws.window.request_redraw();
                 });
             }

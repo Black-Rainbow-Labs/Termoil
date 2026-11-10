@@ -113,8 +113,9 @@ Termoil, so they join at any size whatever the font.
 | `window.opacity` | 1.0 | below 1 the window is translucent |
 | `window.blur` | false | blur what is behind a translucent window, where the system supports it |
 | `window.decorations` | true | draw the system's title bar and borders |
+| `window.macos_titlebar_height` | 28 | macOS only: when the window is translucent, Termoil draws a title bar this many points high in the tab bar's color, so the desktop does not show through the system title bar; 0 keeps the system title bar |
 | `window.renderer` | auto | `auto` draws on the processor and starts the graphics card only for a custom shader; `gpu` uses the graphics card; `cpu` never does |
-| `window.shader` | none | a WGSL file run over every frame; see [Custom shaders](shaders.md) |
+| `window.shader` | none | a built in shader by name (`crt`, `retro`, `neon`, `amber` and the rest), or a WGSL file run over every frame; see [Custom shaders](shaders.md) |
 | `window.quick_terminal_hotkey` | ``ctrl+` `` | a system wide key that slides a terminal in from `window.quick_terminal_edge` |
 
 ## The tab bar

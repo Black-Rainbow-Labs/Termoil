@@ -37,7 +37,9 @@ or the IPC socket asked for it.
 | [`reload-config`](#reload-config) | yes | yes | nothing | Reads the configuration file again and applies it. |
 | [`set-theme`](#set-theme) | yes | yes | nothing | Switches to a bundled colour theme and writes it to the configuration file. |
 | [`list-themes`](#list-themes) | yes | no | nothing | Prints every bundled theme name, the themes Unluminous ships first, and the theme in effect. |
-| [`choose-theme`](#choose-theme) | no | yes | a window | Lists the bundled themes, previewing each as it is highlighted; Enter keeps one. |
+| [`set-shader`](#set-shader) | yes | yes | nothing | Turns on a built in shader (crt, retro, neon and the rest) over the window, or turns it off with none, and writes it to the configuration file. It combines with any theme. |
+| [`list-shaders`](#list-shaders) | yes | no | nothing | Prints every built in shader with what it looks like, and the shader in effect. |
+| [`choose-theme`](#choose-theme) | no | yes | a window | Lists the bundled themes and, beside them, the built in shaders, previewing each as it is highlighted; Enter keeps both. |
 | [`open-settings`](#open-settings) | no | yes | a window | Opens the settings view: every setting with its help text and value, edited in place and written to the configuration file. |
 | [`open-config`](#open-config) | no | yes | nothing | Opens the configuration file in the configured editor. |
 | [`activate-key-table`](#activate-key-table) | yes | no | nothing | Makes a key table active: keys are looked up in its bindings first until it is deactivated. |
@@ -445,9 +447,35 @@ Over IPC: `{"id":1,"action":"list-themes","args":{...}}`. MCP tool: `termoil_lis
 
 No parameters.
 
+## set-shader
+
+Turns on a built in shader (crt, retro, neon and the rest) over the window, or turns it off with none, and writes it to the configuration file. It combines with any theme.
+
+```
+termoil +set-shader --name <text>
+```
+
+Over IPC: `{"id":1,"action":"set-shader","args":{...}}`. MCP tool: `termoil_set_shader`.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `name` | text | yes | The shader's name, as `list-shaders` prints it, or none. |
+
+## list-shaders
+
+Prints every built in shader with what it looks like, and the shader in effect.
+
+```
+termoil +list-shaders
+```
+
+Over IPC: `{"id":1,"action":"list-shaders","args":{...}}`. MCP tool: `termoil_list_shaders`.
+
+No parameters.
+
 ## choose-theme
 
-Lists the bundled themes, previewing each as it is highlighted; Enter keeps one.
+Lists the bundled themes and, beside them, the built in shaders, previewing each as it is highlighted; Enter keeps both.
 
 No parameters.
 

@@ -45,6 +45,12 @@ pub fn dispatch(app: &mut App, name: &str, args: &Map<String, Value>) -> Outcome
                 .and_then(|n| crate::themes::set(app, &n).map(|_| json!({ "theme": n })).map_err(ActionError::Failed)),
         ),
         "list-themes" => done(Ok(list_themes(app))),
+        "set-shader" => {
+            done(req_str(args, "name").map(String::from).and_then(|n| {
+                crate::shaders::set(app, &n).map(|v| json!({ "shader": v })).map_err(ActionError::Failed)
+            }))
+        }
+        "list-shaders" => done(Ok(list_shaders(app))),
         "telemetry-status" => done(Ok(crate::telemetry::sender::status(arg_bool(args, "flush")))),
         "check-for-updates" | "list-updates" | "install-update" | "skip-update" => {
             crate::update::actions::dispatch(app, name, args)
@@ -292,6 +298,13 @@ fn list_themes(app: &App) -> Value {
     let rest = crate::config::themes().iter().map(|t| t.name.as_str()).filter(|n| !featured.contains(n));
     let all: Vec<&str> = featured.iter().copied().chain(rest).collect();
     json!({ "current": app.config.theme.name, "featured": featured, "themes": all })
+}
+
+/// Every built in shader with its summary, and the `window.shader` value in effect.
+fn list_shaders(app: &App) -> Value {
+    let shaders: Vec<Value> =
+        crate::shaders::BUILTINS.iter().map(|b| json!({ "name": b.name, "summary": b.summary })).collect();
+    json!({ "current": app.config.window.shader, "shaders": shaders })
 }
 
 /// Focuses a pane: its window, its tab, and the pane in the tab.

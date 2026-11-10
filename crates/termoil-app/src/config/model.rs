@@ -256,6 +256,7 @@ pub struct Window {
     pub repaint_retry_max_ms: u64,
     pub output_fps: u32,
     pub input_grace_ms: u64,
+    pub macos_titlebar_height: u32,
 }
 
 impl Default for Window {
@@ -281,6 +282,7 @@ impl Default for Window {
             repaint_retry_max_ms: 1000,
             output_fps: 60,
             input_grace_ms: 250,
+            macos_titlebar_height: 28,
         }
     }
 }

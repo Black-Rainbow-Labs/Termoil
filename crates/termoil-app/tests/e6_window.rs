@@ -603,7 +603,56 @@ fn theme_step(g: &mut Gui, el: &ActiveEventLoop) -> Result<bool, String> {
     if bg.r < 128 {
         return Err("the window kept the dark background".into());
     }
+    shader_list_step(g, el)?;
     Ok(true)
+}
+
+/// task-2590: the shader list beside the themes. Right moves to it, typing filters it and previews
+/// the shader, Enter writes the shader and keeps the theme, and Escape after moving restores the
+/// shader that was in effect.
+fn shader_list_step(g: &mut Gui, el: &ActiveEventLoop) -> Result<(), String> {
+    let key = |k| RawKey::new(Key::Named(k), Modifiers::NONE);
+    g.app.run_named("choose-theme").map_err(|e| e.to_string())?;
+    g.flush(el);
+    press(g, key(NamedKey::Right));
+    type_text(g, "neon");
+    g.flush(el);
+    if g.app.config.window.shader != "neon" {
+        return Err(format!("the shader preview is '{}'", g.app.config.window.shader));
+    }
+    press(g, key(NamedKey::Enter));
+    g.flush(el);
+    let text = std::fs::read_to_string(&g.app.config_path).map_err(|e| e.to_string())?;
+    if !text.contains("shader = \"neon\"") || !text.contains("theme = \"Termoil Light\"") {
+        return Err(format!("Enter did not keep the theme and the shader: {text}"));
+    }
+    let (win, _) = focus(g).ok_or("window")?;
+    if let Some(error) = g.windows[&win].shader.banner() {
+        return Err(format!("the neon shader did not compile in the window: {error}"));
+    }
+    g.app.run_named("choose-theme").map_err(|e| e.to_string())?;
+    g.flush(el);
+    press(g, key(NamedKey::Right));
+    press(g, key(NamedKey::Down));
+    g.flush(el);
+    if g.app.config.window.shader == "neon" {
+        return Err("Down in the shader list did not preview the next shader".into());
+    }
+    press(g, key(NamedKey::Escape));
+    g.flush(el);
+    if g.app.config.window.shader != "neon" {
+        return Err(format!("Escape left the shader at '{}'", g.app.config.window.shader));
+    }
+    g.app.run_action(&termoil_protocol::ActionCall { action: "set-shader".into(), args: json_name("none") });
+    g.flush(el);
+    Ok(())
+}
+
+/// Arguments naming one value, for an action that takes `name`.
+fn json_name(name: &str) -> serde_json::Map<String, serde_json::Value> {
+    let mut args = serde_json::Map::new();
+    args.insert("name".into(), serde_json::Value::String(name.into()));
+    args
 }
 
 /// Opens the settings view through its action, tries an out of range value (refused, file untouched),
@@ -792,6 +841,7 @@ fn palette_args(action: &str) -> &'static [&'static str] {
         "set-title" => &["e6 title"],
         "run-action" => &["version"],
         "set-theme" => &["Termoil Light"],
+        "set-shader" => &["none"],
         "activate-key-table" => &["e6"],
         _ => &[],
     }

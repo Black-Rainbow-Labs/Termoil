@@ -114,6 +114,10 @@ pub static SECTIONS: &[Section] = &[
                 "The most frames per second drawn for program output while nothing was typed or clicked in the last input_grace_ms. Streaming output changes every row of every frame, so frames above this rate cost CPU and show nothing more. The first frame after a quiet period is never held back. 0 draws at the display's rate.",
             ),
             e(
+                "macos_titlebar_height",
+                "macOS only: the height in points of the title bar Termoil draws in the tab bar's color when the window is translucent (opacity below 1), so the desktop does not show through the system title bar. 0 leaves the system title bar.",
+            ),
+            e(
                 "input_grace_ms",
                 "Milliseconds after a key press, click or scroll during which frames are drawn at the display's rate, so typing is never held back by output_fps.",
             ),

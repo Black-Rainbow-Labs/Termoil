@@ -1,6 +1,6 @@
-//! A window's custom shader (`window.shader`): loading the WGSL file, compiling it on the window's
-//! GPU renderer, reloading it when the configuration changes or the file's modified time changes,
-//! and keeping the error text the window's banner shows.
+//! A window's custom shader (`window.shader`): a built in shader by name (`crate::shaders`) or a
+//! WGSL file, compiled on the window's GPU renderer, reloaded when the configuration changes or the
+//! file's modified time changes, and the error text the window's banner shows.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
@@ -8,11 +8,20 @@ use std::time::{Duration, Instant, SystemTime};
 use crate::config::Config;
 use crate::gui::paint::Painter;
 
+/// Where a window's shader comes from.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Origin {
+    /// A shader built into Termoil, by name.
+    Builtin(&'static str),
+    /// A file, made absolute against the configuration file's folder.
+    File(PathBuf),
+}
+
 /// The state of one window's shader.
 #[derive(Default)]
 pub struct ShaderState {
-    /// The file `window.shader` names, made absolute against the configuration file's folder.
-    path: Option<PathBuf>,
+    /// What `window.shader` names.
+    path: Option<Origin>,
     /// The source last handed to the renderer (or that failed), to skip a recompile of the same text.
     source: Option<String>,
     /// The file's modified time when it was last read.
@@ -25,18 +34,44 @@ pub struct ShaderState {
     pub error: Option<String>,
 }
 
-/// The shader path of a configuration: the file `window.shader` names, relative paths read from the
-/// folder of the configuration file. None when the setting is empty.
-fn resolve_path(config: &Config, config_path: &Path) -> Option<PathBuf> {
+/// What `window.shader` names: a built in shader when the value is one of their names (no folder and
+/// no extension), otherwise a file, with relative paths read from the folder of the configuration
+/// file. None when the setting is empty.
+fn resolve_path(config: &Config, config_path: &Path) -> Option<Origin> {
     let name = config.window.shader.trim();
     if name.is_empty() {
         return None;
     }
+    let bare = !name.contains(['/', '\\', '.']);
+    if let Some(b) = crate::shaders::builtin(name).filter(|_| bare) {
+        return Some(Origin::Builtin(b.name));
+    }
     let path = PathBuf::from(name);
     if path.is_absolute() {
-        return Some(path);
+        return Some(Origin::File(path));
     }
-    Some(config_path.parent().map_or(path.clone(), |dir| dir.join(&path)))
+    Some(Origin::File(config_path.parent().map_or(path.clone(), |dir| dir.join(&path))))
+}
+
+/// The source of a shader and the name its errors carry: the built in text, or the file read now.
+fn read(origin: &Origin) -> (String, Result<String, String>) {
+    match origin {
+        Origin::Builtin(name) => {
+            let text = crate::shaders::builtin(name).map(|b| b.source.to_string());
+            (format!("built in shader {name}"), text.ok_or_else(|| format!("no built in shader {name}")))
+        }
+        Origin::File(path) => {
+            (path.display().to_string(), std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display())))
+        }
+    }
+}
+
+/// The file's modified time for a file shader, None for a built in one.
+fn origin_modified(origin: &Origin) -> Option<SystemTime> {
+    match origin {
+        Origin::File(path) => modified_time(path),
+        Origin::Builtin(_) => None,
+    }
 }
 
 /// The file's modified time, None when it cannot be read.
@@ -72,18 +107,19 @@ impl ShaderState {
     /// printed, and the painter then draws without a shader. True when `error` changed.
     pub fn apply(&mut self, painter: &mut Painter, force: bool) -> bool {
         let before = self.error.clone();
-        let Some(path) = self.path.clone() else {
+        let Some(origin) = self.path.clone() else {
             if self.must_drop(force) {
                 let _ = painter.set_shader(None);
             }
             self.error = None;
             return before != self.error;
         };
-        self.modified = modified_time(&path);
-        match std::fs::read_to_string(&path) {
-            Err(e) => self.fail(painter, format!("{}: {e}", path.display())),
+        self.modified = origin_modified(&origin);
+        let (label, text) = read(&origin);
+        match text {
+            Err(e) => self.fail(painter, e),
             Ok(text) if force || self.source.as_deref() != Some(text.as_str()) => {
-                self.error = painter.set_shader(Some(&text)).err().map(|e| format!("{}: {e}", path.display()));
+                self.error = painter.set_shader(Some(&text)).err().map(|e| format!("{label}: {e}"));
                 if let Some(e) = &self.error {
                     eprintln!("termoil: shader error: {e}");
                 }
@@ -112,7 +148,7 @@ impl ShaderState {
     /// it changed. Returns whether anything changed (the window needs a frame) and when to check
     /// next (None when no shader is set).
     pub fn poll(&mut self, painter: &mut Painter, now: Instant) -> (bool, Option<Instant>) {
-        let Some(path) = &self.path else { return (false, None) };
+        let Some(Origin::File(path)) = &self.path else { return (false, None) };
         let due = self.checked.map_or(now, |c| c + self.poll);
         if now < due {
             return (false, Some(due));
@@ -151,7 +187,20 @@ mod tests {
     #[test]
     fn a_relative_shader_path_is_read_from_the_config_folder() {
         let p = resolve_path(&config_with("fx/crt.wgsl"), Path::new("/etc/termoil/config.toml"));
-        assert_eq!(p, Some(PathBuf::from("/etc/termoil/fx/crt.wgsl")));
+        assert_eq!(p, Some(Origin::File(PathBuf::from("/etc/termoil/fx/crt.wgsl"))));
+    }
+
+    #[test]
+    fn a_built_in_name_is_the_built_in_shader_and_a_path_is_a_file() {
+        let at = Path::new("/etc/termoil/config.toml");
+        assert_eq!(resolve_path(&config_with("Neon"), at), Some(Origin::Builtin("neon")));
+        assert_eq!(
+            resolve_path(&config_with("crt.wgsl"), at),
+            Some(Origin::File(PathBuf::from("/etc/termoil/crt.wgsl")))
+        );
+        let (label, text) = read(&Origin::Builtin("crt"));
+        assert_eq!(label, "built in shader crt");
+        assert!(text.unwrap().contains("termoil_shade"));
     }
 
     #[test]

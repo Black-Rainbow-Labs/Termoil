@@ -21,6 +21,7 @@ pub const ANSWERS: &[&str] = &[
     "run-action",
     "show-config",
     "list-themes",
+    "list-shaders",
     "install-shell-integration",
     "version",
     "check-for-updates",
@@ -58,6 +59,7 @@ pub const ACTS: &[&str] = &[
     "set-title",
     "reload-config",
     "set-theme",
+    "set-shader",
     "choose-theme",
     "open-settings",
     "open-config",
@@ -170,12 +172,26 @@ fn describe_value(action: &str, v: &Value) -> (String, Vec<String>) {
             format!("Termoil {}", v["version"].as_str().unwrap_or("?")),
             vec![format!("Built {}", v["build_date"].as_str().unwrap_or("?"))],
         ),
+        "list-shaders" => shaders_text(v),
         "wait-prompt" => match v["exit_code"].as_i64() {
             Some(code) => ("The command finished".into(), vec![format!("Exit code {code}.")]),
             None => ("The command finished".into(), Vec::new()),
         },
         _ => (action.to_string(), generic_lines(v)),
     }
+}
+
+/// list-shaders: each built in shader with what it looks like, the one in effect marked.
+fn shaders_text(v: &Value) -> (String, Vec<String>) {
+    let current = v["current"].as_str().unwrap_or("");
+    let shown = if current.is_empty() { "none" } else { current };
+    let mut lines = vec![format!("In effect: {shown}. Set one with set-shader, or pick one beside the themes.")];
+    for s in v["shaders"].as_array().into_iter().flatten() {
+        let name = s["name"].as_str().unwrap_or("?");
+        let mark = if name.eq_ignore_ascii_case(current) { "*" } else { " " };
+        lines.push(format!("{mark} {name:<15} {}", s["summary"].as_str().unwrap_or("")));
+    }
+    ("Shaders".into(), lines)
 }
 
 /// check-for-updates: the sentences the automatic check uses, and the release notes.

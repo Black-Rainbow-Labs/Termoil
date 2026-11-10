@@ -322,7 +322,13 @@ pub fn cursor_moved(ws: &mut WinState, app: &mut App, x: f64, y: f64) {
 /// A mouse button went down or up.
 pub fn button(ws: &mut WinState, app: &mut App, state: ElementState, b: winit::event::MouseButton) {
     let (x, y) = ws.mouse.pos;
-    if state == ElementState::Pressed && y < ws.tab_bar_h as f64 {
+    // The title strip Termoil draws on macOS moves the window, as the title bar it stands in for does.
+    if state == ElementState::Pressed && y < ws.title_h as f64 {
+        let _ = ws.window.drag_window();
+        return;
+    }
+    let bar_y = y - ws.title_h as f64;
+    if state == ElementState::Pressed && bar_y >= 0.0 && bar_y < ws.tab_bar_h as f64 {
         press_tab_bar(ws, app, x, b);
         return;
     }
@@ -533,6 +539,7 @@ fn tab_index_at(ws: &WinState, x: f64) -> Option<usize> {
 
 /// Tracks what in the tab bar is under the pointer, redrawing when it changed.
 fn hover_tab_bar(ws: &mut WinState, x: f64, y: f64) {
+    let y = y - ws.title_h as f64;
     let hover = if y >= 0.0 && y < ws.tab_bar_h as f64 {
         crate::gui::tab_bar::hit(&ws.tab_layout, x, ws.cell().0)
     } else {

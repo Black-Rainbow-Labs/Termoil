@@ -6,6 +6,7 @@ use serde_json::{Map, Value};
 use termoil_input::{Key, KeyEvent, Modifiers, NamedKey};
 use termoil_protocol::{ActionCall, ParamDef, ParamKind};
 use termoil_render::Colors;
+use termoil_vt::style::Rgb;
 
 use crate::answer::{Answer, Asked};
 use crate::app::App;
@@ -29,7 +30,7 @@ pub enum Overlay {
     Search(SearchUi),
     /// Keyboard labels on a pane's links.
     Hints(HintsUi),
-    /// The theme switcher.
+    /// The theme switcher, with the shader list beside it.
     Themes(ThemesUi),
     /// The settings view.
     Settings(crate::gui::settings_view::SettingsUi),
@@ -57,22 +58,63 @@ impl AnswerUi {
     }
 }
 
-/// The theme switcher's state.
+/// Which list of the theme switcher takes the arrow keys and the typed filter.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ThemeList {
+    /// The color themes, on the left.
+    Themes,
+    /// The built in shaders, on the right (task-2590).
+    Shaders,
+}
+
+/// The theme switcher's state: the themes on the left and the shaders on the right, each with its
+/// own filter and highlight, so a color theme and a shader are chosen together.
 pub struct ThemesUi {
-    /// The filter text.
+    /// The themes' filter text.
     pub query: String,
     /// The highlighted theme among the matches.
     pub selected: usize,
     /// The theme in effect when the switcher opened, restored by Escape.
     pub original: String,
+    /// The list that takes the keys.
+    pub list: ThemeList,
+    /// The shaders' filter text.
+    pub shader_query: String,
+    /// The highlighted shader among the matches.
+    pub shader_selected: usize,
+    /// `window.shader` when the switcher opened, file path or name, restored by Escape.
+    pub original_shader: String,
+    /// A shader was highlighted with the keys, so Enter writes it. Until then a shader file set by
+    /// path is left as it is.
+    pub shader_touched: bool,
 }
 
 impl ThemesUi {
-    /// A switcher opened while `original` is in effect, with that theme highlighted.
-    pub fn new(original: String) -> ThemesUi {
-        let mut ui = ThemesUi { query: String::new(), selected: 0, original };
+    /// A switcher opened while theme `original` and `window.shader` value `shader` are in effect, with
+    /// both highlighted.
+    pub fn new(original: String, shader: String) -> ThemesUi {
+        let mut ui = ThemesUi {
+            query: String::new(),
+            selected: 0,
+            original,
+            list: ThemeList::Themes,
+            shader_query: String::new(),
+            shader_selected: 0,
+            original_shader: shader,
+            shader_touched: false,
+        };
         ui.selected = ui.matches().iter().position(|n| n.eq_ignore_ascii_case(&ui.original)).unwrap_or(0);
+        let current = crate::shaders::list_name(&ui.original_shader);
+        ui.shader_selected = ui.shader_matches().iter().position(|n| Some(*n) == current).unwrap_or(0);
         ui
+    }
+
+    /// The shader names matching the shader filter: `none` first, then the built in shaders in their
+    /// own order.
+    pub fn shader_matches(&self) -> Vec<&'static str> {
+        let q = self.shader_query.to_lowercase();
+        let names = std::iter::once(crate::shaders::NONE).chain(crate::shaders::BUILTINS.iter().map(|b| b.name));
+        names.filter(|n| q.is_empty() || n.contains(&q)).collect()
     }
 
     /// The bundled theme names matching the query: the themes Unluminous ships first, in their own
@@ -189,69 +231,182 @@ fn answer_key(a: &mut AnswerUi, ev: &KeyEvent) -> After {
     After::Open
 }
 
-/// Theme keys: type to filter, arrows move and preview, Enter keeps and saves, Escape restores.
+/// Theme keys: Left, Right and Tab switch between the themes and the shaders; typing filters the
+/// list in use; the arrows move and preview; Enter keeps and saves the theme and the shader;
+/// Escape restores both.
 fn themes_key(t: &mut ThemesUi, app: &mut App, ev: &KeyEvent) -> After {
     match ev.key {
         Key::Named(NamedKey::Escape) => {
             let _ = crate::themes::preview(app, &t.original);
+            crate::shaders::restore(app, &t.original_shader);
             return After::Close;
         }
         Key::Named(NamedKey::Enter) => {
-            if let Some(name) = t.matches().get(t.selected) {
-                let _ = crate::themes::set(app, name);
-            }
+            themes_enter(t, app);
             return After::Close;
         }
-        Key::Named(NamedKey::Up) => t.selected = t.selected.saturating_sub(1),
-        Key::Named(NamedKey::Down) => t.selected = (t.selected + 1).min(t.matches().len().saturating_sub(1)),
-        Key::Named(NamedKey::Backspace) => {
-            t.query.pop();
-            t.selected = 0;
+        Key::Named(NamedKey::Left) => t.list = ThemeList::Themes,
+        Key::Named(NamedKey::Right) => t.list = ThemeList::Shaders,
+        Key::Named(NamedKey::Tab) => {
+            t.list = if t.list == ThemeList::Themes { ThemeList::Shaders } else { ThemeList::Themes };
         }
-        _ => match typed(ev) {
-            Some(s) => {
-                t.query.push_str(s);
-                t.selected = 0;
+        _ => {
+            if !list_key(t, ev) {
+                return After::Open;
             }
-            None => return After::Open,
-        },
+        }
     }
-    if let Some(name) = t.matches().get(t.selected) {
-        let _ = crate::themes::preview(app, name);
-    }
+    themes_preview(t, app);
     After::Open
 }
 
-/// The theme switcher's content and its number of rows.
+/// Up, Down, Backspace and typed text for the list in use. False when the key does nothing.
+fn list_key(t: &mut ThemesUi, ev: &KeyEvent) -> bool {
+    let len = match t.list {
+        ThemeList::Themes => t.matches().len(),
+        ThemeList::Shaders => t.shader_matches().len(),
+    };
+    let (query, selected) = match t.list {
+        ThemeList::Themes => (&mut t.query, &mut t.selected),
+        ThemeList::Shaders => (&mut t.shader_query, &mut t.shader_selected),
+    };
+    match ev.key {
+        Key::Named(NamedKey::Up) => *selected = selected.saturating_sub(1),
+        Key::Named(NamedKey::Down) => *selected = (*selected + 1).min(len.saturating_sub(1)),
+        Key::Named(NamedKey::Backspace) => {
+            query.pop();
+            *selected = 0;
+        }
+        _ => match typed(ev) {
+            Some(s) => {
+                query.push_str(s);
+                *selected = 0;
+            }
+            None => return false,
+        },
+    }
+    if t.list == ThemeList::Shaders {
+        t.shader_touched = true;
+    }
+    true
+}
+
+/// Shows the highlighted theme, and the highlighted shader once one was chosen with the keys.
+fn themes_preview(t: &ThemesUi, app: &mut App) {
+    if let Some(name) = t.matches().get(t.selected) {
+        let _ = crate::themes::preview(app, name);
+    }
+    if t.shader_touched
+        && let Some(name) = t.shader_matches().get(t.shader_selected)
+    {
+        let _ = crate::shaders::preview(app, name);
+    }
+}
+
+/// Enter: saves the highlighted theme, and the highlighted shader when one was chosen with the keys.
+fn themes_enter(t: &ThemesUi, app: &mut App) {
+    if let Some(name) = t.matches().get(t.selected) {
+        let _ = crate::themes::set(app, name);
+    }
+    if t.shader_touched
+        && let Some(name) = t.shader_matches().get(t.shader_selected)
+    {
+        let _ = crate::shaders::set(app, name);
+    }
+}
+
+/// The theme switcher's columns: the theme list's width, and the shader list's width after a one
+/// column gap. Below 48 columns the shader list is left out.
+fn theme_columns(cols: u16) -> (u16, u16) {
+    if cols < 48 {
+        return (cols, 0);
+    }
+    let shaders = (cols / 3).clamp(18, 34);
+    (cols - shaders - 1, shaders)
+}
+
+/// The theme switcher's content and its number of rows: a header with both filters, the themes on
+/// the left and the shaders on the right, and a line saying how to use them.
 pub fn themes_content(t: &ThemesUi, cols: u16, colors: &Colors) -> (Vec<u8>, u16) {
     let panel = mix(colors.background, colors.foreground, 0.08);
-    let matches = t.matches();
-    let mut out = format!(
-        "{}\x1b[1m{}\x1b[22m\x1b[K",
-        sgr_colors(colors.foreground, panel),
-        clip(&format!(" Theme: {}\u{2588}   {} of {}", t.query, matches.len(), crate::config::themes().len()), cols)
-    );
-    let first = t.selected.saturating_sub(PALETTE_ROWS - 1);
-    let featured = crate::config::featured_themes();
     let dim = mix(colors.foreground, panel, 0.45);
+    let (left_w, right_w) = theme_columns(cols);
+    let themes = t.matches();
+    let shaders = t.shader_matches();
+    let cursor = |list| if t.list == list { "\u{2588}" } else { "" };
+    let count = crate::config::themes().len();
+    let left = format!(" Theme: {}{}   {} of {count}", t.query, cursor(ThemeList::Themes), themes.len());
+    let right = format!(" Shader: {}{}", t.shader_query, cursor(ThemeList::Shaders));
+    let mut out = format!("{}\x1b[1m{}", sgr_colors(colors.foreground, panel), pad(&left, left_w));
+    if right_w > 0 {
+        out.push_str(&format!(" {}", pad(&right, right_w)));
+    }
+    out.push_str("\x1b[22m\x1b[K");
+    let theme_top = t.selected.saturating_sub(PALETTE_ROWS - 1);
+    let shader_top = t.shader_selected.saturating_sub(PALETTE_ROWS - 1);
+    let shown = if right_w > 0 { themes.len().max(shaders.len()) } else { themes.len() };
     let mut rows = 1u16;
-    for (i, name) in matches.iter().enumerate().skip(first).take(PALETTE_ROWS) {
-        let (fg, bg) =
-            if i == t.selected { (colors.background, colors.foreground) } else { (colors.foreground, panel) };
-        let label = clip(name, cols.saturating_sub(2));
-        let tag = if featured.contains(name) { "  from Unluminous" } else { "" };
-        let room = cols.saturating_sub(2 + label.chars().count() as u16);
-        let tag_fg = if i == t.selected { mix(colors.background, colors.foreground, 0.35) } else { dim };
-        out.push_str(&format!(
-            "\r\n{}  {}{}{}\x1b[K",
-            sgr_colors(fg, bg),
-            label,
-            sgr_colors(tag_fg, bg),
-            clip(tag, room)
-        ));
+    for row in 0..shown.min(PALETTE_ROWS) {
+        let theme = theme_cell(t, &themes, theme_top + row, left_w, colors, panel, dim);
+        out.push_str(&format!("\r\n{theme}"));
+        if right_w > 0 {
+            let shader = shader_cell(t, &shaders, shader_top + row, right_w, colors, panel);
+            out.push_str(&format!("{} {shader}", sgr_colors(colors.foreground, panel)));
+        }
+        out.push_str("\x1b[K");
         rows += 1;
     }
-    (out.into_bytes(), rows)
+    out.push_str(&format!("\r\n{}{}\x1b[K", sgr_colors(dim, panel), clip(&themes_hint(t, right_w > 0), cols)));
+    (out.into_bytes(), rows + 1)
+}
+
+/// One theme row, `width` columns wide: the name, and `from Unluminous` for the featured themes. The
+/// highlighted theme is drawn inverted while the theme list has the keys, and marked otherwise.
+fn theme_cell(t: &ThemesUi, themes: &[&str], i: usize, width: u16, colors: &Colors, panel: Rgb, dim: Rgb) -> String {
+    let Some(name) = themes.get(i) else {
+        return format!("{}{}", sgr_colors(colors.foreground, panel), pad("", width));
+    };
+    let active = i == t.selected && t.list == ThemeList::Themes;
+    let (fg, bg) = if active { (colors.background, colors.foreground) } else { (colors.foreground, panel) };
+    let mark = if i == t.selected { "\u{203a} " } else { "  " };
+    let label = clip(&format!("{mark}{name}"), width);
+    let tag = if crate::config::featured_themes().contains(name) { "  from Unluminous" } else { "" };
+    let room = width.saturating_sub(label.chars().count() as u16);
+    let tag_fg = if active { mix(colors.background, colors.foreground, 0.35) } else { dim };
+    format!("{}{label}{}{}", sgr_colors(fg, bg), sgr_colors(tag_fg, bg), pad(tag, room))
+}
+
+/// One shader row, `width` columns wide. The highlighted shader is drawn inverted while the shader
+/// list has the keys, and marked otherwise.
+fn shader_cell(t: &ThemesUi, shaders: &[&str], i: usize, width: u16, colors: &Colors, panel: Rgb) -> String {
+    let Some(name) = shaders.get(i) else {
+        return format!("{}{}", sgr_colors(colors.foreground, panel), pad("", width));
+    };
+    let active = i == t.shader_selected && t.list == ThemeList::Shaders;
+    let (fg, bg) = if active { (colors.background, colors.foreground) } else { (colors.foreground, panel) };
+    let mark = if i == t.shader_selected { "\u{203a} " } else { "  " };
+    format!("{}{}", sgr_colors(fg, bg), pad(&format!("{mark}{name}"), width))
+}
+
+/// The switcher's last line: what the highlighted shader looks like while the shader list has the
+/// keys, otherwise how to use the switcher.
+fn themes_hint(t: &ThemesUi, with_shaders: bool) -> String {
+    let highlighted = t.shader_matches().get(t.shader_selected).and_then(|n| crate::shaders::builtin(n));
+    match highlighted {
+        Some(b) if t.list == ThemeList::Shaders => format!(" {}: {}", b.name, b.summary),
+        _ if with_shaders => {
+            " Left and Right switch lists, Up and Down preview, Enter keeps both, Escape restores".to_string()
+        }
+        _ => " Up and Down preview, Enter keeps, Escape restores".to_string(),
+    }
+}
+
+/// Text cut or filled with spaces to exactly `cols` characters.
+fn pad(s: &str, cols: u16) -> String {
+    let mut text = clip(s, cols);
+    let short = (cols as usize).saturating_sub(text.chars().count());
+    text.push_str(&" ".repeat(short));
+    text
 }
 
 /// Hint keys: letters narrow the labels and a full label opens its link; anything else closes.

@@ -23,6 +23,7 @@ pub mod platform;
 pub mod restore;
 pub mod session;
 pub mod settings;
+pub mod shaders;
 pub mod shell_integration;
 pub mod telemetry;
 pub mod terminfo;
