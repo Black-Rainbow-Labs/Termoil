@@ -482,7 +482,8 @@ fn right_click(app: &mut App, pane: PaneId) {
 
 /// A click in the tab bar switches to the tab under it.
 /// A button went down in the tab bar. A left click on a tab shows it and may start dragging it, on its
-/// cross closes it, and on the plus opens a new tab; a middle click on a tab closes it. Closing and
+/// cross closes it, on the plus opens a new tab, and on empty space moves the window; a middle click on
+/// a tab closes it. Closing and
 /// opening go through `run_action` (`close-tab`, `new-tab`), the same as a keybinding or the CLI.
 fn press_tab_bar(ws: &mut WinState, app: &mut App, x: f64, b: winit::event::MouseButton) {
     use winit::event::MouseButton as B;
@@ -510,6 +511,11 @@ fn press_tab_bar(ws: &mut WinState, app: &mut App, x: f64, b: winit::event::Mous
                 &termoil_protocol::ActionCall { action: "new-tab".into(), args: Map::new() },
                 Asked::Binding,
             );
+        }
+        // The empty part of the bar moves the window, as a title bar does. With two or more tabs the
+        // bar is where the person reaches to drag the window, and a press there did nothing.
+        (B::Left, None) => {
+            let _ = ws.window.drag_window();
         }
         _ => {}
     }
