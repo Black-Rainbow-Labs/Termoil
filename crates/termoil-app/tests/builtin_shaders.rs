@@ -8,6 +8,7 @@ use termoil_app::shaders::BUILTINS;
 use termoil_font::{FontConfig, FontGrid};
 use termoil_render::{BuildOptions, Colors, Frame, Image, RenderState, Renderer, VelloGpuRenderer, build_frame};
 use termoil_vt::{Terminal, TerminalConfig};
+use wgpu::Backends as wgpu_backends;
 
 /// A grid on the vendored JetBrains Mono.
 fn grid() -> FontGrid {
@@ -63,6 +64,43 @@ fn distinct_colors(img: &Image) -> usize {
         seen.insert((p[0] / 8, p[1] / 8, p[2] / 8));
     }
     seen.len()
+}
+
+/// task-2590: the window draws through DX12 on Windows, whose own compiler (FXC) refused crt and
+/// tft for writing into a vector at a computed index, though naga and Vulkan accepted them. The
+/// installed 1.5.9 then ended with a panic. Every shader is compiled on each backend this machine has.
+#[test]
+fn every_built_in_shader_compiles_on_every_backend() {
+    let backends = [("dx12", wgpu_backends::DX12), ("vulkan", wgpu_backends::VULKAN), ("metal", wgpu_backends::METAL)];
+    let mut tried = 0;
+    for (name, backend) in backends {
+        let Ok(ctx) = termoil_render::GpuContext::with_backends(backend) else { continue };
+        tried += 1;
+        for b in BUILTINS {
+            if let Err(e) = ctx.check_shader(b.source) {
+                panic!("{} does not compile on {name}: {e}", b.name);
+            }
+        }
+    }
+    if tried == 0 {
+        eprintln!("backend test skipped: no GPU adapter");
+    }
+}
+
+/// task-2590: a shader DX12's compiler refuses is an error the window shows in its banner, not a
+/// panic. Before the internal error scope, this compile ended the program.
+#[test]
+fn a_shader_dx12_refuses_is_an_error_not_a_crash() {
+    let Ok(ctx) = termoil_render::GpuContext::with_backends(wgpu_backends::DX12) else {
+        eprintln!("DX12 test skipped: no DX12 adapter");
+        return;
+    };
+    let refused = "fn termoil_shade(uv: vec2<f32>, color: vec4<f32>) -> vec4<f32> {\n    var v = vec3<f32>(0.0);\n    v[u32(uv.x * 3.0)] = 1.0;\n    return vec4<f32>(v, 1.0);\n}\n";
+    match ctx.check_shader(refused) {
+        Err(e) => assert!(e.to_string().contains("shader"), "{e}"),
+        Ok(()) => eprintln!("this DX12 compiler accepts the module, so there is nothing to refuse"),
+    }
+    assert!(ctx.check_shader(BUILTINS[0].source).is_ok(), "the device still works after the refusal");
 }
 
 #[test]

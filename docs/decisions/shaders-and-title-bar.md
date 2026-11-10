@@ -53,9 +53,24 @@ on a translucent window too.
 This could only be compiled for macOS from the Windows machine (`cargo clippy --target aarch64-apple-darwin`); it was
 checked on a Mac after the release.
 
+## Found on the installed 1.5.9: a shader DX12 refuses ended the program
+
+The first release of this work (1.5.9) crashed on start on this PC with `window.shader = "crt"`. The window draws
+through DX12, whose own compiler (FXC) refused `crt` and `tft` with `error X3500: array reference cannot be used as an
+l-value` (they wrote into a vector at a computed index). naga and Vulkan had accepted both, and the offscreen GPU
+test runs on Vulkan, so the tests passed. wgpu reports a backend compiler failure as an internal error, and
+`termoil-render/src/shader.rs` only opened a validation error scope, so the error reached wgpu's default handler,
+which panics. That is a crash for any user shader DX12 refuses, not only these two.
+
+1.5.10 fixes both: the shader pass opens an internal error scope as well, so such a shader shows the banner and the
+window draws without it, and `crt`, `tft` and `game-boy` no longer index vectors or arrays at a computed index. The
+tests now compile every built in shader on every backend the machine has (`GpuContext::check_shader`), and check that
+a module DX12 refuses comes back as an error. With the 1.5.9 `crt` put back, that test fails naming dx12.
+
 ## Tests
 
-- `crates/termoil-app/tests/builtin_shaders.rs` compiles every built in shader on the GPU, draws a frame of colored
+- `crates/termoil-app/tests/builtin_shaders.rs` compiles every built in shader on DX12, Vulkan and Metal (whichever
+  exist), checks a module DX12 refuses is an error, and compiles every built in shader on the GPU, draws a frame of colored
   text with it and checks that it changed the frame, kept the text (at least 4 colors) and kept the alpha.
 - `src/shaders.rs` and `src/gui/shader.rs` unit tests: at least 20 shaders with unique names and the entry function,
   names resolve ignoring case, `none` clears, a path stays a file, and the write keeps the rest of the file.

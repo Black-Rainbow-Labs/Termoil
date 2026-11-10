@@ -7,8 +7,8 @@ const GAP: f32 = 0.18;
 fn termoil_shade(uv: vec2<f32>, color: vec4<f32>) -> vec4<f32> {
     let px = uv * termoil.size;
     let column = u32(px.x) % 3u;
-    var stripe = vec3<f32>(1.0 - STRIPE);
-    stripe[column] = 1.0 + STRIPE * 0.6;
+    let lit = vec3<f32>(f32(column == 0u), f32(column == 1u), f32(column == 2u));
+    let stripe = vec3<f32>(1.0 - STRIPE) + lit * STRIPE * 1.6;
     let row = fract(px.y / 3.0);
     let gap = select(1.0, 1.0 - GAP, row > 0.8);
     return vec4<f32>(color.rgb * stripe * gap, color.a);

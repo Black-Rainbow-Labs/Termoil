@@ -28,9 +28,8 @@ fn termoil_shade(uv: vec2<f32>, color: vec4<f32>) -> vec4<f32> {
     let px = p * termoil.size;
     rgb = rgb * (1.0 - SCANLINE + SCANLINE * (0.5 + 0.5 * sin(px.y * 3.14159)));
     let column = u32(px.x) % 3u;
-    var mask = vec3<f32>(1.0 - MASK);
-    mask[column] = 1.0 + MASK;
-    rgb = rgb * mask;
+    let lit = vec3<f32>(f32(column == 0u), f32(column == 1u), f32(column == 2u));
+    rgb = rgb * (vec3<f32>(1.0 - MASK) + lit * 2.0 * MASK);
     let edge = p * (1.0 - p);
     let vignette = clamp(pow(edge.x * edge.y * 18.0, 0.3), 0.0, 1.0);
     return vec4<f32>(rgb * vignette * 1.08, color.a);

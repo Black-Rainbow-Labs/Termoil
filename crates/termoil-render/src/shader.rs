@@ -78,11 +78,17 @@ fn module_text(source: &str) -> String {
     format!("{source}{WRAPPER}")
 }
 
-/// Runs `build` with a validation error scope and returns the first error as text.
+/// Runs `build` inside validation and internal error scopes and returns the first error as text.
+/// The internal scope matters on DX12: there the backend's own compiler (FXC) can refuse a module
+/// naga accepted, and wgpu reports that as an internal error. Without a scope for it the error was
+/// uncaptured and wgpu's default handler ended the program (task-2590).
 fn scoped<T>(device: &wgpu::Device, what: &str, build: impl FnOnce() -> T) -> Result<T, RenderError> {
-    let guard = device.push_error_scope(wgpu::ErrorFilter::Validation);
+    let validation = device.push_error_scope(wgpu::ErrorFilter::Validation);
+    let internal = device.push_error_scope(wgpu::ErrorFilter::Internal);
     let value = build();
-    match pollster::block_on(guard.pop()) {
+    let internal = pollster::block_on(internal.pop());
+    let validation = pollster::block_on(validation.pop());
+    match validation.or(internal) {
         Some(e) => Err(RenderError::Gpu(format!("{what}: {e}"))),
         None => Ok(value),
     }

@@ -13,10 +13,11 @@ fn gb_shade(i: i32) -> vec3<f32> {
 
 /// A 2x2 ordered dither threshold for a pixel.
 fn gb_dither(px: vec2<f32>) -> f32 {
-    let x = i32(px.x) % 2;
-    let y = i32(px.y) % 2;
-    var m = array<f32, 4>(0.0, 0.5, 0.75, 0.25);
-    return m[y * 2 + x] - 0.375;
+    let x = i32(px.x) % 2 == 1;
+    let y = i32(px.y) % 2 == 1;
+    let top = select(0.0, 0.5, x);
+    let bottom = select(0.75, 0.25, x);
+    return select(top, bottom, y) - 0.375;
 }
 
 fn termoil_shade(uv: vec2<f32>, color: vec4<f32>) -> vec4<f32> {

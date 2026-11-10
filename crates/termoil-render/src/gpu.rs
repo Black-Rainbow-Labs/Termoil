@@ -197,6 +197,12 @@ impl GpuContext {
         Self::for_display(display)
     }
 
+    /// Compiles a custom shader on this device, as a window would, and drops it. An error names what
+    /// the device's own shader compiler refused, so a shader can be checked on every backend.
+    pub fn check_shader(&self, source: &str) -> Result<(), RenderError> {
+        crate::shader::ShaderPass::compile(&self.device, wgpu::TextureFormat::Bgra8Unorm, source).map(|_| ())
+    }
+
     /// Starts a device on the high performance adapter of the given backends, with no display.
     pub fn with_backends(backends: wgpu::Backends) -> Result<GpuContext, RenderError> {
         Self::with_descriptor(wgpu::InstanceDescriptor {
