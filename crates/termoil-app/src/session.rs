@@ -37,6 +37,9 @@ pub struct SessionOptions {
     pub lock_slice: usize,
     /// How often the exit watcher checks the child.
     pub exit_poll: Duration,
+    /// After the output ends, how long the parser waits for the child to be reaped so its exit code
+    /// is known. A child that closed its terminal and kept running is recorded with no status.
+    pub exit_status_wait: Duration,
     /// Keep a copy of every byte written to the program, for tests.
     pub record_input: bool,
     /// Quiet time after output before cold scrollback pages are compressed.
@@ -63,6 +66,7 @@ impl SessionOptions {
             channel_depth: 16,
             lock_slice: 64 << 10,
             exit_poll: Duration::from_millis(100),
+            exit_status_wait: Duration::from_millis(500),
             record_input: false,
             idle_compress: Duration::from_secs(2),
             keep_live_pages: 4,
@@ -161,6 +165,7 @@ impl Session {
             opts.lock_slice.max(1024),
             waker.clone(),
             (opts.idle_compress, opts.keep_live_pages),
+            opts.exit_status_wait,
         )?;
         spawn_exit_watcher(session.pty.clone(), session.shared.clone(), opts.exit_poll, waker)?;
         Ok(session)
@@ -334,7 +339,7 @@ fn spawn_reader(
 /// Starts the thread that applies PTY output to the terminal.
 fn spawn_parser(
     rx: Receiver<Vec<u8>>, term: Arc<Mutex<Terminal>>, writer: Arc<Mutex<Box<dyn Write + Send>>>, pty: Arc<Mutex<Pty>>,
-    shared: Arc<Shared>, slice: usize, waker: Waker, idle: (Duration, usize),
+    shared: Arc<Shared>, slice: usize, waker: Waker, idle: (Duration, usize), exit_status_wait: Duration,
 ) -> std::io::Result<()> {
     thread::Builder::new().name("termoil parser".into()).spawn(move || {
         let mut since_compress = false;
@@ -356,7 +361,7 @@ fn spawn_parser(
             }
             waker();
         }
-        let status = lock(&pty).try_wait().ok().flatten();
+        let status = reap_within(&pty, exit_status_wait);
         mark_exited(&shared, status, &waker);
     })?;
     Ok(())
@@ -381,6 +386,19 @@ fn spawn_exit_watcher(pty: Arc<Mutex<Pty>>, shared: Arc<Shared>, poll: Duration,
         }
     })?;
     Ok(())
+}
+
+/// The child's exit status, polling until it is reaped or `limit` passes. The output can end a moment
+/// before the process does, and without the wait a failed program was recorded with no exit code.
+fn reap_within(pty: &Mutex<Pty>, limit: Duration) -> Option<ExitStatus> {
+    let deadline = std::time::Instant::now() + limit;
+    loop {
+        let status = lock(pty).try_wait().ok().flatten();
+        if status.is_some() || std::time::Instant::now() >= deadline {
+            return status;
+        }
+        thread::sleep(Duration::from_millis(5));
+    }
 }
 
 /// Records the exit once and wakes the UI and any `wait-prompt` callers.

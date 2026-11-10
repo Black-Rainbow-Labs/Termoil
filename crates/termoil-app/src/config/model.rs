@@ -327,12 +327,14 @@ pub struct Shell {
     pub cwd: Option<String>,
     pub integration: bool,
     pub env: BTreeMap<String, String>,
+    /// Keep a pane started with a command open when the command fails, showing its exit code.
+    pub hold_on_failure: bool,
 }
 
 impl Default for Shell {
-    /// The registered shell, no arguments, shell integration on.
+    /// The registered shell, no arguments, shell integration on, and a failed command's pane kept open.
     fn default() -> Self {
-        Shell { program: None, args: vec![], cwd: None, integration: true, env: BTreeMap::new() }
+        Shell { program: None, args: vec![], cwd: None, integration: true, env: BTreeMap::new(), hold_on_failure: true }
     }
 }
 

@@ -150,6 +150,9 @@ pub struct Pane {
     pub progress: Option<Progress>,
     /// The command the pane was started with, None for the configured shell. Session restore saves it.
     pub command: Option<String>,
+    /// The program exited with a failure and the pane is kept open to show it (`shell.hold_on_failure`).
+    /// The next key closes it.
+    pub held: bool,
 }
 
 /// A program's progress (OSC 9;4): state 1 normal, 2 error, 3 indeterminate, 4 paused, and the
@@ -313,6 +316,7 @@ impl App {
                 cwd,
                 progress: None,
                 command: command.map(String::from),
+                held: false,
             },
         );
         Ok(id)
@@ -326,6 +330,9 @@ impl App {
             let mut words = split_command(cmd).into_iter();
             opts.spawn.program = words.next().unwrap_or_default();
             opts.spawn.args = words.collect();
+            // A command is not a login shell. On macOS the login form runs it under /usr/bin/login,
+            // which exits with 0 whatever the command returned, so its exit code was lost.
+            opts.spawn.login = false;
         } else if let Some(p) = &shell.program {
             opts.spawn.program = p.clone();
             opts.spawn.args = shell.args.clone();

@@ -167,6 +167,10 @@ pub static SECTIONS: &[Section] = &[
             opt("cwd", "Directory a new pane starts in; the current one when unset.", "\"~\""),
             e("integration", "Inject the shell integration scripts."),
             e("env", "Extra environment variables for the program, as a table."),
+            e(
+                "hold_on_failure",
+                "Keep a pane started with a command open when the command fails, showing its exit code. A key closes it.",
+            ),
         ],
     },
     Section {

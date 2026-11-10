@@ -123,7 +123,8 @@ fn first_match(
     last
 }
 
-/// Encodes a key for the pane's keyboard mode and writes it, returning the view to the bottom.
+/// Encodes a key for the pane's keyboard mode and writes it, returning the view to the bottom. A key in
+/// a held pane (its program failed, `shell.hold_on_failure`) closes the pane instead.
 pub fn send_key(app: &mut App, pane: PaneId, ev: &KeyEvent) {
     crate::gui::window::BLINK_RESET.store(true, std::sync::atomic::Ordering::Relaxed);
     let Some(p) = app.panes.get_mut(&pane) else { return };
@@ -131,6 +132,10 @@ pub fn send_key(app: &mut App, pane: PaneId, ev: &KeyEvent) {
     let mut out = Vec::new();
     encode_key(ev, &modes, &mut out);
     if out.is_empty() {
+        return;
+    }
+    if p.held {
+        app.close_pane(pane);
         return;
     }
     if p.scroll != 0 {

@@ -22,12 +22,17 @@ pub fn send_text(app: &mut App, pane: PaneId, text: &str) -> Result<Value, Actio
     Ok(json!({ "bytes": bytes.len() }))
 }
 
-/// Presses a key in a pane, encoded for the program's keyboard mode.
+/// Presses a key in a pane, encoded for the program's keyboard mode. A key in a held pane (its program
+/// failed, `shell.hold_on_failure`) closes the pane instead.
 pub fn send_key(app: &mut App, pane: PaneId, key: &str) -> Result<Value, ActionError> {
     let chord = parse_chord(key).map_err(ActionError::BadArgs)?;
     let ev =
         chord_to_event(&chord).ok_or_else(|| ActionError::BadArgs(format!("'{key}' is not a key that can be sent")))?;
     let p = app.panes.get_mut(&pane).ok_or_else(|| ActionError::NotFound(format!("pane {pane}")))?;
+    if p.held {
+        app.close_pane(pane);
+        return Ok(json!({ "closed": true }));
+    }
     let modes = inspect::keyboard_modes(&p.session.lock());
     let mut out = Vec::new();
     termoil_input::encode_key(&ev, &modes, &mut out);
