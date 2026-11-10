@@ -1,7 +1,7 @@
 // Retro: an old terminal monitor in the style of cool-retro-term. A gentle curve, soft scanlines,
 // a faint glow that bleeds from the text, film noise and a slow flicker.
 
-const CURVE: f32 = 0.06;
+const CURVE: f32 = 0.03;
 const GLOW: f32 = 0.35;
 
 /// Reads the frame at a position.

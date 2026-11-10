@@ -246,7 +246,11 @@ impl WinState {
         let (mut painter, upgrade) = if translucent {
             (crate::gui::paint::translucent_painter(&window)?, None)
         } else {
-            let gpu = crate::gui::paint::wants_gpu(config.window.renderer, &config.window.shader);
+            let gpu = crate::gui::paint::wants_gpu(
+                config.window.renderer,
+                &config.window.shader,
+                &config.window.cursor_effect,
+            );
             Painter::new(&window, gpu, warm_cpu, el.owned_display_handle())?
         };
         crate::gui::backdrop::apply(&window, translucent, config.window.blur);
@@ -568,11 +572,15 @@ impl WinState {
         }
     }
 
-    /// Applies `window.shader` after the configuration changed: the file is read and compiled again
+    /// Applies `window.shader` and `window.cursor_effect` after the configuration changed: the file is read and compiled again
     /// when its text changed. A new banner changes the layout.
     pub fn config_shader(&mut self, app: &mut App) {
         self.shader.configure(&app.config, &app.config_path);
-        let gpu = crate::gui::paint::wants_gpu(app.config.window.renderer, &app.config.window.shader);
+        let gpu = crate::gui::paint::wants_gpu(
+            app.config.window.renderer,
+            &app.config.window.shader,
+            &app.config.window.cursor_effect,
+        );
         if gpu && !self.painter.is_gpu() && self.upgrade.is_none() {
             self.upgrade = Some(crate::gui::paint::upgrade_to_gpu(&self.window, self.display.clone()));
         }
@@ -820,7 +828,7 @@ impl WinState {
             }
             Overlay::Hints(_) => None,
             Overlay::Themes(t) => {
-                let width = cols.saturating_sub(4).clamp(10, 92);
+                let width = cols.saturating_sub(4).clamp(10, 110);
                 let (bytes, rows) = crate::gui::overlay::themes_content(t, width, &self.colors);
                 self.overlay_strip.frame(width, rows, &bytes, &self.colors, &mut self.grid, &opts);
                 let x = (size.width as f32 - (width as u32 * cw + 2 * opts.padding.0) as f32) / 2.0;

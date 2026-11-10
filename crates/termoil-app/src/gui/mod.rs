@@ -371,8 +371,9 @@ impl Gui {
             Effect::ShowThemes(id) => {
                 let original = self.app.config.theme.name.clone();
                 let shader = self.app.config.window.shader.clone();
+                let cursor = self.app.config.window.cursor_effect.clone();
                 self.with_window(id, |ws, _| {
-                    ws.overlay = Some(overlay::Overlay::Themes(overlay::ThemesUi::new(original, shader)));
+                    ws.overlay = Some(overlay::Overlay::Themes(overlay::ThemesUi::new(original, shader, cursor)));
                     ws.window.request_redraw();
                 });
             }

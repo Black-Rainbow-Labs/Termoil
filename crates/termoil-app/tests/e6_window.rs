@@ -645,6 +645,39 @@ fn shader_list_step(g: &mut Gui, el: &ActiveEventLoop) -> Result<(), String> {
     }
     g.app.run_action(&termoil_protocol::ActionCall { action: "set-shader".into(), args: json_name("none") });
     g.flush(el);
+    cursor_list_step(g, el)
+}
+
+/// task-2593: the cursor effect list right of the shaders. Right twice moves to it, typing filters it
+/// and previews the cursor effect, Enter writes it beside the shader, and the window compiles the
+/// cursor effect over the shader.
+fn cursor_list_step(g: &mut Gui, el: &ActiveEventLoop) -> Result<(), String> {
+    let key = |k| RawKey::new(Key::Named(k), Modifiers::NONE);
+    g.app.run_action(&termoil_protocol::ActionCall { action: "set-shader".into(), args: json_name("cursor-glow") });
+    g.app.run_named("choose-theme").map_err(|e| e.to_string())?;
+    g.flush(el);
+    press(g, key(NamedKey::Right));
+    press(g, key(NamedKey::Right));
+    type_text(g, "sonar");
+    g.flush(el);
+    if g.app.config.window.cursor_effect != "sonar" || g.app.config.window.shader != "cursor-glow" {
+        let w = &g.app.config.window;
+        return Err(format!("the cursor effect preview is '{}' over '{}'", w.cursor_effect, w.shader));
+    }
+    press(g, key(NamedKey::Enter));
+    g.flush(el);
+    let text = std::fs::read_to_string(&g.app.config_path).map_err(|e| e.to_string())?;
+    if !text.contains("cursor_effect = \"sonar\"") || !text.contains("shader = \"cursor-glow\"") {
+        return Err(format!("Enter did not keep the shader and the cursor effect: {text}"));
+    }
+    let (win, _) = focus(g).ok_or("window")?;
+    if let Some(error) = g.windows[&win].shader.banner() {
+        return Err(format!("sonar over cursor-glow did not compile in the window: {error}"));
+    }
+    for (action, name) in [("set-cursor-effect", "none"), ("set-shader", "none")] {
+        g.app.run_action(&termoil_protocol::ActionCall { action: action.into(), args: json_name(name) });
+    }
+    g.flush(el);
     Ok(())
 }
 
@@ -842,6 +875,7 @@ fn palette_args(action: &str) -> &'static [&'static str] {
         "run-action" => &["version"],
         "set-theme" => &["Termoil Light"],
         "set-shader" => &["none"],
+        "set-cursor-effect" => &["none"],
         "activate-key-table" => &["e6"],
         _ => &[],
     }

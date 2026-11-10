@@ -39,7 +39,9 @@ or the IPC socket asked for it.
 | [`list-themes`](#list-themes) | yes | no | nothing | Prints every bundled theme name, the themes Unluminous ships first, and the theme in effect. |
 | [`set-shader`](#set-shader) | yes | yes | nothing | Turns on a built in shader (crt, retro, neon and the rest) over the window, or turns it off with none, and writes it to the configuration file. It combines with any theme. |
 | [`list-shaders`](#list-shaders) | yes | no | nothing | Prints every built in shader with what it looks like, and the shader in effect. |
-| [`choose-theme`](#choose-theme) | no | yes | a window | Lists the bundled themes and, beside them, the built in shaders, previewing each as it is highlighted; Enter keeps both. |
+| [`set-cursor-effect`](#set-cursor-effect) | yes | yes | nothing | Turns on a built in cursor effect (glow, sonar, orbit, magnify and the rest) around the cursor, or turns it off with none, and writes it to the configuration file. It combines with any shader and replaces the shader's own cursor light. |
+| [`list-cursor-effects`](#list-cursor-effects) | yes | no | nothing | Prints every built in cursor effect with what it looks like, and the cursor effect in effect. |
+| [`choose-theme`](#choose-theme) | no | yes | a window | Lists the bundled themes and, beside them, the built in shaders and cursor effects, previewing each as it is highlighted; Enter keeps all three. |
 | [`open-settings`](#open-settings) | no | yes | a window | Opens the settings view: every setting with its help text and value, edited in place and written to the configuration file. |
 | [`open-config`](#open-config) | no | yes | nothing | Opens the configuration file in the configured editor. |
 | [`activate-key-table`](#activate-key-table) | yes | no | nothing | Makes a key table active: keys are looked up in its bindings first until it is deactivated. |
@@ -473,9 +475,35 @@ Over IPC: `{"id":1,"action":"list-shaders","args":{...}}`. MCP tool: `termoil_li
 
 No parameters.
 
+## set-cursor-effect
+
+Turns on a built in cursor effect (glow, sonar, orbit, magnify and the rest) around the cursor, or turns it off with none, and writes it to the configuration file. It combines with any shader and replaces the shader's own cursor light.
+
+```
+termoil +set-cursor-effect --name <text>
+```
+
+Over IPC: `{"id":1,"action":"set-cursor-effect","args":{...}}`. MCP tool: `termoil_set_cursor_effect`.
+
+| Parameter | Type | Required | Meaning |
+|---|---|---|---|
+| `name` | text | yes | The cursor effect's name, as `list-cursor-effects` prints it, or none. |
+
+## list-cursor-effects
+
+Prints every built in cursor effect with what it looks like, and the cursor effect in effect.
+
+```
+termoil +list-cursor-effects
+```
+
+Over IPC: `{"id":1,"action":"list-cursor-effects","args":{...}}`. MCP tool: `termoil_list_cursor_effects`.
+
+No parameters.
+
 ## choose-theme
 
-Lists the bundled themes and, beside them, the built in shaders, previewing each as it is highlighted; Enter keeps both.
+Lists the bundled themes and, beside them, the built in shaders and cursor effects, previewing each as it is highlighted; Enter keeps all three.
 
 No parameters.
 

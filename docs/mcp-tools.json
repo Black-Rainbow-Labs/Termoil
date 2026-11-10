@@ -410,6 +410,31 @@
       "name": "termoil_list_shaders"
     },
     {
+      "description": "Turns on a built in cursor effect (glow, sonar, orbit, magnify and the rest) around the cursor, or turns it off with none, and writes it to the configuration file. It combines with any shader and replaces the shader's own cursor light.",
+      "inputSchema": {
+        "properties": {
+          "name": {
+            "description": "The cursor effect's name, as `list-cursor-effects` prints it, or none.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "name": "termoil_set_cursor_effect"
+    },
+    {
+      "description": "Prints every built in cursor effect with what it looks like, and the cursor effect in effect.",
+      "inputSchema": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "termoil_list_cursor_effects"
+    },
+    {
       "description": "Makes a key table active: keys are looked up in its bindings first until it is deactivated.",
       "inputSchema": {
         "properties": {

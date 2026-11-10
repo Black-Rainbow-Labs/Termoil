@@ -1,5 +1,6 @@
 //! A window's custom shader (`window.shader`): a built in shader by name (`crate::shaders`) or a
-//! WGSL file, compiled on the window's GPU renderer, reloaded when the configuration changes or the
+//! WGSL file, with the cursor effect (`window.cursor_effect`, `crate::cursor_effects`) composed after
+//! it, compiled on the window's GPU renderer, reloaded when the configuration changes or the
 //! file's modified time changes, and the error text the window's banner shows.
 
 use std::path::{Path, PathBuf};
@@ -22,6 +23,8 @@ enum Origin {
 pub struct ShaderState {
     /// What `window.shader` names.
     path: Option<Origin>,
+    /// The cursor effect `window.cursor_effect` names.
+    cursor: Option<&'static str>,
     /// The source last handed to the renderer (or that failed), to skip a recompile of the same text.
     source: Option<String>,
     /// The file's modified time when it was last read.
@@ -90,13 +93,15 @@ impl ShaderState {
     /// Reads `window.shader` and its poll interval from a configuration. Call `apply` afterwards.
     pub fn configure(&mut self, config: &Config, config_path: &Path) {
         let path = resolve_path(config, config_path);
-        if path != self.path {
-            // Clearing the setting keeps the old source, so `apply` knows the painter still has a
-            // shader to drop. A new path forgets it, so the new file is compiled.
-            if path.is_some() {
+        let cursor = crate::cursor_effects::effect(&config.window.cursor_effect).map(|e| e.name);
+        if path != self.path || cursor != self.cursor {
+            // Clearing both settings keeps the old source, so `apply` knows the painter still has a
+            // shader to drop. Anything else forgets it, so the new text is compiled.
+            if path.is_some() || cursor.is_some() {
                 self.source = None;
             }
             self.path = path;
+            self.cursor = cursor;
             self.modified = None;
         }
         self.poll = Duration::from_millis(config.window.shader_poll_ms.max(50));
@@ -107,15 +112,14 @@ impl ShaderState {
     /// printed, and the painter then draws without a shader. True when `error` changed.
     pub fn apply(&mut self, painter: &mut Painter, force: bool) -> bool {
         let before = self.error.clone();
-        let Some(origin) = self.path.clone() else {
+        if self.path.is_none() && self.cursor.is_none() {
             if self.must_drop(force) {
                 let _ = painter.set_shader(None);
             }
             self.error = None;
             return before != self.error;
-        };
-        self.modified = origin_modified(&origin);
-        let (label, text) = read(&origin);
+        }
+        let (label, text) = self.composed();
         match text {
             Err(e) => self.fail(painter, e),
             Ok(text) if force || self.source.as_deref() != Some(text.as_str()) => {
@@ -128,6 +132,23 @@ impl ShaderState {
             Ok(_) => {}
         }
         before != self.error
+    }
+
+    /// The text the painter compiles, and the name its errors carry: the shader (read now when it is a
+    /// file) with the cursor effect after it. Records the file's modified time.
+    fn composed(&mut self) -> (String, Result<String, String>) {
+        let cursor = self.cursor.and_then(crate::cursor_effects::effect);
+        let Some(origin) = self.path.clone() else {
+            let name = self.cursor.unwrap_or_default();
+            return (format!("cursor effect {name}"), Ok(crate::cursor_effects::compose(None, cursor)));
+        };
+        self.modified = origin_modified(&origin);
+        let (label, text) = read(&origin);
+        let label = match self.cursor {
+            Some(name) => format!("{label} with cursor effect {name}"),
+            None => label,
+        };
+        (label, text.map(|t| crate::cursor_effects::compose(Some(&t), cursor)))
     }
 
     /// With no shader set, whether the painter still has one to drop: once after the setting was
@@ -211,6 +232,27 @@ mod tests {
         assert!(s.source.is_some(), "the same path keeps the source");
         s.configure(&config_with("b.wgsl"), Path::new("/c/config.toml"));
         assert!(s.source.is_none());
+    }
+
+    #[test]
+    fn a_cursor_effect_alone_or_with_a_shader_is_composed_and_changing_it_recompiles() {
+        let at = Path::new("/c/config.toml");
+        let mut c = config_with("");
+        c.window.cursor_effect = "Sonar".into();
+        let mut s = ShaderState::new(&c, at);
+        assert_eq!(s.cursor, Some("sonar"));
+        let (label, text) = s.composed();
+        assert_eq!(label, "cursor effect sonar");
+        assert!(text.unwrap().contains("fn termoil_cursor_effect("));
+        c.window.shader = "crt".into();
+        s.configure(&c, at);
+        let (label, text) = s.composed();
+        assert_eq!(label, "built in shader crt with cursor effect sonar");
+        assert!(text.unwrap().contains("fn termoil_base_shade("));
+        s.source = Some("x".into());
+        c.window.cursor_effect = "orbit".into();
+        s.configure(&c, at);
+        assert!(s.source.is_none(), "a new cursor effect is compiled");
     }
 
     #[test]

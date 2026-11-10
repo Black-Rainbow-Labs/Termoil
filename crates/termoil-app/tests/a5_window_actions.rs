@@ -285,6 +285,7 @@ fn person_args(name: &str, dir: &std::path::Path) -> Value {
         "set-title" => json!({ "title": "a5 title" }),
         "set-theme" => json!({ "name": "Termoil Light" }),
         "set-shader" => json!({ "name": "none" }),
+        "set-cursor-effect" => json!({ "name": "none" }),
         "activate-key-table" => json!({ "name": "a5", "once": true }),
         "run-action" => json!({ "name": "version" }),
         "wait-prompt" => json!({ "timeout": 1 }),

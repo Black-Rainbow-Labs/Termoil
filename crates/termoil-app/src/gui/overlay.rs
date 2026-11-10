@@ -63,12 +63,33 @@ impl AnswerUi {
 pub enum ThemeList {
     /// The color themes, on the left.
     Themes,
-    /// The built in shaders, on the right (task-2590).
+    /// The built in shaders, in the middle (task-2590).
     Shaders,
+    /// The built in cursor effects, on the right (task-2593).
+    CursorEffects,
 }
 
-/// The theme switcher's state: the themes on the left and the shaders on the right, each with its
-/// own filter and highlight, so a color theme and a shader are chosen together.
+impl ThemeList {
+    /// The list to the right of this one, among the `shown` lists (1 to 3).
+    fn right(self, shown: usize) -> ThemeList {
+        match self {
+            ThemeList::Themes if shown > 1 => ThemeList::Shaders,
+            ThemeList::Shaders if shown > 2 => ThemeList::CursorEffects,
+            other => other,
+        }
+    }
+
+    /// The list to the left of this one.
+    fn left(self) -> ThemeList {
+        match self {
+            ThemeList::CursorEffects => ThemeList::Shaders,
+            _ => ThemeList::Themes,
+        }
+    }
+}
+
+/// The theme switcher's state: the themes on the left, the shaders in the middle and the cursor
+/// effects on the right, each with its own filter and highlight, so all three are chosen together.
 pub struct ThemesUi {
     /// The themes' filter text.
     pub query: String,
@@ -87,12 +108,22 @@ pub struct ThemesUi {
     /// A shader was highlighted with the keys, so Enter writes it. Until then a shader file set by
     /// path is left as it is.
     pub shader_touched: bool,
+    /// The cursor effects' filter text.
+    pub cursor_query: String,
+    /// The highlighted cursor effect among the matches.
+    pub cursor_selected: usize,
+    /// `window.cursor_effect` when the switcher opened, restored by Escape.
+    pub original_cursor: String,
+    /// A cursor effect was highlighted with the keys, so Enter writes it.
+    pub cursor_touched: bool,
+    /// How many lists the window is wide enough to show (1 to 3), set when it is drawn.
+    pub shown: std::cell::Cell<usize>,
 }
 
 impl ThemesUi {
-    /// A switcher opened while theme `original` and `window.shader` value `shader` are in effect, with
-    /// both highlighted.
-    pub fn new(original: String, shader: String) -> ThemesUi {
+    /// A switcher opened while theme `original`, `window.shader` value `shader` and
+    /// `window.cursor_effect` value `cursor` are in effect, with all three highlighted.
+    pub fn new(original: String, shader: String, cursor: String) -> ThemesUi {
         let mut ui = ThemesUi {
             query: String::new(),
             selected: 0,
@@ -102,18 +133,35 @@ impl ThemesUi {
             shader_selected: 0,
             original_shader: shader,
             shader_touched: false,
+            cursor_query: String::new(),
+            cursor_selected: 0,
+            original_cursor: cursor,
+            cursor_touched: false,
+            shown: std::cell::Cell::new(3),
         };
         ui.selected = ui.matches().iter().position(|n| n.eq_ignore_ascii_case(&ui.original)).unwrap_or(0);
         let current = crate::shaders::list_name(&ui.original_shader);
         ui.shader_selected = ui.shader_matches().iter().position(|n| Some(*n) == current).unwrap_or(0);
+        let cursor = crate::cursor_effects::list_name(&ui.original_cursor);
+        ui.cursor_selected = ui.cursor_matches().iter().position(|n| *n == cursor).unwrap_or(0);
         ui
     }
 
-    /// The shader names matching the shader filter: `none` first, then the built in shaders in their
-    /// own order.
+    /// The shader names matching the shader filter: the first built in shader (neon-glow), then
+    /// `none`, then the other built in shaders in their own order.
     pub fn shader_matches(&self) -> Vec<&'static str> {
         let q = self.shader_query.to_lowercase();
-        let names = std::iter::once(crate::shaders::NONE).chain(crate::shaders::BUILTINS.iter().map(|b| b.name));
+        let (first, rest) = crate::shaders::BUILTINS.split_first().expect("there are built in shaders");
+        let names = [first.name, crate::shaders::NONE].into_iter().chain(rest.iter().map(|b| b.name));
+        names.filter(|n| q.is_empty() || n.contains(&q)).collect()
+    }
+
+    /// The cursor effect names matching the cursor effect filter: `none` first, then the built in
+    /// cursor effects in their own order.
+    pub fn cursor_matches(&self) -> Vec<&'static str> {
+        let q = self.cursor_query.to_lowercase();
+        let names =
+            std::iter::once(crate::cursor_effects::NONE).chain(crate::cursor_effects::EFFECTS.iter().map(|e| e.name));
         names.filter(|n| q.is_empty() || n.contains(&q)).collect()
     }
 
@@ -231,24 +279,26 @@ fn answer_key(a: &mut AnswerUi, ev: &KeyEvent) -> After {
     After::Open
 }
 
-/// Theme keys: Left, Right and Tab switch between the themes and the shaders; typing filters the
-/// list in use; the arrows move and preview; Enter keeps and saves the theme and the shader;
-/// Escape restores both.
+/// Theme keys: Left and Right move between the themes, the shaders and the cursor effects, and Tab
+/// goes round them; typing filters the list in use; the arrows move and preview; Enter keeps and
+/// saves all three; Escape restores all three.
 fn themes_key(t: &mut ThemesUi, app: &mut App, ev: &KeyEvent) -> After {
     match ev.key {
         Key::Named(NamedKey::Escape) => {
             let _ = crate::themes::preview(app, &t.original);
             crate::shaders::restore(app, &t.original_shader);
+            crate::cursor_effects::restore(app, &t.original_cursor);
             return After::Close;
         }
         Key::Named(NamedKey::Enter) => {
             themes_enter(t, app);
             return After::Close;
         }
-        Key::Named(NamedKey::Left) => t.list = ThemeList::Themes,
-        Key::Named(NamedKey::Right) => t.list = ThemeList::Shaders,
+        Key::Named(NamedKey::Left) => t.list = t.list.left(),
+        Key::Named(NamedKey::Right) => t.list = t.list.right(t.shown.get()),
         Key::Named(NamedKey::Tab) => {
-            t.list = if t.list == ThemeList::Themes { ThemeList::Shaders } else { ThemeList::Themes };
+            let next = t.list.right(t.shown.get());
+            t.list = if next == t.list { ThemeList::Themes } else { next };
         }
         _ => {
             if !list_key(t, ev) {
@@ -265,10 +315,12 @@ fn list_key(t: &mut ThemesUi, ev: &KeyEvent) -> bool {
     let len = match t.list {
         ThemeList::Themes => t.matches().len(),
         ThemeList::Shaders => t.shader_matches().len(),
+        ThemeList::CursorEffects => t.cursor_matches().len(),
     };
     let (query, selected) = match t.list {
         ThemeList::Themes => (&mut t.query, &mut t.selected),
         ThemeList::Shaders => (&mut t.shader_query, &mut t.shader_selected),
+        ThemeList::CursorEffects => (&mut t.cursor_query, &mut t.cursor_selected),
     };
     match ev.key {
         Key::Named(NamedKey::Up) => *selected = selected.saturating_sub(1),
@@ -285,13 +337,16 @@ fn list_key(t: &mut ThemesUi, ev: &KeyEvent) -> bool {
             None => return false,
         },
     }
-    if t.list == ThemeList::Shaders {
-        t.shader_touched = true;
+    match t.list {
+        ThemeList::Shaders => t.shader_touched = true,
+        ThemeList::CursorEffects => t.cursor_touched = true,
+        ThemeList::Themes => {}
     }
     true
 }
 
-/// Shows the highlighted theme, and the highlighted shader once one was chosen with the keys.
+/// Shows the highlighted theme, and the highlighted shader and cursor effect once each was chosen
+/// with the keys.
 fn themes_preview(t: &ThemesUi, app: &mut App) {
     if let Some(name) = t.matches().get(t.selected) {
         let _ = crate::themes::preview(app, name);
@@ -301,9 +356,15 @@ fn themes_preview(t: &ThemesUi, app: &mut App) {
     {
         let _ = crate::shaders::preview(app, name);
     }
+    if t.cursor_touched
+        && let Some(name) = t.cursor_matches().get(t.cursor_selected)
+    {
+        let _ = crate::cursor_effects::preview(app, name);
+    }
 }
 
-/// Enter: saves the highlighted theme, and the highlighted shader when one was chosen with the keys.
+/// Enter: saves the highlighted theme, and the highlighted shader and cursor effect when each was
+/// chosen with the keys.
 fn themes_enter(t: &ThemesUi, app: &mut App) {
     if let Some(name) = t.matches().get(t.selected) {
         let _ = crate::themes::set(app, name);
@@ -313,50 +374,79 @@ fn themes_enter(t: &ThemesUi, app: &mut App) {
     {
         let _ = crate::shaders::set(app, name);
     }
-}
-
-/// The theme switcher's columns: the theme list's width, and the shader list's width after a one
-/// column gap. Below 48 columns the shader list is left out.
-fn theme_columns(cols: u16) -> (u16, u16) {
-    if cols < 48 {
-        return (cols, 0);
+    if t.cursor_touched
+        && let Some(name) = t.cursor_matches().get(t.cursor_selected)
+    {
+        let _ = crate::cursor_effects::set(app, name);
     }
-    let shaders = (cols / 3).clamp(18, 34);
-    (cols - shaders - 1, shaders)
 }
 
-/// The theme switcher's content and its number of rows: a header with both filters, the themes on
-/// the left and the shaders on the right, and a line saying how to use them.
+/// The theme switcher's columns: the theme list's width, then the shader list's and the cursor
+/// effect list's widths, each after a one column gap. Below 48 columns only the themes are shown,
+/// and below 72 the cursor effects are left out.
+fn theme_columns(cols: u16) -> (u16, u16, u16) {
+    if cols < 48 {
+        return (cols, 0, 0);
+    }
+    if cols < 72 {
+        let shaders = (cols / 3).clamp(18, 34);
+        return (cols - shaders - 1, shaders, 0);
+    }
+    let side = (cols / 4).clamp(18, 26);
+    (cols - 2 * side - 2, side, side)
+}
+
+/// The switcher's first line: each list's filter, with a block after the one that takes the keys.
+fn themes_header(t: &ThemesUi, widths: (u16, u16, u16), themes: usize) -> String {
+    let cursor = |list| if t.list == list { "\u{2588}" } else { "" };
+    let count = crate::config::themes().len();
+    let left = format!(" Theme: {}{}   {themes} of {count}", t.query, cursor(ThemeList::Themes));
+    let mut out = pad(&left, widths.0);
+    if widths.1 > 0 {
+        let middle = format!(" Shader: {}{}", t.shader_query, cursor(ThemeList::Shaders));
+        out.push_str(&format!(" {}", pad(&middle, widths.1)));
+    }
+    if widths.2 > 0 {
+        let right = format!(" Cursor: {}{}", t.cursor_query, cursor(ThemeList::CursorEffects));
+        out.push_str(&format!(" {}", pad(&right, widths.2)));
+    }
+    out
+}
+
+/// The theme switcher's content and its number of rows: a header with the filters, the themes on
+/// the left, the shaders and cursor effects beside them, and a line saying how to use them.
 pub fn themes_content(t: &ThemesUi, cols: u16, colors: &Colors) -> (Vec<u8>, u16) {
     let panel = mix(colors.background, colors.foreground, 0.08);
     let dim = mix(colors.foreground, panel, 0.45);
-    let (left_w, right_w) = theme_columns(cols);
+    let widths = theme_columns(cols);
+    t.shown.set(1 + usize::from(widths.1 > 0) + usize::from(widths.2 > 0));
     let themes = t.matches();
     let shaders = t.shader_matches();
-    let cursor = |list| if t.list == list { "\u{2588}" } else { "" };
-    let count = crate::config::themes().len();
-    let left = format!(" Theme: {}{}   {} of {count}", t.query, cursor(ThemeList::Themes), themes.len());
-    let right = format!(" Shader: {}{}", t.shader_query, cursor(ThemeList::Shaders));
-    let mut out = format!("{}\x1b[1m{}", sgr_colors(colors.foreground, panel), pad(&left, left_w));
-    if right_w > 0 {
-        out.push_str(&format!(" {}", pad(&right, right_w)));
-    }
-    out.push_str("\x1b[22m\x1b[K");
+    let cursors = t.cursor_matches();
+    let header = themes_header(t, widths, themes.len());
+    let mut out = format!("{}\x1b[1m{header}\x1b[22m\x1b[K", sgr_colors(colors.foreground, panel));
     let theme_top = t.selected.saturating_sub(PALETTE_ROWS - 1);
     let shader_top = t.shader_selected.saturating_sub(PALETTE_ROWS - 1);
-    let shown = if right_w > 0 { themes.len().max(shaders.len()) } else { themes.len() };
+    let cursor_top = t.cursor_selected.saturating_sub(PALETTE_ROWS - 1);
+    let side = |w: u16, n: usize| if w > 0 { n } else { 0 };
+    let shown = themes.len().max(side(widths.1, shaders.len())).max(side(widths.2, cursors.len()));
     let mut rows = 1u16;
     for row in 0..shown.min(PALETTE_ROWS) {
-        let theme = theme_cell(t, &themes, theme_top + row, left_w, colors, panel, dim);
-        out.push_str(&format!("\r\n{theme}"));
-        if right_w > 0 {
-            let shader = shader_cell(t, &shaders, shader_top + row, right_w, colors, panel);
-            out.push_str(&format!("{} {shader}", sgr_colors(colors.foreground, panel)));
+        out.push_str(&format!("\r\n{}", theme_cell(t, &themes, theme_top + row, widths.0, colors, panel, dim)));
+        if widths.1 > 0 {
+            let active = t.list == ThemeList::Shaders;
+            let cell = side_cell(&shaders, shader_top + row, t.shader_selected, active, widths.1, colors, panel);
+            out.push_str(&format!("{} {cell}", sgr_colors(colors.foreground, panel)));
+        }
+        if widths.2 > 0 {
+            let active = t.list == ThemeList::CursorEffects;
+            let cell = side_cell(&cursors, cursor_top + row, t.cursor_selected, active, widths.2, colors, panel);
+            out.push_str(&format!("{} {cell}", sgr_colors(colors.foreground, panel)));
         }
         out.push_str("\x1b[K");
         rows += 1;
     }
-    out.push_str(&format!("\r\n{}{}\x1b[K", sgr_colors(dim, panel), clip(&themes_hint(t, right_w > 0), cols)));
+    out.push_str(&format!("\r\n{}{}\x1b[K", sgr_colors(dim, panel), clip(&themes_hint(t, widths.1 > 0), cols)));
     (out.into_bytes(), rows + 1)
 }
 
@@ -376,26 +466,30 @@ fn theme_cell(t: &ThemesUi, themes: &[&str], i: usize, width: u16, colors: &Colo
     format!("{}{label}{}{}", sgr_colors(fg, bg), sgr_colors(tag_fg, bg), pad(tag, room))
 }
 
-/// One shader row, `width` columns wide. The highlighted shader is drawn inverted while the shader
-/// list has the keys, and marked otherwise.
-fn shader_cell(t: &ThemesUi, shaders: &[&str], i: usize, width: u16, colors: &Colors, panel: Rgb) -> String {
-    let Some(name) = shaders.get(i) else {
+/// One row of the shader or cursor effect list, `width` columns wide. The highlighted name is drawn
+/// inverted while its list has the keys (`active`), and marked otherwise.
+fn side_cell(
+    names: &[&str], i: usize, selected: usize, active: bool, width: u16, colors: &Colors, panel: Rgb,
+) -> String {
+    let Some(name) = names.get(i) else {
         return format!("{}{}", sgr_colors(colors.foreground, panel), pad("", width));
     };
-    let active = i == t.shader_selected && t.list == ThemeList::Shaders;
-    let (fg, bg) = if active { (colors.background, colors.foreground) } else { (colors.foreground, panel) };
-    let mark = if i == t.shader_selected { "\u{203a} " } else { "  " };
+    let lit = i == selected && active;
+    let (fg, bg) = if lit { (colors.background, colors.foreground) } else { (colors.foreground, panel) };
+    let mark = if i == selected { "\u{203a} " } else { "  " };
     format!("{}{}", sgr_colors(fg, bg), pad(&format!("{mark}{name}"), width))
 }
 
-/// The switcher's last line: what the highlighted shader looks like while the shader list has the
-/// keys, otherwise how to use the switcher.
+/// The switcher's last line: what the highlighted shader or cursor effect looks like while its list
+/// has the keys, otherwise how to use the switcher.
 fn themes_hint(t: &ThemesUi, with_shaders: bool) -> String {
-    let highlighted = t.shader_matches().get(t.shader_selected).and_then(|n| crate::shaders::builtin(n));
-    match highlighted {
-        Some(b) if t.list == ThemeList::Shaders => format!(" {}: {}", b.name, b.summary),
+    let shader = t.shader_matches().get(t.shader_selected).and_then(|n| crate::shaders::builtin(n));
+    let cursor = t.cursor_matches().get(t.cursor_selected).and_then(|n| crate::cursor_effects::effect(n));
+    match (t.list, shader, cursor) {
+        (ThemeList::Shaders, Some(b), _) => format!(" {}: {}", b.name, b.summary),
+        (ThemeList::CursorEffects, _, Some(e)) => format!(" {}: {}", e.name, e.summary),
         _ if with_shaders => {
-            " Left and Right switch lists, Up and Down preview, Enter keeps both, Escape restores".to_string()
+            " Left and Right switch lists, Up and Down preview, Enter keeps all, Escape restores".to_string()
         }
         _ => " Up and Down preview, Enter keeps, Escape restores".to_string(),
     }

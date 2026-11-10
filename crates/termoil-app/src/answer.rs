@@ -22,6 +22,7 @@ pub const ANSWERS: &[&str] = &[
     "show-config",
     "list-themes",
     "list-shaders",
+    "list-cursor-effects",
     "install-shell-integration",
     "version",
     "check-for-updates",
@@ -60,6 +61,7 @@ pub const ACTS: &[&str] = &[
     "reload-config",
     "set-theme",
     "set-shader",
+    "set-cursor-effect",
     "choose-theme",
     "open-settings",
     "open-config",
@@ -173,6 +175,7 @@ fn describe_value(action: &str, v: &Value) -> (String, Vec<String>) {
             vec![format!("Built {}", v["build_date"].as_str().unwrap_or("?"))],
         ),
         "list-shaders" => shaders_text(v),
+        "list-cursor-effects" => cursor_effects_text(v),
         "wait-prompt" => match v["exit_code"].as_i64() {
             Some(code) => ("The command finished".into(), vec![format!("Exit code {code}.")]),
             None => ("The command finished".into(), Vec::new()),
@@ -192,6 +195,20 @@ fn shaders_text(v: &Value) -> (String, Vec<String>) {
         lines.push(format!("{mark} {name:<15} {}", s["summary"].as_str().unwrap_or("")));
     }
     ("Shaders".into(), lines)
+}
+
+/// list-cursor-effects: each built in cursor effect with what it looks like, the one in effect marked.
+fn cursor_effects_text(v: &Value) -> (String, Vec<String>) {
+    let current = v["current"].as_str().unwrap_or("");
+    let shown = if current.is_empty() { "none" } else { current };
+    let mut lines =
+        vec![format!("In effect: {shown}. Set one with set-cursor-effect, or pick one beside the shaders.")];
+    for e in v["cursor_effects"].as_array().into_iter().flatten() {
+        let name = e["name"].as_str().unwrap_or("?");
+        let mark = if name.eq_ignore_ascii_case(current) { "*" } else { " " };
+        lines.push(format!("{mark} {name:<15} {}", e["summary"].as_str().unwrap_or("")));
+    }
+    ("Cursor effects".into(), lines)
 }
 
 /// check-for-updates: the sentences the automatic check uses, and the release notes.

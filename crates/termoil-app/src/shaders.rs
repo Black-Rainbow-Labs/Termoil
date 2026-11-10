@@ -24,6 +24,7 @@ macro_rules! builtin {
 
 /// Every built in shader, in the order the shader list shows them.
 pub const BUILTINS: &[Builtin] = &[
+    builtin!("neon-glow", "The Mac neon look: text bloom, a drifting magenta to cyan wash, a pulsing cursor halo"),
     builtin!("crt", "Curved glass tube, scanlines, aperture grille, color fringes, dark corners"),
     builtin!("retro", "Old terminal monitor: soft curve, glow, scanlines, noise and flicker"),
     builtin!("neon", "Text glows like neon tubing, colors pushed to full saturation"),

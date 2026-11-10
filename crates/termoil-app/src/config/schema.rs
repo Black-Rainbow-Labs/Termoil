@@ -98,6 +98,10 @@ pub static SECTIONS: &[Section] = &[
                 "Path to a WGSL file that runs as a post process pass over every frame (relative paths are read from the folder of this file; empty means none). The file defines fn termoil_shade(uv: vec2<f32>, color: vec4<f32>) -> vec4<f32>, see docs/shaders.md. Only the GPU renderer runs it: with renderer = auto a shader starts the GPU, and with renderer = cpu the shader is ignored. A shader with an error is reported in the window's banner and the window draws without it.",
             ),
             e(
+                "cursor_effect",
+                "A built in cursor effect drawn around the cursor after the shader, such as glow, sonar, orbit or magnify (empty means none). It combines with any shader, or runs alone, and turns off the cursor light of a built in shader. Like a shader it needs the GPU renderer. See list-cursor-effects.",
+            ),
+            e(
                 "shader_poll_ms",
                 "Milliseconds between checks of the shader file's modified time, so an edit applies without a restart.",
             ),

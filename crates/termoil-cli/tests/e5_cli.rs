@@ -189,6 +189,7 @@ fn run_action_args(name: &str, pane: u64) -> Value {
         "move-tab-to-window" => json!({ "pane": pane }),
         "set-theme" => json!({ "name": "Termoil Light" }),
         "set-shader" => json!({ "name": "none" }),
+        "set-cursor-effect" => json!({ "name": "none" }),
         "activate-key-table" => json!({ "name": "e5", "once": true }),
         "set-title" => json!({ "pane": pane, "title": "run-action" }),
         "run-action" => json!({ "name": "version" }),
@@ -208,6 +209,7 @@ fn run_action_args(name: &str, pane: u64) -> Value {
         | "list"
         | "list-themes"
         | "list-shaders"
+        | "list-cursor-effects"
         | "quick-terminal"
         | "quit"
         | "deactivate-key-table"
@@ -315,6 +317,18 @@ fn more_commands(inst: &Instance, p2: &str, covered: &mut BTreeSet<String>) {
     inst.ok(&["+set-shader", "none"]);
     assert!(std::fs::read_to_string(&inst.config).unwrap().contains("shader = \"\""));
     seen("set-shader");
+    // task-2593: the built in cursor effects, listed and set by name next to the shader, and cleared with none.
+    let effects = inst.json(&["+list-cursor-effects"]);
+    seen("list-cursor-effects");
+    assert!(
+        effects["cursor_effects"].as_array().is_some_and(|e| e.len() == 20 && e.iter().any(|x| x["name"] == "sonar"))
+    );
+    inst.ok(&["+set-cursor-effect", "sonar"]);
+    assert!(std::fs::read_to_string(&inst.config).unwrap().contains("cursor_effect = \"sonar\""));
+    assert_eq!(inst.json(&["+list-cursor-effects"])["current"], "sonar");
+    inst.ok(&["+set-cursor-effect", "none"]);
+    assert!(std::fs::read_to_string(&inst.config).unwrap().contains("cursor_effect = \"\""));
+    seen("set-cursor-effect");
     let saved = inst.json(&["+save-session"]);
     seen("save-session");
     let session_file = inst.dir.join("data").join("session.json");

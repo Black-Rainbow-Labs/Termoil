@@ -4,6 +4,7 @@
 
 use std::path::PathBuf;
 
+use termoil_app::cursor_effects::{EFFECTS, compose};
 use termoil_app::shaders::BUILTINS;
 use termoil_font::{FontConfig, FontGrid};
 use termoil_render::{BuildOptions, Colors, Frame, Image, RenderState, Renderer, VelloGpuRenderer, build_frame};
@@ -77,8 +78,19 @@ fn every_built_in_shader_compiles_on_every_backend() {
         let Ok(ctx) = termoil_render::GpuContext::with_backends(backend) else { continue };
         tried += 1;
         for b in BUILTINS {
-            if let Err(e) = ctx.check_shader(b.source) {
+            if let Err(e) = ctx.check_shader(&compose(Some(b.source), None)) {
                 panic!("{} does not compile on {name}: {e}", b.name);
+            }
+        }
+        // task-2593: every cursor effect alone, and over every shader, the way the window composes them.
+        for e in EFFECTS {
+            if let Err(err) = ctx.check_shader(&compose(None, Some(e))) {
+                panic!("cursor effect {} does not compile on {name}: {err}", e.name);
+            }
+            for b in BUILTINS {
+                if let Err(err) = ctx.check_shader(&compose(Some(b.source), Some(e))) {
+                    panic!("cursor effect {} over {} does not compile on {name}: {err}", e.name, b.name);
+                }
             }
         }
     }
@@ -100,7 +112,10 @@ fn a_shader_dx12_refuses_is_an_error_not_a_crash() {
         Err(e) => assert!(e.to_string().contains("shader"), "{e}"),
         Ok(()) => eprintln!("this DX12 compiler accepts the module, so there is nothing to refuse"),
     }
-    assert!(ctx.check_shader(BUILTINS[0].source).is_ok(), "the device still works after the refusal");
+    assert!(
+        ctx.check_shader(&compose(Some(BUILTINS[0].source), None)).is_ok(),
+        "the device still works after the refusal"
+    );
 }
 
 #[test]
@@ -116,7 +131,8 @@ fn every_built_in_shader_compiles_and_changes_the_frame() {
     r.set_shader_cursor(Some((40.0, 12.0)));
     let mut report = Vec::new();
     for b in BUILTINS {
-        r.set_shader(Some(b.source)).unwrap_or_else(|e| panic!("{} does not compile: {e}", b.name));
+        r.set_shader(Some(&compose(Some(b.source), None)))
+            .unwrap_or_else(|e| panic!("{} does not compile: {e}", b.name));
         let shaded = draw(&mut r, &f, &g);
         let share = changed_share(&plain, &shaded);
         let colors = distinct_colors(&shaded);
@@ -129,5 +145,36 @@ fn every_built_in_shader_compiles_and_changes_the_frame() {
     }
     r.set_shader(None).expect("removing the shader");
     assert_eq!(draw(&mut r, &f, &g), plain, "without a shader the frame is the plain frame again");
+    eprintln!("{}", report.join("\n"));
+}
+
+/// task-2593: each cursor effect, run alone, changes the pixels near the cursor and keeps the text
+/// and an opaque frame. sparkle lights only a few twinkling points, which may all be dark at the
+/// moment the frame is drawn, so it is only required to compile and keep the frame.
+#[test]
+fn every_cursor_effect_changes_the_frame_near_the_cursor() {
+    let mut g = grid();
+    let f = frame(&mut g);
+    let Some(mut r) = VelloGpuRenderer::new_offscreen(f.width, f.height, false) else {
+        eprintln!("cursor effect test skipped: no GPU adapter");
+        return;
+    };
+    let plain = draw(&mut r, &f, &g);
+    r.set_shader_cursor(Some((40.0, 12.0)));
+    let mut report = Vec::new();
+    for e in EFFECTS {
+        r.set_shader(Some(&compose(None, Some(e)))).unwrap_or_else(|err| panic!("{} does not compile: {err}", e.name));
+        let shaded = draw(&mut r, &f, &g);
+        let share = changed_share(&plain, &shaded);
+        report.push(format!("{:<12} changed {:>5.2}% of pixels", e.name, share * 100.0));
+        if e.name != "sparkle" {
+            assert!(share > 0.0, "cursor effect {} changed nothing", e.name);
+        }
+        assert!(distinct_colors(&shaded) >= 4, "cursor effect {} lost the text", e.name);
+        assert!(shaded.rgba.chunks_exact(4).all(|p| p[3] == 255), "{} changed the alpha of an opaque frame", e.name);
+    }
+    r.set_shader_cursor(None);
+    r.set_shader(Some(&compose(None, EFFECTS.first()))).expect("glow");
+    assert_eq!(draw(&mut r, &f, &g), plain, "with no cursor shown a cursor effect draws nothing");
     eprintln!("{}", report.join("\n"));
 }

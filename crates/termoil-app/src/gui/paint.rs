@@ -128,9 +128,10 @@ impl Painter {
 static FIRST_CPU_FRAME: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Whether a window with this configuration draws on the GPU: `window.renderer = "gpu"`, or
-/// `auto` with a custom shader, which only the GPU renderer runs.
-pub fn wants_gpu(choice: Choice, shader: &str) -> bool {
-    choice == Choice::Gpu || (choice == Choice::Auto && !shader.trim().is_empty())
+/// `auto` with a custom shader or a cursor effect, which only the GPU renderer runs.
+pub fn wants_gpu(choice: Choice, shader: &str, cursor_effect: &str) -> bool {
+    let pass = !shader.trim().is_empty() || !cursor_effect.trim().is_empty();
+    choice == Choice::Gpu || (choice == Choice::Auto && pass)
 }
 
 /// Starts building the GPU renderer for a window that is drawing on the CPU (a shader was set
@@ -248,10 +249,11 @@ mod tests {
     /// `auto` draws on the CPU unless a shader needs the GPU; `gpu` and `cpu` do what they say.
     #[test]
     fn only_gpu_or_a_shader_starts_the_gpu() {
-        assert!(!wants_gpu(Choice::Auto, ""));
-        assert!(!wants_gpu(Choice::Auto, "  "));
-        assert!(wants_gpu(Choice::Auto, "crt.wgsl"));
-        assert!(wants_gpu(Choice::Gpu, ""));
-        assert!(!wants_gpu(Choice::Cpu, "crt.wgsl"));
+        assert!(!wants_gpu(Choice::Auto, "", ""));
+        assert!(!wants_gpu(Choice::Auto, "  ", ""));
+        assert!(wants_gpu(Choice::Auto, "crt.wgsl", ""));
+        assert!(wants_gpu(Choice::Auto, "", "sonar"));
+        assert!(wants_gpu(Choice::Gpu, "", ""));
+        assert!(!wants_gpu(Choice::Cpu, "crt.wgsl", "sonar"));
     }
 }

@@ -1,7 +1,7 @@
 // CRT: a curved glass tube with scanlines, an aperture grille, a little color fringing at the edges
 // and darker corners. Inspired by the CRT shaders of Timothy Lottes and cool-retro-term.
 
-const CURVE: f32 = 0.045;
+const CURVE: f32 = 0.0225;
 const SCANLINE: f32 = 0.22;
 const MASK: f32 = 0.12;
 const FRINGE: f32 = 0.0012;

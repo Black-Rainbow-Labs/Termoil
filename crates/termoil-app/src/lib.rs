@@ -9,6 +9,7 @@ pub mod answer;
 pub mod app;
 pub mod config;
 pub mod crash;
+pub mod cursor_effects;
 pub mod events;
 pub mod gui;
 pub mod headless;

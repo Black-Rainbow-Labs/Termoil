@@ -2,7 +2,7 @@
 
 ## Built in shaders
 
-Termoil ships 21 shaders, built into the program (`crates/termoil-app/shaders/`). Set one by name:
+Termoil ships 22 shaders, built into the program (`crates/termoil-app/shaders/`). Set one by name:
 
 ```toml
 [window]
@@ -11,6 +11,7 @@ shader = "crt"
 
 | Name | What it looks like |
 |---|---|
+| `neon-glow` | the neon look first made as a shader file on the Mac: text bloom, a drifting magenta to cyan wash, a pulsing cursor halo, soft scanlines and a vignette. It is first in the shader list |
 | `crt` | a curved glass tube with scanlines, an aperture grille, color fringes at the edges and dark corners |
 | `retro` | an old terminal monitor in the style of cool-retro-term: soft curve, glow, scanlines, noise and flicker |
 | `neon` | text glows like neon tubing, colors pushed to full saturation |
@@ -34,13 +35,16 @@ shader = "crt"
 | `blueprint` | white lines on drafting blue with a faint grid |
 
 A shader runs over the frame the color theme drew, so any theme combines with any shader. The theme picker
-(`choose-theme`, in the command palette) has the shaders in a second list on the right of the themes:
+(`choose-theme`, in the command palette) has the shaders in a second list beside the themes, and the cursor effects
+in a third list beside the shaders:
 
-- Left, Right or Tab moves between the theme list and the shader list.
-- Typing filters the list that has the keys; Up and Down move through it and preview the theme or shader.
-- Enter keeps the theme and the shader and writes both to the configuration file. A shader file set by path is left
-  as it is unless a shader was picked in the list.
-- Escape puts back the theme and the shader that were in effect.
+- Left and Right move between the theme list, the shader list and the cursor effect list, and Tab goes round them.
+  A window narrower than 72 columns leaves out the cursor effect list.
+- Typing filters the list that has the keys; Up and Down move through it and preview the theme, shader or cursor
+  effect.
+- Enter keeps all three and writes them to the configuration file. A shader file set by path is left as it is
+  unless a shader was picked in the list, and the cursor effect is left as it is unless one was picked.
+- Escape puts back the theme, the shader and the cursor effect that were in effect.
 
 `termoil +list-shaders` prints the names with what each looks like, and `termoil +set-shader <name>` sets one (`none`
 turns the shader off). Both are catalogue actions, so the palette, keybindings, IPC and the MCP server reach them too.
@@ -48,7 +52,30 @@ turns the shader off). Both are catalogue actions, so the palette, keybindings, 
 Inspiration came from cool-retro-term, the CRT shaders of Timothy Lottes, the shaders people share for Ghostty, and
 the retro effect of Windows Terminal. The shaders here are written from scratch.
 
-The shaders `retro`, `vhs`, `glitch`, `film-grain`, `hologram`, `underwater` and `cursor-glow` move, so the window
+## Cursor effects
+
+A cursor effect is a light or a distortion drawn around the cursor after the shader, set with `window.cursor_effect`.
+It combines with any shader, or runs with no shader. Termoil ships 20 of them (`crates/termoil-app/cursor-effects/`):
+`glow`, `pulse`, `neon-halo`, `sonar`, `spotlight`, `crosshair`, `row`, `column`, `rainbow`, `heartbeat`, `sparkle`,
+`orbit`, `flame`, `frost`, `magnify`, `ripple`, `beacon`, `starburst`, `invert` and `aurora`.
+
+```toml
+[window]
+shader = "crt"
+cursor_effect = "sonar"
+```
+
+When a cursor effect is set, the cursor light of a built in shader (`cursor-glow`, and the halo of `neon-glow`) is
+turned off, so the chosen cursor effect replaces it. `termoil +list-cursor-effects` prints the names with what each
+looks like, and `termoil +set-cursor-effect <name>` sets one (`none` turns it off).
+
+Termoil builds one module for the shader and the cursor effect: the shader's `termoil_shade` is renamed
+`termoil_base_shade`, and a new `termoil_shade` runs it and then the cursor effect. It also defines
+`const TERMOIL_SHADER_CURSOR: f32`, which is 0 while a cursor effect is set and 1 otherwise. A shader file can
+multiply its own cursor light by `TERMOIL_SHADER_CURSOR` to give way to a cursor effect, and must not declare that
+name itself.
+
+The shaders `neon-glow`, `retro`, `vhs`, `glitch`, `film-grain`, `hologram`, `underwater` and `cursor-glow` move, and so do most cursor effects, so the window
 redraws at the display rate while one of them is set (see Animation below). The others cost nothing while the
 terminal is idle.
 

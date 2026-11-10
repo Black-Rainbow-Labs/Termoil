@@ -27,7 +27,7 @@ Every action it has can also be run from the command line or by an AI agent.
 - A command palette that lists every action and its key.
 - Shell integration for PowerShell, bash, zsh, fish, nushell and cmd: jump between prompts, select the output of
   the last command, and see a failed command's exit code in its tab.
-- 21 built in shaders (CRT, retro monitor, neon, amber and green phosphor, VHS, glitch, Game Boy and more) that combine with any color theme, and your own shaders written in WGSL.
+- 22 built in shaders (neon glow, CRT, retro monitor, neon, amber and green phosphor, VHS, glitch, Game Boy and more) that combine with any color theme, 20 cursor effects that combine with any shader, and your own shaders written in WGSL.
 - A command line and an MCP server that reach the same 65 actions as the keyboard and the mouse.
 - Anonymous usage statistics (which actions are used, how long Termoil is open), on by default and turned off
   with `[telemetry] enabled = false`. No other network connections except the update check.
@@ -148,11 +148,15 @@ it and press Enter to run one. You never have to remember a key you rarely use.
 
 ### Shaders
 
-Termoil ships 21 shaders: `crt`, `retro`, `neon`, `amber`, `green-phosphor`, `scanlines`, `bloom`, `vhs`, `glitch`,
+Termoil ships 22 shaders: `neon-glow`, `crt`, `retro`, `neon`, `amber`, `green-phosphor`, `scanlines`, `bloom`, `vhs`, `glitch`,
 `chromatic`, `vignette`, `film-grain`, `tft`, `game-boy`, `sepia`, `noir`, `hologram`, `synthwave`, `underwater`,
 `cursor-glow` and `blueprint`. The theme picker (`choose-theme`) lists them on the right of the themes: Right moves to
 the shader list, Up and Down preview, and Enter keeps the theme and the shader together. `termoil +set-shader crt`
 and `window.shader = "crt"` do the same, and `none` turns the shader off.
+
+It also ships 20 cursor effects, such as `glow`, `sonar`, `orbit`, `flame` and `magnify`, drawn around the cursor
+after the shader. The theme picker lists them in a third column right of the shaders. A chosen cursor effect replaces
+the cursor light of the shader. `termoil +set-cursor-effect sonar` and `window.cursor_effect = "sonar"` do the same.
 
 `window.shader` can also name a WGSL file that Termoil runs over every frame. Two examples come with it: a CRT screen with
 scanlines and curvature, and a glow that follows the cursor. [Custom shaders](docs/shaders.md) explains how to write

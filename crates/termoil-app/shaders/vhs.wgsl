@@ -16,15 +16,15 @@ fn termoil_shade(uv: vec2<f32>, color: vec4<f32>) -> vec4<f32> {
     let band_y = fract(t * 0.07);
     let in_band = smoothstep(0.03, 0.0, abs(uv.y - band_y));
     let row = floor(uv.y * termoil.size.y / 2.0);
-    let wobble = (sin(uv.y * 40.0 + t * 3.0) * 0.0006) + (vhs_hash(vec2<f32>(row, floor(t * 20.0))) - 0.5) * 0.0015;
-    let shift = wobble + in_band * 0.008;
+    let wobble = (sin(uv.y * 40.0 + t * 3.0) * 0.0003) + (vhs_hash(vec2<f32>(row, floor(t * 20.0))) - 0.5) * 0.00075;
+    let shift = wobble + in_band * 0.004;
     let p = vec2<f32>(uv.x + shift, uv.y);
-    let spread = 0.0025 + in_band * 0.004;
+    let spread = 0.00125 + in_band * 0.002;
     var rgb = vec3<f32>(vhs_read(p + vec2<f32>(spread, 0.0)).r, vhs_read(p).g, vhs_read(p - vec2<f32>(spread, 0.0)).b);
     let soft = (vhs_read(p + vec2<f32>(1.5 / termoil.size.x, 0.0)) + vhs_read(p - vec2<f32>(1.5 / termoil.size.x, 0.0))) * 0.5;
-    rgb = mix(rgb, soft, 0.3);
+    rgb = mix(rgb, soft, 0.15);
     let noise = vhs_hash(uv * termoil.size + fract(t) * 91.0);
-    rgb = rgb + (noise - 0.5) * (0.05 + in_band * 0.35);
-    rgb = rgb * vec3<f32>(1.02, 0.98, 1.04) * 0.95 + 0.03;
+    rgb = rgb + (noise - 0.5) * (0.025 + in_band * 0.175);
+    rgb = rgb * vec3<f32>(1.01, 0.99, 1.02) * 0.975 + 0.015;
     return vec4<f32>(rgb, color.a);
 }

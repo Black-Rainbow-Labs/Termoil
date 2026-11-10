@@ -51,6 +51,10 @@ pub fn dispatch(app: &mut App, name: &str, args: &Map<String, Value>) -> Outcome
             }))
         }
         "list-shaders" => done(Ok(list_shaders(app))),
+        "set-cursor-effect" => done(req_str(args, "name").map(String::from).and_then(|n| {
+            crate::cursor_effects::set(app, &n).map(|v| json!({ "cursor_effect": v })).map_err(ActionError::Failed)
+        })),
+        "list-cursor-effects" => done(Ok(list_cursor_effects(app))),
         "telemetry-status" => done(Ok(crate::telemetry::sender::status(arg_bool(args, "flush")))),
         "check-for-updates" | "list-updates" | "install-update" | "skip-update" => {
             crate::update::actions::dispatch(app, name, args)
@@ -305,6 +309,13 @@ fn list_shaders(app: &App) -> Value {
     let shaders: Vec<Value> =
         crate::shaders::BUILTINS.iter().map(|b| json!({ "name": b.name, "summary": b.summary })).collect();
     json!({ "current": app.config.window.shader, "shaders": shaders })
+}
+
+/// Every built in cursor effect with its summary, and the `window.cursor_effect` value in effect.
+fn list_cursor_effects(app: &App) -> Value {
+    let effects: Vec<Value> =
+        crate::cursor_effects::EFFECTS.iter().map(|e| json!({ "name": e.name, "summary": e.summary })).collect();
+    json!({ "current": app.config.window.cursor_effect, "cursor_effects": effects })
 }
 
 /// Focuses a pane: its window, its tab, and the pane in the tab.
