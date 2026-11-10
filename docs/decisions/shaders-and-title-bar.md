@@ -50,8 +50,8 @@ the banner, the panes and the overlays are laid out below it. An opaque window k
 already follows the theme's light or dark appearance. `window.macos_titlebar_height = 0` keeps the system title bar
 on a translucent window too.
 
-This could only be compiled for macOS from the Windows machine (`cargo clippy --target aarch64-apple-darwin`); it was
-checked on a Mac after the release.
+This could only be compiled for macOS from the Windows machine (`cargo clippy --target aarch64-apple-darwin`). task-2593
+installed 1.5.10 on the Mac, but the Mac's screen was locked, so how the title bar looks is still to be checked there.
 
 ## Found on the installed 1.5.9: a shader DX12 refuses ended the program
 
