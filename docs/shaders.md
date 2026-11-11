@@ -111,7 +111,7 @@ Termoil appends this to your file, so every name below is available inside your 
 ```wgsl
 struct TermoilUniforms {
     size: vec2<f32>,     // frame size in pixels
-    cursor: vec2<f32>,   // centre of the focused pane's cursor cell in pixels, negative when no cursor is shown
+    cursor: vec2<f32>,   // centre of the focused pane's cursor cell in pixels, negative when no cursor is shown or the program hides it
     time: f32,           // seconds since the shader was loaded
     pad0: f32, pad1: f32, pad2: f32,
 }
@@ -126,7 +126,9 @@ Pixel positions are `uv * termoil.size`. Because your code comes first in the mo
 
 ## Animation
 
-When your file contains `termoil.time` (outside a `//` comment), Termoil redraws the window at the display rate for as long as the shader is set, so the effect moves while the terminal is idle. A shader that does not read the time costs nothing while the terminal is idle.
+When your file contains `termoil.time` (outside a `//` comment), Termoil redraws the window at the display rate for as long as the shader is set, so the effect moves while the terminal is idle. A frame in which nothing on screen changed runs only your pass, over the picture Termoil drew last, so an idle animated window costs one pass of your shader per frame and no text drawing. A shader that does not read the time costs nothing while the terminal is idle.
+
+`termoil.cursor` is negative while the program hides the cursor (DECTCEM). Full screen programs hide the cursor and move it over the rows they redraw, so a light that followed it would jump to each of those rows. The blink phase does not hide it, so a cursor light stays steady while the cursor blinks.
 
 ## Errors
 

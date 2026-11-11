@@ -574,7 +574,7 @@ pub fn wheel(ws: &mut WinState, app: &mut App, delta: MouseScrollDelta) {
     let (_, ch) = ws.cell();
     let lines = match delta {
         MouseScrollDelta::LineDelta(_, dy) => (dy * app.config.mouse.scroll_multiplier as f32).round() as i32,
-        MouseScrollDelta::PixelDelta(p) => (p.y / ch as f64).round() as i32,
+        MouseScrollDelta::PixelDelta(p) => whole_rows(&mut ws.mouse.wheel_rest, p.y, ch),
     };
     if lines == 0 {
         return;
@@ -601,9 +601,33 @@ pub fn wheel(ws: &mut WinState, app: &mut App, delta: MouseScrollDelta) {
     view::scroll_by(app, pane, lines as isize);
 }
 
+/// The whole rows a trackpad delta of `dy` pixels scrolls with rows `ch` pixels high, adding what
+/// earlier deltas left over in `rest` and keeping the new remainder there. A change of direction
+/// starts from zero, so a reversed scroll moves at once.
+fn whole_rows(rest: &mut f64, dy: f64, ch: u32) -> i32 {
+    let step = dy / f64::from(ch.max(1));
+    let carried = if *rest * step < 0.0 { 0.0 } else { *rest };
+    let total = carried + step;
+    let rows = total.trunc();
+    *rest = total - rows;
+    rows as i32
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{click_selection_mode, quote_path};
+    use super::{click_selection_mode, quote_path, whole_rows};
+
+    /// Small trackpad deltas add up to rows instead of each rounding to nothing (task-2630).
+    #[test]
+    fn small_trackpad_deltas_add_up_to_rows() {
+        let mut rest = 0.0;
+        let moved: i32 = (0..10).map(|_| whole_rows(&mut rest, 8.0, 40)).sum();
+        assert_eq!(moved, 2, "ten deltas of a fifth of a row scroll two rows");
+        assert_eq!(whole_rows(&mut rest, 100.0, 40), 2);
+        assert!((rest - 0.5).abs() < 1e-9);
+        assert_eq!(whole_rows(&mut rest, -20.0, 40), 0, "a reversed scroll drops the old remainder");
+        assert!((rest + 0.5).abs() < 1e-9);
+    }
     use termoil_vt::selection::SelectionMode;
 
     /// Clicks in a row select a cell, a word, a line, then a command's output; alt a rectangle.

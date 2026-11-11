@@ -14,7 +14,7 @@ use vello_gpu::{
 };
 
 use crate::draw::{Canvas, Layer, draw_layers, hint_enabled, image_paint_transform, image_rect, skew_transform};
-use crate::frame::{GlyphRun, ImageRecord, Rgba};
+use crate::frame::{Frame, GlyphRun, ImageRecord, Rgba};
 use crate::images::ImageData;
 use crate::shader::{ShaderInputs, ShaderPass, frame_texture};
 use crate::{FrameStats, Image, RenderError, Renderer};
@@ -50,6 +50,35 @@ pub struct VelloGpuRenderer {
     format: wgpu::TextureFormat,
     shader: Option<ShaderSlot>,
     cursor: Option<(f32, f32)>,
+    /// What the shader's frame texture holds, while a shader is set (see `SceneKey`).
+    drawn: Option<SceneKey>,
+    /// Frames drawn by the shader pass alone over the last scene (for tests).
+    reused: u64,
+}
+
+/// A copy of what vello last drew into the shader's frame texture: the background and every
+/// layer. A frame that would draw the same thing again only runs the shader pass over that
+/// texture. A shader that reads the time redraws at the display rate while nothing on screen
+/// changes, and encoding and rendering the whole scene for each of those frames cost about 2 ms
+/// of the UI thread at 120 Hz (task-2630).
+#[derive(PartialEq)]
+struct SceneKey {
+    background: Rgba,
+    layers: Vec<(f32, f32, Frame)>,
+}
+
+impl SceneKey {
+    /// The key for drawing `layers` over `background`.
+    fn of(background: Rgba, layers: &[Layer<'_>]) -> SceneKey {
+        SceneKey { background, layers: layers.iter().map(|l| (l.x, l.y, l.frame.clone())).collect() }
+    }
+
+    /// True when drawing `layers` over `background` would draw what this key records.
+    fn matches(&self, background: Rgba, layers: &[Layer<'_>]) -> bool {
+        self.background == background
+            && self.layers.len() == layers.len()
+            && self.layers.iter().zip(layers).all(|((x, y, f), l)| *x == l.x && *y == l.y && f == l.frame)
+    }
 }
 
 /// A compiled custom shader and the texture vello draws into before it runs.
@@ -387,6 +416,7 @@ impl VelloGpuRenderer {
             self.format = config.format;
             // The shader pipeline was built for the old format; the app sets the shader again.
             self.shader = None;
+            self.drawn = None;
         }
         self.target = Target::Surface { surface, config };
         Ok(())
@@ -416,7 +446,15 @@ impl VelloGpuRenderer {
             format,
             shader: None,
             cursor: None,
+            drawn: None,
+            reused: 0,
         }
+    }
+
+    /// How many frames were drawn by the shader pass alone, because vello's last scene was the
+    /// same (for tests).
+    pub fn reused_frames(&self) -> u64 {
+        self.reused
     }
 
     /// How many image textures the renderer holds (for tests).
@@ -439,6 +477,7 @@ impl VelloGpuRenderer {
     /// without a pass and returns the error text.
     pub fn set_shader(&mut self, source: Option<&str>) -> Result<(), RenderError> {
         self.shader = None;
+        self.drawn = None;
         let Some(source) = source else { return Ok(()) };
         let pass = ShaderPass::compile(&self.device, self.format, source)?;
         let frame = frame_texture(&self.device, self.format, self.size.0, self.size.1);
@@ -490,6 +529,50 @@ impl VelloGpuRenderer {
         }
         self.queue.submit([encoder.finish()]);
         Ok(())
+    }
+
+    /// Runs only the shader pass, over the frame vello drew last (`drawn`), into `out`.
+    fn submit_shader_only(&mut self, out: &wgpu::TextureView) {
+        let Some(slot) = &self.shader else { return };
+        let mut encoder =
+            self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("termoil shader frame") });
+        let (w, h) = (f32::from(self.size.0), f32::from(self.size.1));
+        let inputs = ShaderInputs { size: (w, h), cursor: self.cursor.unwrap_or((-1.0, -1.0)) };
+        slot.pass.run(&self.device, &self.queue, &mut encoder, &slot.frame, out, inputs);
+        self.queue.submit([encoder.finish()]);
+    }
+
+    /// Encodes `layers` into the scene unless a shader is set and its frame texture already holds
+    /// exactly them. Returns true when the scene was encoded and vello must render it.
+    fn encode_if_changed(&mut self, background: Rgba, layers: &[Layer<'_>], grid: &FontGrid) -> bool {
+        if self.shader.is_some() && self.drawn.as_ref().is_some_and(|k| k.matches(background, layers)) {
+            return false;
+        }
+        self.drawn = self.shader.is_some().then(|| SceneKey::of(background, layers));
+        self.scene.reset();
+        let mut canvas = GpuCanvas {
+            scene: &mut self.scene,
+            resources: &mut self.resources,
+            atlas: self.atlas,
+            hint: self.hint,
+            images: &mut self.images,
+            device: &self.device,
+            queue: &self.queue,
+        };
+        draw_layers(&mut canvas, (self.size.0.into(), self.size.1.into()), background, layers, grid);
+        true
+    }
+
+    /// Draws the frame into `out`: vello and the shader when the scene was encoded, otherwise the
+    /// shader alone over the frame vello drew last.
+    fn submit_frame(&mut self, out: &wgpu::TextureView, encoded: bool) -> Result<(), RenderError> {
+        if encoded {
+            self.submit(out).inspect_err(|_| self.drawn = None)
+        } else {
+            self.submit_shader_only(out);
+            self.reused += 1;
+            Ok(())
+        }
     }
 
     /// The surface texture for the next frame, or None when the window is occluded or the GPU timed
@@ -615,6 +698,7 @@ impl Renderer for VelloGpuRenderer {
         }
         self.depth = vello_gpu::Renderer::create_depth_texture_view(&self.device, &RenderSize { width: w, height: h });
         self.scene = Scene::new(w, h);
+        self.drawn = None;
         if let Some(slot) = &mut self.shader {
             let frame = frame_texture(&self.device, self.format, w, h);
             slot.frame = frame.create_view(&wgpu::TextureViewDescriptor::default());
@@ -627,32 +711,22 @@ impl Renderer for VelloGpuRenderer {
         &mut self, background: Rgba, layers: &[Layer<'_>], grid: &FontGrid,
     ) -> Result<FrameStats, RenderError> {
         let start = Instant::now();
-        self.scene.reset();
-        {
-            let mut canvas = GpuCanvas {
-                scene: &mut self.scene,
-                resources: &mut self.resources,
-                atlas: self.atlas,
-                hint: self.hint,
-                images: &mut self.images,
-                device: &self.device,
-                queue: &self.queue,
-            };
-            draw_layers(&mut canvas, (self.size.0.into(), self.size.1.into()), background, layers, grid);
-        }
+        let encoded = self.encode_if_changed(background, layers, grid);
         let encode = start.elapsed();
         let glyphs = layers.iter().map(|l| l.frame.glyph_count()).sum();
         if let Target::Offscreen(t) = &self.target {
             let view = t.create_view(&wgpu::TextureViewDescriptor::default());
-            self.submit(&view)?;
+            self.submit_frame(&view, encoded)?;
             self.wait_idle();
             return Ok(FrameStats { encode, total: start.elapsed(), glyphs, presented: true });
         }
-        let Some(frame) = self.acquire()? else {
+        let Some(frame) = self.acquire().inspect_err(|_| self.drawn = None)? else {
+            // vello drew nothing this time, so the shader's frame texture holds the older scene.
+            self.drawn = None;
             return Ok(FrameStats { encode, total: start.elapsed(), glyphs: 0, presented: false });
         };
         let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
-        self.submit(&view)?;
+        self.submit_frame(&view, encoded)?;
         self.queue.present(frame);
         Ok(FrameStats { encode, total: start.elapsed(), glyphs, presented: true })
     }
@@ -670,6 +744,7 @@ impl Renderer for VelloGpuRenderer {
     /// The renderer's name with the adapter.
     fn set_hinting(&mut self, on: bool) {
         self.hint = on;
+        self.drawn = None;
     }
 
     fn name(&self) -> String {

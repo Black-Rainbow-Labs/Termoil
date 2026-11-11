@@ -47,6 +47,11 @@ pub struct PaneView {
     pub top: usize,
     /// When synchronized output started holding this pane's frame.
     pub sync_since: Option<Instant>,
+    /// The cursor cell (column, row) a shader's cursor light follows: the cursor while the program
+    /// shows it (DECTCEM), in either blink phase. None while the program hides it, because a full
+    /// screen program hides the cursor and moves it over the rows it redraws, and the light jumped
+    /// to each of them (task-2630).
+    pub glow: Option<(u16, u16)>,
 }
 
 /// Mouse state.
@@ -67,6 +72,10 @@ pub struct Mouse {
     /// A divider being dragged: the pane on its left or top side, the split's axis, and the
     /// pointer position the last move was applied at.
     pub divider: Option<(PaneId, crate::model::Axis, (f64, f64))>,
+    /// The part of a row a trackpad has scrolled that has not moved the view yet, in rows. A
+    /// trackpad sends many small pixel deltas, and rounding each one on its own dropped every
+    /// delta under half a row, so a slow scroll did not move at all (task-2630).
+    pub wheel_rest: f64,
 }
 
 /// One window.
@@ -425,6 +434,7 @@ impl WinState {
 
     /// Draws the window: each visible pane, the tab bar, the banner and the preedit.
     pub fn draw(&mut self, app: &mut App) -> Result<(), String> {
+        let started = Instant::now();
         self.paint_held_until = None;
         let had_shader_error = self.shader.error.is_some();
         self.take_gpu();
@@ -450,7 +460,7 @@ impl WinState {
         }
         let bg = look::mix(self.colors.background, self.colors.foreground, 0.2);
         let (cw, ch) = self.cell();
-        let shader_cursor = self.cursor_px(focus).map(|(x, y)| (x + cw as f32 / 2.0, y + ch as f32 / 2.0));
+        let shader_cursor = self.glow_px(focus).map(|(x, y)| (x + cw as f32 / 2.0, y + ch as f32 / 2.0));
         let chrome = self.build_chrome(app, wi, focus);
         let mut layers: Vec<Layer<'_>> = Vec::new();
         for (pane, rect) in &layout {
@@ -487,8 +497,11 @@ impl WinState {
             self.schedule_repaint(&app.config.window);
         }
         painted?;
-        self.last_paint = Some(Instant::now());
-        self.keep_animating();
+        // Pacing counts from when this paint started, so a frame that takes time to draw does
+        // not push the next one past a display refresh (task-2630: frames came 12 ms apart on a
+        // 120 Hz display, 8.3 ms of wait after 3 ms of drawing).
+        self.last_paint = Some(started);
+        self.keep_animating(started);
         if self.shown {
             self.presented_shown = true;
         } else {
@@ -601,10 +614,11 @@ impl WinState {
         next
     }
 
-    /// While a shader that reads the time runs, schedules the next frame at the display rate.
-    fn keep_animating(&mut self) {
+    /// While a shader that reads the time runs, schedules the next frame one display refresh after
+    /// the paint that `started` then.
+    fn keep_animating(&mut self, started: Instant) {
         if self.painter.shader_animates() {
-            self.defer_paint(Instant::now() + self.frame_interval);
+            self.defer_paint(started + self.frame_interval);
         }
     }
 
@@ -672,6 +686,7 @@ impl WinState {
             flashed: false,
             top: 0,
             sync_since: None,
+            glow: None,
         });
         view.rect = rect;
         let flash = self.bell_until.is_some_and(|t| Instant::now() < t);
@@ -715,6 +730,7 @@ impl WinState {
         if flash {
             view.state.reverse_video = !view.state.reverse_video;
         }
+        view.glow = glow_cell(view.state.cursor);
         let blink =
             blink_phase(&mut self.blink, &mut self.wake_at, self.opts.default_cursor, focused, &view.state, blink_ms);
         if let Some(c) = view.state.cursor.as_mut().filter(|_| !blink) {
@@ -896,6 +912,18 @@ impl WinState {
         Some((
             v.rect.x + self.opts.padding.0 as f32 + (c.col as u32 * cw) as f32,
             v.rect.y + self.opts.padding.1 as f32 + (c.row as u32 * ch) as f32,
+        ))
+    }
+
+    /// The pixel position of the top left of the cell a shader's cursor light follows in `pane`
+    /// (see `PaneView::glow`), or None when the program hides its cursor.
+    fn glow_px(&self, pane: PaneId) -> Option<(f32, f32)> {
+        let v = self.views.get(&pane)?;
+        let (col, row) = v.glow?;
+        let (cw, ch) = self.cell();
+        Some((
+            v.rect.x + self.opts.padding.0 as f32 + (col as u32 * cw) as f32,
+            v.rect.y + self.opts.padding.1 as f32 + (row as u32 * ch) as f32,
         ))
     }
 
@@ -1127,4 +1155,31 @@ fn selection_rows(p: &Pane, t: &Terminal, separators: &str) -> Vec<(u16, u16, u1
         out.push((row, a, b.min(cols - 1)));
     }
     out
+}
+
+/// The cell a shader's cursor light follows: the cursor's (column, row) while the program shows
+/// it (DECTCEM), None while the program hides it or the view is scrolled back (task-2630).
+fn glow_cell(cursor: Option<termoil_render::CursorState>) -> Option<(u16, u16)> {
+    cursor.filter(|c| c.visible).map(|c| (c.col, c.row))
+}
+
+#[cfg(test)]
+mod glow_tests {
+    use super::glow_cell;
+    use termoil_render::CursorState;
+    use termoil_vt::terminal::CursorShape;
+
+    /// A cursor at (col, row), shown or hidden by the program.
+    fn cursor(col: u16, row: u16, visible: bool) -> CursorState {
+        CursorState { row, col, shape: CursorShape::default(), visible, wide: false }
+    }
+
+    #[test]
+    fn the_cursor_light_follows_only_a_cursor_the_program_shows() {
+        // task-2630: a full screen program hid its cursor and moved it over the rows it redrew,
+        // and the light flashed on each of those rows.
+        assert_eq!(glow_cell(Some(cursor(3, 7, true))), Some((3, 7)));
+        assert_eq!(glow_cell(Some(cursor(40, 2, false))), None);
+        assert_eq!(glow_cell(None), None, "a view scrolled back has no cursor");
+    }
 }

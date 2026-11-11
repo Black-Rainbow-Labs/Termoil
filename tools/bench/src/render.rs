@@ -190,3 +190,81 @@ pub fn cpu_memory(threads: u16, atlas: bool, cols: u16, rows: u16, raster: bool)
         ms(times[296])
     );
 }
+
+/// The neon-glow shader with the pulse cursor effect, composed the way `termoil-app`'s
+/// `cursor_effects::compose` does it, so the bench measures the pass a person sees (task-2630).
+fn neon_glow_with_pulse() -> String {
+    let base = include_str!("../../../crates/termoil-app/shaders/neon-glow.wgsl")
+        .replace("fn termoil_shade(", "fn termoil_base_shade(");
+    let common = include_str!("../../../crates/termoil-app/cursor-effects/common.wgsl");
+    let pulse = include_str!("../../../crates/termoil-app/cursor-effects/pulse.wgsl");
+    format!(
+        "{base}\nconst TERMOIL_SHADER_CURSOR: f32 = 0.0;\n{common}\n{pulse}\n\
+         fn termoil_shade(uv: vec2<f32>, color: vec4<f32>) -> vec4<f32> {{\n    \
+         return termoil_cursor_effect(uv, termoil_base_shade(uv, color));\n}}\n"
+    )
+}
+
+/// Times `frames` frames on `renderer`. With `scroll` every frame appends a line (a person
+/// scrolling or output streaming); without it every frame shows the same text, which is what an
+/// animated shader draws at the display rate while the terminal is idle. Returns sorted times.
+fn shader_frames(
+    renderer: &mut VelloGpuRenderer, grid: &mut FontGrid, size: (u16, u16), scroll: bool, frames: usize,
+) -> Vec<Duration> {
+    let mut term = Terminal::new(size.0, size.1, TerminalConfig::default());
+    for n in 0..usize::from(size.1) {
+        term.advance(&line(n));
+    }
+    let mut state = RenderState::new(size.0, size.1, Colors::dark_default());
+    let (opts, mut builder) = (BuildOptions::default(), FrameBuilder::new());
+    let mut times = Vec::with_capacity(frames);
+    for n in 0..frames + 10 {
+        if scroll {
+            term.advance(&line(n + 1000));
+        }
+        let start = Instant::now();
+        state.update(&mut term, 0);
+        let frame = builder.build(&state, grid, &opts);
+        renderer.render(&frame, grid).expect("render");
+        if n >= 10 {
+            times.push(start.elapsed());
+        }
+    }
+    times.sort();
+    times
+}
+
+/// `shader [frames]` (task-2630): frame times on a Retina sized window (a 3024 by 1964 pixel
+/// display, font at twice its size) with the neon-glow shader and the pulse cursor effect, for a
+/// frame where the text scrolled and a frame where nothing changed, against the same frames with
+/// no shader. Offscreen frames wait for the GPU, so each time is the whole frame.
+pub fn shader_measure(frames: usize) {
+    let mut grid = FontGrid::new(FontConfig { size_px: FontConfig::default().size_px * 2.0, ..FontConfig::default() })
+        .expect("default font");
+    let m = *grid.metrics();
+    let (w, h) = (3024u32, 1964u32);
+    let size = (((w - 4) / m.width) as u16, ((h - 4) / m.height) as u16);
+    println!("shader bench: {w}x{h} px, {}x{} cells of {}x{} px, {frames} frames", size.0, size.1, m.width, m.height);
+    let source = neon_glow_with_pulse();
+    for shader in [false, true] {
+        for scroll in [true, false] {
+            let Some(mut r) = VelloGpuRenderer::new_offscreen(w, h, true) else {
+                println!("vello_gpu: no GPU adapter");
+                return;
+            };
+            if shader {
+                r.set_shader(Some(&source)).expect("neon-glow with pulse compiles");
+            }
+            let t = shader_frames(&mut r, &mut grid, size, scroll, frames);
+            println!(
+                "{:<26} {:<16} p50 {:>6.2} ms  p90 {:>6.2} ms  p99 {:>6.2} ms  max {:>6.2} ms",
+                if shader { "neon-glow + pulse" } else { "no shader" },
+                if scroll { "scrolling" } else { "nothing changed" },
+                ms(t[t.len() / 2]),
+                ms(t[t.len() * 9 / 10]),
+                ms(t[t.len() * 99 / 100]),
+                ms(t[t.len() - 1])
+            );
+        }
+    }
+}

@@ -286,7 +286,7 @@ fn write_stream_command(args: &[String]) {
 }
 
 /// Entry point: `throughput [samples] [scenario]`, `compare [samples] [scenario|all]`,
-/// `write-stream <scenario> <path>`, `parse`, `alloc`, `memory`, `gpu-init`, or `render [frames]`.
+/// `write-stream <scenario> <path>`, `parse`, `alloc`, `memory`, `gpu-init`, `render [frames]`, or `shader [frames]`.
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     match args.get(1).map(String::as_str) {
@@ -326,6 +326,7 @@ fn main() {
             args.get(5).and_then(|v| v.parse().ok()).unwrap_or(34),
             args.get(6).is_some_and(|a| a == "raster"),
         ),
+        Some("shader") => render::shader_measure(args.get(2).and_then(|s| s.parse().ok()).unwrap_or(300)),
         Some("gpu-init") => gpuinit::run(args.get(2).map(String::as_str).unwrap_or("every")),
         Some("render") => {
             let frames = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(1200);

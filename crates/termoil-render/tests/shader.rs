@@ -141,3 +141,49 @@ fn only_shaders_that_read_the_time_animate() {
     assert!(!shader_reads_time("// termoil.time is not used\nlet a = 1.0;"));
     assert!(!shader_reads_time(INVERT));
 }
+
+/// A light that follows `termoil.cursor`, like the cursor effects.
+const CURSOR_LIGHT: &str = "fn termoil_shade(uv: vec2<f32>, color: vec4<f32>) -> vec4<f32> {\n    let d = distance(uv * termoil.size, termoil.cursor);\n    return vec4<f32>(color.rgb + vec3<f32>(0.8) * exp(-d / 6.0), color.a);\n}\n";
+
+/// A frame showing `text`.
+fn frame_of(g: &mut FontGrid, text: &[u8]) -> Frame {
+    let mut t = Terminal::new(12, 3, TerminalConfig::default());
+    t.advance(text);
+    let mut state = RenderState::new(12, 3, Colors::dark_default());
+    state.update(&mut t, 0);
+    build_frame(&state, g, &BuildOptions::default())
+}
+
+/// Draws `f` with the cursor light at `cursor` on a new renderer, every step done in full.
+fn fresh(f: &Frame, g: &FontGrid, cursor: (f32, f32)) -> Image {
+    let mut r = VelloGpuRenderer::new_offscreen(f.width, f.height, false).expect("adapter");
+    r.set_shader(Some(CURSOR_LIGHT)).expect("compiles");
+    r.set_shader_cursor(Some(cursor));
+    draw(&mut r, f, g)
+}
+
+#[test]
+fn an_unchanged_frame_runs_only_the_shader_and_matches_a_full_render() {
+    // task-2630: an animated shader redraws at the display rate while nothing on screen changes.
+    // Those frames reuse the scene vello drew last and run only the shader pass.
+    let mut g = grid();
+    let f = frame(&mut g);
+    let Some(mut r) = renderer(&f) else { return };
+    r.set_shader(Some(CURSOR_LIGHT)).expect("compiles");
+    r.set_shader_cursor(Some((10.0, 10.0)));
+    let first = draw(&mut r, &f, &g);
+    assert_eq!(r.reused_frames(), 0, "the first frame is drawn in full");
+    r.set_shader_cursor(Some((60.0, 30.0)));
+    let moved = draw(&mut r, &f, &g);
+    assert_eq!(r.reused_frames(), 1, "the same frame again runs only the shader");
+    assert_ne!(moved, first, "the shader saw the new cursor");
+    assert_eq!(moved, fresh(&f, &g, (60.0, 30.0)), "the shader alone draws what a full render draws");
+    let other = frame_of(&mut g, b"other text");
+    let changed = draw(&mut r, &other, &g);
+    assert_eq!(r.reused_frames(), 1, "a changed frame is drawn in full");
+    assert_eq!(changed, fresh(&other, &g, (60.0, 30.0)));
+    r.set_shader(Some(CURSOR_LIGHT)).expect("compiles");
+    r.set_shader_cursor(Some((60.0, 30.0)));
+    draw(&mut r, &other, &g);
+    assert_eq!(r.reused_frames(), 1, "a new shader draws the scene again into its new texture");
+}
