@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
+PackageIdentifier: Termoil.Termoil
+PackageVersion: 1.5.12
+InstallerType: inno
+Scope: user
+InstallModes:
+- interactive
+- silent
+- silentWithProgress
+UpgradeBehavior: install
+Commands:
+- termoil
+ReleaseDate: 2026-11-11
+Installers:
+- Architecture: x64
+  InstallerUrl: https://github.com/Black-Rainbow-Labs/Termoil/releases/download/v1.5.12/TermoilSetup-1.5.12-x64.exe
+  InstallerSha256: 04994AE51C67E84F5EFA10F8D3BF48F2264D7A9CD52BC24BAFBEE2D725405E48
+  ProductCode: '{9B3E6D52-4C1A-4F0E-8A57-2D6C1E7B94A3}_is1'
+ManifestType: installer
+ManifestVersion: 1.10.0
